@@ -16,7 +16,7 @@ const TABS: { href: string; label: string; icon: LucideIcon; match: string[] }[]
   { href: "/cashflow", label: "תזרים", icon: ChartColumn, match: ["/cashflow"] },
   { href: "/forecast", label: "תחזית", icon: CalendarClock, match: ["/forecast"] },
   { href: "/pension", label: "פנסיה", icon: PiggyBank, match: ["/pension"] },
-  { href: "/more", label: "עוד", icon: Menu, match: ["/more", "/transactions", "/categorize", "/accounts", "/settings", "/notifications", "/plans", "/cost", "/whatif", "/progress", "/reconcile"] },
+  { href: "/more", label: "עוד", icon: Menu, match: ["/more", "/transactions", "/accounts", "/settings", "/notifications", "/plans", "/cost", "/whatif", "/progress", "/reconcile"] },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {

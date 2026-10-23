@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException
@@ -7,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 
 from freerise.api.deps import DB, get_or_404
 from freerise.categorize.pipeline import (
+    category_usage,
     set_category,
     set_merchant_category,
     uncategorized_merchants,
@@ -42,6 +44,8 @@ class Uncategorized(BaseModel):
     count: int
     total: float  # signed sum
     kind: Literal["bank", "card"]
+    sample_date: date  # latest one
+    account_label: str  # latest one's account
 
 
 class TxnCategoryIn(BaseModel):
@@ -54,6 +58,7 @@ class MerchantCategoryIn(BaseModel):
     merchant_key: str
     category_id: int
     apply_to_past: bool = True
+    remember: bool = True  # False: categorize its uncategorized txns once, no rule
 
 
 class Changed(BaseModel):
@@ -99,6 +104,12 @@ def update_category(id: int, body: CategoryPatch, db: DB) -> CategoryOut:
     return c
 
 
+@router.get("/categories/usage")
+def get_category_usage(db: DB) -> list[int]:
+    """Category ids, most used first (quick picks)."""
+    return category_usage(db)
+
+
 @router.get("/categories/uncategorized")
 def list_uncategorized(db: DB) -> list[Uncategorized]:
     return uncategorized_merchants(db)
@@ -109,7 +120,9 @@ def categorize_merchant(body: MerchantCategoryIn, db: DB) -> Changed:
     get_or_404(db, Category, body.category_id)
     if not body.merchant_key:
         raise HTTPException(422, "merchant_key required")
-    n = set_merchant_category(db, body.merchant_key, body.category_id, body.apply_to_past)
+    n = set_merchant_category(
+        db, body.merchant_key, body.category_id, body.apply_to_past, body.remember
+    )
     db.commit()
     return Changed(changed=n)
 

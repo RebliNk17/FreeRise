@@ -13,7 +13,7 @@ from freerise.models import Category, MerchantRule
 def export_uncategorized(session: Session, out: Path) -> int:
     rows = uncategorized_merchants(session)
     with Path(out).open("w", encoding="utf-8") as f:
-        f.writelines(json.dumps(rec, ensure_ascii=False) + "\n" for rec in rows)
+        f.writelines(json.dumps(rec, ensure_ascii=False, default=str) + "\n" for rec in rows)
     return len(rows)
 
 

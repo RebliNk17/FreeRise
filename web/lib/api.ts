@@ -124,7 +124,7 @@ export type OtpRequest = { id: number; credential_label: string; provider: strin
 // Phases 2–6 (api-contract.md). Money here is number.
 export type Group = "income" | "fixed" | "variable" | "savings" | "transfer" | "card_bill" | "ignore";
 export type Category = { id: number; name: string; group: Group; sort_order: number };
-export type Uncategorized = { merchant_key: string; sample_description: string; count: number; total: number; kind: "bank" | "card" };
+export type Uncategorized = { merchant_key: string; sample_description: string; count: number; total: number; kind: "bank" | "card"; sample_date: string; account_label: string };
 export type Cycle = { start: string; end: string; label_year: number; label_month: number };
 
 export type CashFlow = {

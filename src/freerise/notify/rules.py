@@ -198,7 +198,7 @@ def _uncategorized_growing(s: Session, today: date) -> None:
             "uncategorized_growing",
             "עסקאות ממתינות לסיווג",
             f"{n} עסקאות ללא קטגוריה",
-            "/categorize",
+            "/home?categorize=1",
             f"uncategorized_growing:{y}-W{w:02d}",
         )
 

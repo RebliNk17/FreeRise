@@ -76,7 +76,7 @@ function CashFlowView({ cf }: { cf: CashFlow }) {
       </Card>
 
       {cf.uncategorized_count > 0 && (
-        <Link href="/categorize" className="rounded-2xl bg-sun-soft px-4 py-3 text-sm font-semibold">
+        <Link href="/home?categorize=1" className="rounded-2xl bg-sun-soft px-4 py-3 text-sm font-semibold">
           {cf.uncategorized_count === 1 ? "עסקה אחת לא מסווגת" : `${cf.uncategorized_count} עסקאות לא מסווגות`} (<Amount value={cf.uncategorized_total} plain />) — לסיווג
         </Link>
       )}

@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { CalendarClock, ChevronLeft, EyeOff, PiggyBank, Repeat, StickyNote, Tag, Wallet, X } from "lucide-react";
 import { Money } from "@/components/Amount";
+import { Sheet } from "@/components/Sheet";
+import { Switch } from "@/components/Switch";
 import { CategorySelect, GROUP_LABEL, loadCategories } from "@/components/CategorySelect";
 import { send, type Category, type Group } from "@/lib/api";
 import { categoryLabel, formatDate } from "@/lib/format";
@@ -32,30 +34,21 @@ const IGNORE_CATEGORY = "להתעלם";
 
 type Mode = null | "note" | "fixed" | "cycle" | { groups: Group[]; title: string; remember: boolean };
 
-/** Bottom sheet (native modal <dialog>: focus trap + Escape); backdrop tap or swipe-down closes too. */
 export function TxnSheet({ t, onClose }: { t: Txn; onClose: () => void }) {
   const { mutate, data } = useHome();
-  const ref = useRef<HTMLDialogElement>(null);
   const [mode, setMode] = useState<Mode>(null);
-  const [dy, setDy] = useState<number | null>(null);
-  const startY = useRef<number | null>(null);
 
-  useEffect(() => {
-    const d = ref.current!;
-    const opener = document.activeElement as HTMLElement | null;
-    d.showModal();
-    return () => {
-      d.close();
-      opener?.focus();
-    };
-  }, []);
-
-  async function setCategory(category_id: number, remember: boolean) {
+  /** all: also every past and future transaction of this merchant (rule + PUT /categories/merchant). */
+  async function setCategory(category_id: number, all: boolean) {
     const c = (await loadCategories().catch(() => [] as Category[])).find((x) => x.id === category_id);
+    const merchant = all && t.merchant_key ? t.merchant_key : null;
     onClose();
     mutate(
-      (d) => mapTxns(d, (x) => (x.id === t.id ? (c?.group === "ignore" ? null : { ...x, category_id, category_name: c?.name ?? null, group: c?.group ?? x.group }) : x)),
-      () => send("PUT", `/transactions/${t.id}/category`, { category_id, remember, apply_to_past: false }),
+      (d) => mapTxns(d, (x) => (x.id === t.id || (merchant && x.merchant_key === merchant) ? (c?.group === "ignore" ? null : { ...x, category_id, category_name: c?.name ?? null, group: c?.group ?? x.group }) : x)),
+      async () => {
+        await send("PUT", `/transactions/${t.id}/category`, { category_id, remember: false, apply_to_past: false });
+        if (merchant) await send("PUT", "/categories/merchant", { merchant_key: merchant, category_id, apply_to_past: true });
+      },
     );
   }
 
@@ -99,37 +92,17 @@ export function TxnSheet({ t, onClose }: { t: Txn; onClose: () => void }) {
     mutate((d) => mapTxns(d, (x) => (x.id === t.id ? optimistic(x) : x)), req);
   }
 
-  const swipe = {
-    onPointerDown: (e: React.PointerEvent) => void (startY.current = e.clientY),
-    onPointerMove: (e: React.PointerEvent) => startY.current != null && setDy(Math.max(0, e.clientY - startY.current)),
-    onPointerUp: () => {
-      startY.current = null;
-      if ((dy ?? 0) > 80) onClose();
-      setDy(null);
-    },
-    onPointerCancel: () => ((startY.current = null), setDy(null)),
-  };
-
   return (
-    <dialog
-      ref={ref}
-      aria-labelledby="txn-sheet-title"
-      onCancel={(e) => {
-        e.preventDefault();
-        onClose();
-      }}
-      onClick={(e) => e.target === ref.current && onClose()}
-      style={dy != null ? { translate: `0 ${dy}px`, transition: "none" } : undefined}
-      className="mx-auto mt-auto mb-0 max-h-[90dvh] w-full max-w-lg overflow-hidden rounded-t-[28px] border-0 bg-bg p-0 text-text shadow-[0_-10px_40px_rgb(0_0_0/0.25)] transition-[translate] duration-300 ease-out backdrop:bg-(--backdrop) starting:translate-y-full motion-reduce:transition-none"
-    >
-      <div className="flex max-h-[90dvh] flex-col">
-        <header className="flex touch-none flex-col gap-3.5 px-5 pt-2.5 pb-4" {...swipe}>
-          <div className="mx-auto h-[5px] w-11 rounded-full bg-border" aria-hidden />
+    <Sheet
+      labelledBy="txn-sheet-title"
+      onClose={onClose}
+      header={
+        <>
           <div className="flex items-center gap-2">
             <p className={`chip min-w-0 truncate px-3 py-1.5 text-[13px] ${CHIP[t.group ?? "variable"] ?? "bg-sunken text-text"}`}>
               {t.group ? GROUP_LABEL[t.group] : "לא מסווג"} · {categoryLabel(t.category_name)}
             </p>
-            <button type="button" className="icon-btn ms-auto size-9" aria-label="סגירה" onClick={onClose}>
+            <button type="button" className="icon-btn ms-auto size-11" aria-label="סגירה" onClick={onClose}>
               <X size={18} />
             </button>
           </div>
@@ -150,8 +123,9 @@ export function TxnSheet({ t, onClose }: { t: Txn; onClose: () => void }) {
             </div>
           </div>
           <Money value={Math.abs(t.amount)} className="block text-right text-[46px] leading-none font-extrabold" />
-        </header>
-        <div className="overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        </>
+      }
+    >
           {t.note && mode !== "note" && <p className="mb-3 rounded-2xl bg-sun-soft p-3 text-sm whitespace-pre-wrap">{t.note}</p>}
           {mode === "note" ? (
             <NoteForm
@@ -180,7 +154,7 @@ export function TxnSheet({ t, onClose }: { t: Txn; onClose: () => void }) {
               onSave={(expected_day, expected_amount) => request((x) => x, () => send("POST", `/transactions/${t.id}/fixed-income`, { expected_day, expected_amount }))}
             />
           ) : mode ? (
-            <CategoryForm key={mode.title} {...mode} current={t.category_id} onCancel={() => setMode(null)} onSave={setCategory} />
+            <CategoryForm key={mode.title} {...mode} merchant={t.merchant_key ? t.description : null} current={t.category_id} onCancel={() => setMode(null)} onSave={setCategory} />
           ) : (
             <>
               <ActionList items={actions} />
@@ -192,9 +166,7 @@ export function TxnSheet({ t, onClose }: { t: Txn; onClose: () => void }) {
               )}
             </>
           )}
-        </div>
-      </div>
-    </dialog>
+    </Sheet>
   );
 }
 
@@ -219,7 +191,7 @@ function NoteForm({ initial, onSave, onCancel }: { initial: string; onSave: (not
   );
 }
 
-function CategoryForm({ groups, title, remember: rememberDefault, current, onSave, onCancel }: { groups: Group[]; title: string; remember: boolean; current: number | null; onSave: (id: number, remember: boolean) => void; onCancel: () => void }) {
+function CategoryForm({ groups, title, remember: rememberDefault, merchant, current, onSave, onCancel }: { groups: Group[]; title: string; remember: boolean; merchant: string | null; current: number | null; onSave: (id: number, all: boolean) => void; onCancel: () => void }) {
   const [cat, setCat] = useState<number | null>(null);
   const [remember, setRemember] = useState(rememberDefault);
   return (
@@ -227,15 +199,17 @@ function CategoryForm({ groups, title, remember: rememberDefault, current, onSav
       className="card flex flex-col gap-3 p-3.5"
       onSubmit={(e) => {
         e.preventDefault();
-        if (cat != null) onSave(cat, remember);
+        if (cat != null) onSave(cat, remember && merchant != null);
       }}
     >
       <h3 className="font-bold">{title}</h3>
       <CategorySelect value={cat} onChange={setCat} groups={groups} exclude={current} autoFocus />
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-        לזכור לבית העסק הזה בפעם הבאה
-      </label>
+      {merchant && (
+        <div className="flex flex-col gap-1 rounded-2xl bg-sunken/60 p-3">
+          <p className="text-sm font-semibold">להחיל על כל העסקאות של {merchant}?</p>
+          <Switch checked={remember} onChange={setRemember} label={remember ? "כן, גם על קודמות ועתידיות" : "רק על העסקה הזו"} />
+        </div>
+      )}
       <div className="flex gap-2">
         <button className="btn flex-1" disabled={cat == null}>
           שמירה

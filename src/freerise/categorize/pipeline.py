@@ -1,6 +1,7 @@
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
+from freerise.accounts import account_labels
 from freerise.models import Account, Category, MerchantRule, Transaction
 
 # Scraper `Transaction.category` text -> our category name. Extend as real strings show up.
@@ -106,13 +107,18 @@ def _remember(session: Session, merchant_key: str, category_id: int) -> None:
 
 
 def set_merchant_category(
-    session: Session, merchant_key: str, category_id: int, apply_to_past: bool = True
+    session: Session,
+    merchant_key: str,
+    category_id: int,
+    apply_to_past: bool = True,
+    remember: bool = True,
 ) -> int:
-    """Bulk: remember a user rule for the merchant, then categorize its uncategorized txns
-    (and, with apply_to_past, every non-manual one). Returns rows changed."""
-    _remember(session, merchant_key, category_id)
+    """Bulk: remember a user rule for the merchant (unless remember=False), then categorize its
+    uncategorized txns (and, with apply_to_past, every non-manual one). Returns rows changed."""
+    if remember:
+        _remember(session, merchant_key, category_id)
     cond = Transaction.category_id.is_(None)
-    if apply_to_past:
+    if apply_to_past and remember:
         cond = or_(
             cond, Transaction.category_source.is_(None), Transaction.category_source != "manual"
         )
@@ -127,7 +133,8 @@ def set_merchant_category(
 
 
 def uncategorized_merchants(session: Session) -> list[dict]:
-    """Uncategorized transactions grouped by merchant, most frequent first."""
+    """Uncategorized transactions grouped by merchant, most frequent first; with the latest
+    one's date and account as a sample."""
     rows = session.execute(
         select(
             Transaction.merchant_key,
@@ -135,6 +142,8 @@ def uncategorized_merchants(session: Session) -> list[dict]:
             func.count(),
             func.sum(Transaction.amount),
             func.min(Account.kind),
+            func.max(Transaction.date),
+            func.max(Transaction.account_id),
         )
         .join(Account, Account.id == Transaction.account_id)
         .where(
@@ -145,6 +154,7 @@ def uncategorized_merchants(session: Session) -> list[dict]:
         .group_by(Transaction.merchant_key)
         .order_by(func.count().desc(), Transaction.merchant_key)
     ).all()
+    labels = account_labels(session) if rows else {}
     return [
         {
             "merchant_key": key,
@@ -152,9 +162,23 @@ def uncategorized_merchants(session: Session) -> list[dict]:
             "count": n,
             "total": float(total),
             "kind": "card" if kind == "card" else "bank",
+            "sample_date": last,
+            "account_label": labels.get(acct, ""),
         }
-        for key, desc, n, total, kind in rows
+        for key, desc, n, total, kind, last, acct in rows
     ]
+
+
+def category_usage(session: Session) -> list[int]:
+    """Category ids by how many transactions use them, most used first."""
+    return list(
+        session.scalars(
+            select(Transaction.category_id)
+            .where(Transaction.category_id.is_not(None))
+            .group_by(Transaction.category_id)
+            .order_by(func.count().desc(), Transaction.category_id)
+        )
+    )
 
 
 def set_category(

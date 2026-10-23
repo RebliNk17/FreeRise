@@ -4,9 +4,12 @@ import { useState } from "react";
 import { CycleSwitcher } from "@/components/CycleSwitcher";
 import { Status } from "@/components/Card";
 import { formatCycleRange, monthName } from "@/lib/format";
+import type { Uncategorized } from "@/lib/api";
+import { pendingCount } from "@/lib/categorize";
 import { findTxn, isIdle, type HomeData, type Txn } from "@/lib/home";
 import { useApi } from "@/lib/useApi";
 import { AddTrackedCategory } from "./AddTrackedCategory";
+import { CategorizeChip, CategorizeSheet } from "./CategorizeSheet";
 import { HomeContext, type HomeCtx } from "./context";
 import { Expander } from "./Expander";
 import { FixedCard } from "./FixedCard";
@@ -27,6 +30,9 @@ export function HomeView({ path, title }: { path: string; title: string }) {
   const [sheet, setSheet] = useState<Txn | null>(null);
   const [failed, setFailed] = useState(false);
   const [version, setVersion] = useState(0);
+  const unc = useApi<Uncategorized[]>("/categories/uncategorized", version);
+  // /home?categorize=1 (e.g. from the "waiting to be categorized" notification) opens the sheet.
+  const [sorting, setSorting] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).has("categorize"));
 
   if (!data)
     return (
@@ -84,6 +90,7 @@ export function HomeView({ path, title }: { path: string; title: string }) {
         )}
         {!empty && data.summary && <WeeklySummary s={data.summary} />}
         {cycle.is_current && <InsightCarousel />}
+        <CategorizeChip count={pendingCount(unc.data ?? [])} onOpen={() => setSorting(true)} />
         <Status loading={false} error={false} empty={empty} />
         {!empty && (
           <>
@@ -131,6 +138,18 @@ export function HomeView({ path, title }: { path: string; title: string }) {
         )}
       </div>
       {open && <TxnSheet key={open.id} t={open} onClose={() => setSheet(null)} />}
+      {sorting && unc.data && (
+        <CategorizeSheet
+          list={unc.data}
+          onClose={(changed) => {
+            setSorting(false);
+            if (changed) {
+              reload();
+              setVersion((v) => v + 1);
+            }
+          }}
+        />
+      )}
     </HomeContext>
   );
 }

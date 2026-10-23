@@ -139,7 +139,10 @@ def test_uncategorized_and_merchant_bulk(authed, ids, sf):
         "count": 2,
         "total": -50.0,
         "kind": "card",
+        "sample_date": "2026-09-02",
+        "account_label": unc[0]["account_label"],
     }
+    assert unc[0]["account_label"]
     assert (
         authed.get("/api/transactions", params={"uncategorized": True}).json()["items"].__len__()
         == 3
@@ -158,6 +161,20 @@ def test_uncategorized_and_merchant_bulk(authed, ids, sf):
     assert [u["merchant_key"] for u in authed.get("/api/categories/uncategorized").json()] == [
         "Other"
     ]
+    usage = authed.get("/api/categories/usage").json()
+    assert usage[0] == cid and other in usage
+
+
+def test_merchant_category_without_rule(authed, ids, sf):
+    cid = ids["cats"]["אוכל בחוץ"]
+    _txn(sf, ids["card"], date(2026, 9, 1), -30, "Once", key="once")
+    r = authed.put(
+        "/api/categories/merchant",
+        json={"merchant_key": "once", "category_id": cid, "remember": False},
+    )
+    assert r.json() == {"changed": 1}
+    with sf() as s:
+        assert s.scalar(select(MerchantRule).where(MerchantRule.pattern == "once")) is None
 
 
 def test_cashflow_endpoint_shape(authed, ids, sf):
