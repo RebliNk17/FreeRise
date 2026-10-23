@@ -32,6 +32,26 @@ NON_SPENDING = ("transfer", "card_bill", "ignore")
 STATUSES = ("pending", "confirmed", "dismissed")
 CENT = Decimal("0.01")
 SWITCH_DAYS = 60  # how long a "moved to another card" note stays visible
+# Auto-confirm: the latest AUTO_N monthly occurrences, one cycle apart, similar amount and day.
+AUTO_N = 3
+AUTO_AMOUNT = Decimal("0.10")  # each within ±10% of their median
+AUTO_DAYS = 4  # day-of-month spread at most this
+
+
+def strong_monthly(occ: list[tuple[date, Decimal]]) -> bool:
+    """A sure fixed charge/income: confirmed automatically (uncertain ones stay pending,
+    silently; the user can undo from the transaction sheet)."""
+    last = occ[-AUTO_N:]
+    if len(last) < AUTO_N:
+        return False
+    lo, hi = CADENCE_BANDS["monthly"]
+    if not all(lo <= (b - a).days <= hi for (a, _), (b, _) in pairwise(last)):
+        return False
+    med = median(a for _, a in last)
+    days = [d.day for d, _ in last]
+    # day of month is circular: the 30th and the 1st are 1-2 days apart
+    near = all(min(abs(x - y), 31 - abs(x - y)) <= AUTO_DAYS for x in days for y in days)
+    return near and all(abs(a - med) <= med * AUTO_AMOUNT for _, a in last)
 
 
 def clean_label(description: str, fallback: str) -> str:
@@ -153,6 +173,8 @@ def detect_recurring(session: Session, today: date) -> list[RecurringItem]:
         item.next_expected_date = next_date
         item.basis = f"{label}{f' · {cat.name}' if cat else ''}: {how}, {CADENCE_HE[cadence]}"
         _track_account(item, txns)
+        if item.status == "pending" and cadence == "monthly" and strong_monthly(occ):
+            item.status = "confirmed"  # never touches dismissed (the user said no)
         session.add(item)
         if item.status != "dismissed":
             out.append(item)

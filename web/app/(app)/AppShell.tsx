@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   ArrowLeftRight,
-  CalendarClock,
   ChartColumn,
   FlaskConical,
   House,
@@ -32,7 +31,6 @@ type NavLink = { href: string; label: string; icon: LucideIcon };
 const TABS: NavLink[] = [
   { href: "/home", label: "בית", icon: House },
   { href: "/progress", label: "המגמות שלי", icon: ChartColumn },
-  { href: "/forecast", label: "תחזית", icon: CalendarClock },
   { href: "/pension", label: "פנסיה", icon: PiggyBank },
 ];
 

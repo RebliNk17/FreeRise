@@ -2,7 +2,7 @@ from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
 from freerise.accounts import account_labels
-from freerise.models import Account, Category, MerchantRule, Transaction
+from freerise.models import Account, Category, MerchantRule, RecurringItem, Transaction
 
 # Scraper `Transaction.category` text -> our category name. Extend as real strings show up.
 PROVIDER_CATEGORY_MAP: dict[str, str] = {
@@ -132,6 +132,25 @@ def set_merchant_category(
     return res.rowcount
 
 
+def _follow_recurring(session: Session, merchant_key: str, category_id: int) -> None:
+    """ "זו לא הוצאה קבועה" (moved to variable) dismisses the merchant's detected fixed item;
+    "זו הוצאה קבועה" (moved to fixed) confirms it. User-defined items are left alone."""
+    if not merchant_key:
+        return
+    group = session.scalar(select(Category.group).where(Category.id == category_id))
+    item = session.scalar(
+        select(RecurringItem).where(
+            RecurringItem.merchant_key == merchant_key, RecurringItem.direction == "expense"
+        )
+    )
+    if item is None or item.user_defined:
+        return
+    if group == "variable" and item.status != "dismissed":
+        item.status = "dismissed"
+    elif group == "fixed" and item.status != "confirmed":
+        item.status = "confirmed"
+
+
 def uncategorized_merchants(session: Session) -> list[dict]:
     """Uncategorized transactions grouped by merchant, most frequent first; with the latest
     one's date and account as a sample."""
@@ -194,6 +213,7 @@ def set_category(
         raise ValueError(f"transaction {txn_id} not found")
     txn.category_id, txn.category_source = category_id, "manual"
     changed = 1
+    _follow_recurring(session, txn.merchant_key, category_id)
     if remember and txn.merchant_key:
         _remember(session, txn.merchant_key, category_id)
     if apply_to_past and txn.merchant_key:

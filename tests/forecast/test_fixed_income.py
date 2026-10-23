@@ -169,7 +169,7 @@ def test_detect_recurring_keeps_user_defined_day_and_amount(session):
         _tx(session, a, date(2026, m, 15), amt, key="job")
     detect_recurring(session, TODAY)
     item = session.scalar(select(RecurringItem).where(RecurringItem.merchant_key == "job"))
-    assert item.status == "pending" and not item.user_defined
+    assert item.status == "confirmed" and not item.user_defined  # auto-confirmed
     mark_fixed_income(session, "job", "job", None, a.id, date(2026, 9, 15), 20, Decimal(5000), True)
     detect_recurring(session, TODAY)
     assert item.user_defined and item.status == "confirmed"

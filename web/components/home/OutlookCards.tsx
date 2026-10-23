@@ -1,12 +1,10 @@
 "use client";
 
-import Link from "next/link";
-import { ChevronLeft } from "lucide-react";
 import { Money } from "@/components/Amount";
 import { Card } from "@/components/Card";
 import { ExpectedItems } from "@/components/ExpectedItems";
 import type { Forecast, Plan } from "@/lib/api";
-import { formatDate } from "@/lib/format";
+import { formatCycleLabel, formatDate } from "@/lib/format";
 import { useApi } from "@/lib/useApi";
 import { useHiddenAccounts, withHidden } from "@/lib/viewFilter";
 import { useHome } from "./context";
@@ -56,45 +54,62 @@ export function BalancesCard() {
   );
 }
 
-/** "החודש הבא": installments that stop, expected fixed and income, link to /forecast. */
+/** "החודש הבא" (#next): expected fixed charges and income with their dates and accounts,
+ * the change from this cycle, and installments that stop — everything the old /forecast page showed. */
 export function NextCycleCard() {
   const { data: f } = useApi<Forecast>("/forecast/next", useHome().version);
   if (!f) return null;
   return (
-    <Card
-      title="החודש הבא"
-      action={
-        <Link href="/forecast" className="link flex items-center">
-          לתחזית המלאה <ChevronLeft size={16} aria-hidden />
-        </Link>
-      }
-    >
-      <ul className="flex flex-col gap-2 text-sm">
-        <li className="flex items-baseline">
-          <span className="flex-1">הוצאות קבועות צפויות</span>
-          <Money value={f.fixed_total} className="font-semibold" />
-        </li>
-        <li className="flex items-baseline">
-          <span className="flex-1">הכנסות צפויות</span>
-          <Money value={f.income_total} className="font-semibold" />
-        </li>
-      </ul>
-      {f.installments_stopping.length > 0 ? (
+    <div id="next" className="scroll-mt-20">
+      <Card title="החודש הבא" action={<span className="text-xs text-muted">{formatCycleLabel(f.cycle.start, f.cycle.end)}</span>}>
         <Expander
-          buttonClassName="flex min-h-11 border-t border-hairline pt-2"
+          buttonClassName="flex min-h-11"
           label={
-            <span className="text-sm font-semibold">
-              יפסיקו תשלומים בסך <Money value={f.installments_stopping_total} className="font-bold text-positive" /> ({f.installments_stopping.length})
+            <span className="flex items-baseline gap-2 text-sm">
+              <span className="flex-1">הוצאות קבועות צפויות</span>
+              <Money value={f.fixed_total} className="font-semibold" />
             </span>
           }
         >
-          <div className="pt-1">
-            <ExpectedItems items={f.installments_stopping} none="" />
+          <div className="pb-1">
+            {f.delta_fixed_vs_current !== 0 && (
+              <p className="text-xs text-muted">
+                {f.delta_fixed_vs_current > 0 ? "יותר" : "פחות"} מהחודש הנוכחי ב־<Money value={Math.abs(f.delta_fixed_vs_current)} />
+              </p>
+            )}
+            <ExpectedItems items={f.fixed_items} none="לא זוהו חיובים קבועים." />
           </div>
         </Expander>
-      ) : (
-        <p className="border-t border-hairline pt-3 text-sm text-muted">אין תשלומים שמסתיימים בחודש הבא.</p>
-      )}
-    </Card>
+        <Expander
+          buttonClassName="flex min-h-11 border-t border-hairline"
+          label={
+            <span className="flex items-baseline gap-2 text-sm">
+              <span className="flex-1">הכנסות צפויות</span>
+              <Money value={f.income_total} className="font-semibold" />
+            </span>
+          }
+        >
+          <div className="pb-1">
+            <ExpectedItems income items={f.income_items} none="לא זוהו הכנסות קבועות." />
+          </div>
+        </Expander>
+        {f.installments_stopping.length > 0 ? (
+          <Expander
+            buttonClassName="flex min-h-11 border-t border-hairline"
+            label={
+              <span className="text-sm font-semibold">
+                יפסיקו תשלומים בסך <Money value={f.installments_stopping_total} className="font-bold text-positive" /> ({f.installments_stopping.length})
+              </span>
+            }
+          >
+            <div className="pt-1">
+              <ExpectedItems items={f.installments_stopping} none="" />
+            </div>
+          </Expander>
+        ) : (
+          <p className="border-t border-hairline pt-3 text-sm text-muted">אין תשלומים שמסתיימים בחודש הבא.</p>
+        )}
+      </Card>
+    </div>
   );
 }

@@ -132,27 +132,6 @@ def test_sync_failed_blocked_is_not_site_changed(session):
     assert body == "הספק חוסם זמנית חיבור אוטומטי"
 
 
-def test_new_recurring_fires_once(session):
-    session.add(
-        RecurringItem(
-            merchant_key="spotify",
-            direction="expense",
-            label="ספוטיפיי",
-            cadence="monthly",
-            amount_kind="fixed",
-            expected_amount=Decimal(49),
-            last_date=TODAY,
-            next_expected_date=TODAY + timedelta(days=30),
-            status="pending",
-            basis="b",
-        )
-    )
-    session.flush()
-    _fires_once(session, "new_recurring")
-    n = session.scalar(select(Notification).where(Notification.kind == "new_recurring"))
-    assert n.link == "/forecast"  # the confirm/dismiss list lives there
-
-
 def test_weekly_allowance_used_fires_once(session):
     a = _acct(session)
     # income gives an allowance; heavy variable spending this week uses it up
@@ -237,7 +216,10 @@ def test_failing_rule_does_not_stop_others(session, monkeypatch):
         notify(s, "boom", "t", "b", None, "boom:1")
         raise RuntimeError
 
-    monkeypatch.setattr(rules, "RULES", (boom, rules._new_recurring))
+    def ok(s, today):
+        notify(s, "ok", "t", "b", None, "ok:1")
+
+    monkeypatch.setattr(rules, "RULES", (boom, ok))
     session.add(
         RecurringItem(
             merchant_key="k",
@@ -254,7 +236,7 @@ def test_failing_rule_does_not_stop_others(session, monkeypatch):
     )
     session.flush()
     assert generate_notifications(session, TODAY) == 1
-    assert _kinds(session) == ["new_recurring"]
+    assert _kinds(session) == ["ok"]
 
 
 def test_disabled_credentials_skip_pension_reminder(session):

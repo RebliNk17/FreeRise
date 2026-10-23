@@ -20,7 +20,6 @@ from freerise.models import (
     Account,
     Category,
     Credential,
-    RecurringItem,
     Setting,
     SyncRun,
     Transaction,
@@ -114,7 +113,7 @@ def _weekly_allowance_used(s: Session, today: date) -> None:
                 "weekly_allowance_used",
                 "תקציב השבוע נוצל",
                 f"הוצאתם {ils(w.spent)} מתוך {ils(w.allowance)} לשבוע זה",
-                "/forecast",
+                "/home",
                 f"weekly_allowance_used:{w.start}",
                 "warning",
             )
@@ -129,7 +128,7 @@ def _category_over_expected(s: Session, today: date) -> None:
                 "category_over_expected",
                 f"חריגה בקטגוריה {c.name}",
                 f"הוצאתם {ils(c.spent)} לעומת צפי של {ils(c.expected)}",
-                "/forecast",
+                "/home",
                 f"category_over_expected:{plan.cycle.start}:{c.category_id}",
                 "warning",
             )
@@ -146,7 +145,7 @@ def _installments_ending(s: Session, today: date) -> None:
             "תשלומים מסתיימים",
             f"{'תשלום אחרון אחד' if len(lines) == 1 else f'{len(lines)} תשלומים אחרונים'} "
             f"במחזור הזה, {ils(total)} לא יחויבו במחזור הבא",
-            "/forecast",
+            "/home#next",
             f"installments_ending:{cycle.start}",
         )
 
@@ -293,18 +292,6 @@ def _sync_paused(s: Session, today: date) -> None:
         )
 
 
-def _new_recurring(s: Session, today: date) -> None:
-    for r in s.scalars(select(RecurringItem).where(RecurringItem.status == "pending")):
-        notify(
-            s,
-            "new_recurring",
-            "זוהה חיוב קבוע חדש",
-            f"{r.label}: {ils(r.expected_amount)}",
-            "/forecast",  # where pending items are confirmed
-            f"new_recurring:{r.id}",
-        )
-
-
 def _card_bills(s: Session, today: date) -> None:
     for b in reconcile_range(s, today - timedelta(days=45), today):
         name = ISSUER_NAMES.get(b.issuer, "לא ידוע")
@@ -353,7 +340,6 @@ def _insight_warnings(s: Session, today: date) -> None:
 RULES = (
     _sync_failed,
     _sync_paused,
-    _new_recurring,
     _weekly_allowance_used,
     _category_over_expected,
     _installments_ending,
