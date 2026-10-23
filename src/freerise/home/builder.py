@@ -33,6 +33,7 @@ from freerise.models import (
     CategoryBudget,
     CategoryWeekBudget,
     RecurringItem,
+    Setting,
     TrackedCategory,
     Transaction,
     TransactionSplit,
@@ -401,6 +402,13 @@ def split_parts(session: Session, cats: dict[int, Category]) -> dict[int, list[S
     return out
 
 
+MANUAL_ORDER = "tracked_order_manual"
+
+
+def manual_order(session: Session) -> bool:
+    return bool(session.scalar(select(Setting.value).where(Setting.key == MANUAL_ORDER)))
+
+
 def default_mode(name: str) -> str:
     return "weekly" if name in WEEKLY_DEFAULT else "monthly"
 
@@ -585,7 +593,10 @@ def build_home(session: Session, cycle: Cycle, today: date) -> Home:
             )
         )
     order = {r.category_id: r.sort_order for r in tracked_rows}
-    tracked.sort(key=lambda x: (-x.expected, order[x.category_id]))
+    if manual_order(session):  # the user's own order (settings), else biggest first
+        tracked.sort(key=lambda x: order[x.category_id])
+    else:
+        tracked.sort(key=lambda x: (-x.expected, order[x.category_id]))
     active = {r.category_id for r in tracked_rows}
     untracked = [
         CategoryRef(c.id, c.name)

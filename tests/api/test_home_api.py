@@ -100,3 +100,20 @@ def test_note_and_move_api(home_api, sf):
         assert {s.get(Transaction, i).category_id for i in (t1, t2, t3)} == {fun}
         rules = s.scalars(select(MerchantRule.pattern).where(MerchantRule.source == "user")).all()
         assert sorted(rules) == ["other", "shop"]
+
+
+def test_tracking_order(home_api, sf):
+    c, _, cats = home_api
+    food, fun = cats["כלכלה"], cats["פנאי"]
+    for cid in (food, fun):
+        c.put(f"/api/tracking/{cid}", json={"tracked": True})
+    order = [t["category_id"] for t in c.get("/api/home/current").json()["tracked"]]
+    assert order == [food, fun]  # automatic: biggest expected, then sort order
+    try:
+        assert c.put("/api/tracking/order", json={"category_ids": [fun, food]}).status_code == 204
+        order = [t["category_id"] for t in c.get("/api/home/current").json()["tracked"]]
+        assert order == [fun, food]
+        r = c.put("/api/tracking/order", json={"category_ids": [cats["משכנתא"]]})
+        assert r.status_code == 404
+    finally:
+        assert c.delete("/api/tracking/order").status_code == 204  # settings survive tests
