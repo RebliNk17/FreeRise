@@ -130,22 +130,6 @@ export type Category = { id: number; name: string; group: Group; sort_order: num
 export type Uncategorized = { merchant_key: string; sample_description: string; count: number; total: number; kind: "bank" | "card"; sample_date: string; account_label: string };
 export type Cycle = { start: string; end: string; label_year: number; label_month: number };
 
-export type CashFlow = {
-  cycle: Cycle;
-  income: number;
-  spending: number;
-  net: number;
-  verdict: "positive" | "negative";
-  groups: { group: "fixed" | "variable" | "savings" | "income"; total: number; categories: { category_id: number | null; name: string; total: number; count: number }[] }[];
-  uncategorized_total: number;
-  uncategorized_count: number;
-  pending_count: number;
-  income_fixed: number;
-  income_variable: number;
-  basis: string;
-  history: (Cycle & { net: number })[];
-  fees: Fees;
-};
 
 export type FeeItem = { txn_id: number; date: string; description: string; account_id: number; account_name: string; merchant_key: string; fee_key: string; amount: number };
 export type Fees = { total: number; count: number; previous_total: number; items: FeeItem[]; new_fee_merchants: string[] };

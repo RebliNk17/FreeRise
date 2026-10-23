@@ -60,7 +60,7 @@ def _fees(s: Session, today: date) -> None:
     start_day = get_start_day(s)
     cycle = cycle_for(today, start_day)
     f = fees_in_cycle(s, cycle)
-    link = f"/cashflow/{cycle.label_month.year}/{cycle.label_month.month}"
+    link = f"/home/{cycle.label_month.year}/{cycle.label_month.month}"
     if f.total > 0:
         accounts = ", ".join(dict.fromkeys(x.account_name for x in f.items))
         notify(

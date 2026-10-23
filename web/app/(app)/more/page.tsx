@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeftRight, Bell, ChevronLeft, CreditCard, FlaskConical, KeyRound, MessagesSquare, Receipt, Settings, Target, TrendingUp, Wallet } from "lucide-react";
+import { ArrowLeftRight, ChevronLeft, CreditCard, FlaskConical, KeyRound, MessagesSquare, Receipt, Settings, Target, TrendingUp, Wallet } from "lucide-react";
 
 const LINKS = [
   { href: "/plans", label: "יעדי חיסכון", icon: Target },
@@ -11,7 +11,6 @@ const LINKS = [
   { href: "/accounts", label: "חשבונות", icon: Wallet },
   { href: "/reconcile", label: "התאמת חיובי אשראי", icon: CreditCard },
   { href: "/settings/credentials", label: "חיבורים לבנקים ואשראי", icon: KeyRound },
-  { href: "/notifications", label: "התראות", icon: Bell },
   { href: "/settings", label: "הגדרות", icon: Settings },
 ];
 

@@ -95,7 +95,7 @@ class Ctx:
     @property
     def cashflow_link(self) -> str:
         m = self.cycle.label_month
-        return f"/cashflow/{m.year}/{m.month}"
+        return f"/home/{m.year}/{m.month}"
 
     @cached_property
     def projected_end(self) -> Decimal:
