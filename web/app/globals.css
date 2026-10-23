@@ -32,6 +32,7 @@
   --danger: light-dark(#d9573c, #f0866b);
   --danger-soft: light-dark(#fbe6de, #3a2420);
   --danger-strong: light-dark(#b4432a, #f5a28c);
+  --info: light-dark(#3f6fae, #8fb3e6); /* savings segment (stacked totals) */
   --info-soft: light-dark(#e4ecf7, #1f2733);
   --nav: light-dark(#1e2a27, #2b2721);
   --nav-icon: light-dark(#c9d3cf, #a59c8e);
@@ -92,6 +93,7 @@
   --color-band-warning: var(--band-warning);
   --color-band-positive: var(--band-positive);
   --color-band-info: var(--band-info);
+  --color-info: var(--info);
   --shadow-card: var(--shadow);
   --shadow-nav: var(--shadow-nav);
   --font-sans: var(--font-assistant);

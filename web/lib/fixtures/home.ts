@@ -21,6 +21,9 @@ const txn = (id: number, amount: number, description: string, extra: Partial<Txn
   cycle_label: null,
   fixed_income_id: null,
   cycle_date_source: null,
+  split_total: null,
+  split: null,
+  review: null,
   ...extra,
 });
 

@@ -21,7 +21,8 @@ import { FixedCard } from "./FixedCard";
 import { IncomeCard } from "./IncomeCard";
 import { InsightCarousel } from "./InsightCarousel";
 import { BalancesCard, NextCycleCard } from "./OutlookCards";
-import { SectionHeader, TotalLine } from "./parts";
+import { SectionHeader } from "./parts";
+import { TotalCard } from "./TotalCard";
 import { SavingsCard } from "./SavingsCard";
 import { TrackedCategoryCard } from "./TrackedCategoryCard";
 import { TxnList } from "./TxnRow";
@@ -136,7 +137,7 @@ export function HomeView({ path, title }: { path: string; title: string }) {
             <AddTrackedCategory />
             <SavingsCard s={data.savings} />
             <FixedCard f={data.fixed} />
-            <TotalLine spent={data.total.spent} expected={data.total.expected} />
+            <TotalCard d={data} />
             <IncomeCard inc={data.income} />
             {cycle.is_current && (
               <>

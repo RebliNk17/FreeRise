@@ -98,14 +98,6 @@ export function SectionHeader({ title, action, id }: { title: React.ReactNode; a
   );
 }
 
-export function TotalLine({ spent, expected }: { spent: number; expected: number }) {
-  return (
-    <p className="px-1 text-center text-sm text-muted">
-      סך כל ההוצאות עד עכשיו <Money value={spent} className="font-bold text-text" /> מתוך <Money value={expected} className="font-bold text-text" /> שצפויים לצאת.
-    </p>
-  );
-}
-
 /** Column header row for the breakdown tables. */
 export function TableHead({ cols }: { cols: [string, string, string] }) {
   return (
