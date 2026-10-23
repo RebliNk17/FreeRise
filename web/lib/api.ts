@@ -115,6 +115,10 @@ export type Transaction = {
   category_source: string | null;
   merchant_key: string | null;
   reconcile_status?: ReconcileStatus | null;
+  note?: string | null;
+  group?: Group | null; // category group
+  split?: { category_id: number; category_name: string; amount: number }[] | null;
+  review?: { assignee: string | null; note: string | null } | null;
 };
 
 /** GET /reviews: transactions flagged "לבדוק עם…". */
