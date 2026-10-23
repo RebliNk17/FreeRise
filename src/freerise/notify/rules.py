@@ -29,7 +29,12 @@ from freerise.models import (
     Notification as _N,
 )
 from freerise.notify.store import notify
-from freerise.reconcile.card_bills import ISSUER_NAMES, reconcile_link, reconcile_range
+from freerise.reconcile.card_bills import (
+    HEALTH_LINK,
+    ISSUER_NAMES,
+    cards_synced_after,
+    reconcile_range,
+)
 from freerise.sync.service import PAUSE_AFTER, login_paused
 
 log = logging.getLogger("freerise.notify")
@@ -300,23 +305,12 @@ def _new_recurring(s: Session, today: date) -> None:
         )
 
 
-def _cards_synced_after(s: Session, issuer: str, d: date) -> bool:
-    """Every enabled card credential of the issuer synced after d (so its bill is visible)."""
-    tz = ZoneInfo(get_settings().tz)
-    stamps = s.scalars(
-        select(Credential.last_success_at).where(
-            Credential.provider == issuer, Credential.enabled, Credential.verified
-        )
-    ).all()
-    return all(x is not None and x.astimezone(tz).date() > d for x in stamps)
-
-
 def _card_bills(s: Session, today: date) -> None:
     for b in reconcile_range(s, today - timedelta(days=45), today):
         name = ISSUER_NAMES.get(b.issuer, "לא ידוע")
         if b.status == "mismatch":
             # Deduped forever, so wait until the card side has caught up with this bill.
-            if not _cards_synced_after(s, b.issuer, b.date):
+            if not cards_synced_after(s, b.issuer, b.date):
                 continue
             detail = (
                 f"חסרות בכרטיס עסקאות בסך {ils(b.gap)}"
@@ -328,7 +322,7 @@ def _card_bills(s: Session, today: date) -> None:
                 "card_bill_mismatch",
                 f"חיוב {name} לא תואם",
                 f"הבנק חויב {ils(b.amount)}, בכרטיס {ils(b.card_total)} — {detail}",
-                reconcile_link(s, b.date),
+                HEALTH_LINK,
                 f"card_bill_mismatch:{b.bank_txn_id}",
                 "warning",
             )
@@ -339,7 +333,7 @@ def _card_bills(s: Session, today: date) -> None:
                 "card_unknown",
                 "חיוב מכרטיס לא מחובר",
                 f"{who} חויב {ils(b.amount)} מהבנק אבל אין כרטיס מחובר שתואם",
-                reconcile_link(s, b.date),
+                HEALTH_LINK,
                 f"card_unknown:{b.bank_txn_id}",
                 "warning",
             )

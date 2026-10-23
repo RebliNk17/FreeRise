@@ -31,7 +31,12 @@ from freerise.models import (
     RecurringItem,
     Transaction,
 )
-from freerise.reconcile.card_bills import reconcile_link, reconcile_range
+from freerise.reconcile.card_bills import (
+    HEALTH_LINK,
+    ISSUER_NAMES,
+    cards_synced_after,
+    reconcile_range,
+)
 from freerise.view import counted
 
 log = logging.getLogger("freerise.insights")
@@ -346,7 +351,6 @@ def unknown_card(ctx: Ctx) -> list[Insight]:
     if not bills:
         return []
     total = sum((b.amount for b in bills), Decimal(0))
-    latest = max(bills, key=lambda b: b.date)
     return [
         Insight(
             f"unknown_card:{max(b.bank_txn_id for b in bills)}",  # a new bill shows it again
@@ -355,11 +359,39 @@ def unknown_card(ctx: Ctx) -> list[Insight]:
             "חיובי אשראי בלי פירוט",
             f"בחודש וחצי האחרונים ירדו מהבנק {ils(total)} לכרטיסים שלא מחוברים ל-FreeRise, "
             "ולכן לא רואים על מה הכסף יצא.",
-            "להתאמת חיובים",
-            reconcile_link(ctx.session, latest.date),
+            "לבדיקת תקינות",
+            HEALTH_LINK,
             total,
         )
     ]
+
+
+def card_mismatch(ctx: Ctx) -> list[Insight]:
+    """A bank-side card bill that doesn't match the card's charges we have (reconcile runs
+    after every sync; only problems show). Waits until the card has synced past the bill."""
+    out = []
+    for b in reconcile_range(ctx.session, ctx.today - timedelta(days=45), ctx.today):
+        if b.status != "mismatch" or not cards_synced_after(ctx.session, b.issuer, b.date):
+            continue
+        card = " ".join(
+            [ISSUER_NAMES.get(b.issuer or "", "אשראי")]
+            + [a["name"].split()[-1] for a in b.matched_accounts[:1] if a["name"].split()]
+        )
+        more = b.gap > 0
+        out.append(
+            Insight(
+                f"card_mismatch:{b.bank_txn_id}",
+                "card_mismatch",
+                "warning",
+                "חיוב אשראי לא תואם",
+                f"חיוב {card} מהבנק ({b.date:%d.%m}) {'גבוה' if more else 'נמוך'} ב־{ils(abs(b.gap))} "
+                "מהעסקאות שיש לנו בכרטיס" + (", כנראה חסרות עסקאות." if more else "."),
+                "לבדיקת תקינות",
+                HEALTH_LINK,
+                abs(b.gap),
+            )
+        )
+    return out
 
 
 def variable_income_expected(ctx: Ctx) -> list[Insight]:
@@ -482,6 +514,7 @@ RULES = (
     fixed_heavy,
     fees,
     unknown_card,
+    card_mismatch,
     variable_income_expected,
     eating_out_weekend,
     fixed_not_charged,

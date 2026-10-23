@@ -149,9 +149,9 @@ function Transactions() {
                     ) : null}
                     {t.status === "pending" && <span className="shrink-0 text-xs text-muted">בהמתנה</span>}
                     {t.reconcile_status && (
-                      <Link href="/reconcile" className={`flex size-6 shrink-0 items-center justify-center rounded-full ${t.reconcile_status === "matched" ? "bg-brand-soft text-brand" : "bg-danger-soft text-danger"}`} aria-label={t.reconcile_status === "matched" ? "תואם לחיובי הכרטיס" : "לא תואם לחיובי הכרטיס"}>
+                      <span className={`flex size-6 shrink-0 items-center justify-center rounded-full ${t.reconcile_status === "matched" ? "bg-brand-soft text-brand" : "bg-danger-soft text-danger"}`} aria-label={t.reconcile_status === "matched" ? "תואם לחיובי הכרטיס" : "לא תואם לחיובי הכרטיס"}>
                         {t.reconcile_status === "matched" ? <Check size={13} aria-hidden /> : <TriangleAlert size={13} aria-hidden />}
-                      </Link>
+                      </span>
                     )}
                   </div>
                   <div className="flex items-center gap-2 text-xs text-muted">
