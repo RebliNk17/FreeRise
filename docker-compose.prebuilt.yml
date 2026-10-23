@@ -1,0 +1,45 @@
+# Runs FreeRise from the published images; no clone or build needed.
+#   docker compose -f docker-compose.prebuilt.yml up -d
+# Pin a release with FREERISE_VERSION=1.0.0 (default: latest).
+x-image: &platform
+  # Images are built for amd64 (the worker needs Google Chrome); Apple Silicon runs them emulated.
+  platform: linux/amd64
+
+services:
+  postgres:
+    image: postgres:18
+    env_file: .env
+    environment:
+      POSTGRES_DB: freerise
+    volumes:
+      - pgdata:/var/lib/postgresql
+    restart: unless-stopped
+
+  api:
+    <<: *platform
+    image: ghcr.io/reblink17/freerise-api:${FREERISE_VERSION:-latest}
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-freerise}:${POSTGRES_PASSWORD:-freerise}@postgres:5432/freerise
+    depends_on: [postgres]
+    restart: unless-stopped # retries until postgres accepts connections
+
+  worker:
+    <<: *platform
+    image: ghcr.io/reblink17/freerise-worker:${FREERISE_VERSION:-latest}
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-freerise}:${POSTGRES_PASSWORD:-freerise}@postgres:5432/freerise
+    depends_on: [api] # api runs the migrations
+    restart: unless-stopped
+
+  web:
+    <<: *platform
+    image: ghcr.io/reblink17/freerise-web:${FREERISE_VERSION:-latest}
+    depends_on: [api]
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+volumes:
+  pgdata:

@@ -36,36 +36,43 @@
 - **Private by design**: bank credentials are encrypted at rest (AES-GCM), and login uses
   password plus TOTP 2FA.
 
-## Quick start (Docker)
+## Quick start (Docker, about two minutes)
 
-You need [Docker](https://docs.docker.com/get-docker/).
-
-```bash
-git clone https://github.com/RebliNk17/FreeRise.git
-cd freerise
-cp .env.example .env
-```
-
-Generate two secrets and paste them into `.env` as `CREDENTIALS_KEY` and `SESSION_SECRET`:
+You need [Docker](https://docs.docker.com/get-docker/). This runs the published images; nothing
+to clone or build.
 
 ```bash
-python3 -c "import os,base64;print(base64.b64encode(os.urandom(32)).decode())"
+mkdir freerise && cd freerise
+curl -fsSLO https://raw.githubusercontent.com/RebliNk17/FreeRise/master/docker-compose.prebuilt.yml
+# .env with freshly generated secrets
+curl -fsSL https://raw.githubusercontent.com/RebliNk17/FreeRise/master/.env.example | sed \
+  -e "s|^CREDENTIALS_KEY=.*|CREDENTIALS_KEY=$(openssl rand -base64 32)|" \
+  -e "s|^SESSION_SECRET=.*|SESSION_SECRET=$(openssl rand -base64 32)|" \
+  -e "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(openssl rand -hex 16)|" > .env
+docker compose -f docker-compose.prebuilt.yml up -d
+docker compose -f docker-compose.prebuilt.yml exec api freerise create-user <your-username>
 ```
 
-> **Back up `CREDENTIALS_KEY`.** If you lose it, every stored bank credential becomes unreadable.
-
-Start everything and create your user:
-
-```bash
-docker compose up -d --build                         # postgres, api :8000, worker, web :3000
-docker compose exec api freerise create-user <your-username>
-```
+> **Back up `.env`, especially `CREDENTIALS_KEY`.** If you lose it, every stored bank credential
+> becomes unreadable.
 
 `create-user` asks for a password and prints a TOTP URI once. Add it to your authenticator app
 (Google Authenticator, 1Password, etc.). Then open <http://localhost:3000>, log in, and connect
 your banks under **Settings → Credentials**.
 
-`docker compose down` stops everything and keeps the database volume.
+To update, run `docker compose -f docker-compose.prebuilt.yml pull && docker compose -f
+docker-compose.prebuilt.yml up -d`. To pin a release, set `FREERISE_VERSION=1.0.0` in `.env`.
+`docker compose ... down` stops everything and keeps the database volume.
+
+### Build from source
+
+```bash
+git clone https://github.com/RebliNk17/FreeRise.git
+cd FreeRise
+cp .env.example .env        # fill CREDENTIALS_KEY and SESSION_SECRET (openssl rand -base64 32)
+docker compose up -d --build                         # postgres, api :8000, worker, web :3000
+docker compose exec api freerise create-user <your-username>
+```
 
 ### Try it with demo data
 
@@ -73,8 +80,10 @@ To explore without connecting real accounts, fill an **empty** database with abo
 months of fake household data and a `demo` user:
 
 ```bash
-docker compose exec -e FREERISE_ALLOW_DEMO=1 api freerise demo-seed   # password: demo-demo-demo
+docker compose -f docker-compose.prebuilt.yml exec -e FREERISE_ALLOW_DEMO=1 api freerise demo-seed   # password: demo-demo-demo
 ```
+
+(Built from source? Drop the `-f docker-compose.prebuilt.yml`.)
 
 Demo seeding refuses to run if any real credential exists, so it never mixes with real data.
 
