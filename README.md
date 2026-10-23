@@ -99,7 +99,7 @@ cd web && bun install && bun dev                       # web on :3000, proxies /
 ```bash
 uv run pytest -q
 uv run ruff check . && uv run ruff format --check .
-cd web && bun test && bun run lint && bun run build
+cd web && bun test && bun run lint && bun run typecheck && bun run build
 ```
 
 ### Project layout
