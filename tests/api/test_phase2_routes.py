@@ -92,7 +92,7 @@ def test_set_category_endpoint_remembers(authed, ids, sf):
     r = authed.put(f"/api/transactions/{a}/category", json={"category_id": cid})
     assert r.json() == {"changed": 1}
     rules = authed.get("/api/rules").json()
-    rule = next(x for x in rules if x["pattern"] == "pizza")
+    rule = next(x for x in rules if x["pattern"] == "pizza" and x["match"] == "exact")
     assert rule == {
         "id": rule["id"],
         "pattern": "pizza",

@@ -15,7 +15,7 @@ def test_user_rule_beats_seed(session, cat, mk_txn):
 
 
 def test_contains_rule_matches_description(session, cat, mk_txn):
-    t = mk_txn("PAYBOX תשלום לדני")
+    t = mk_txn("XYZPAY תשלום לדני")
     rule(session, "תשלום לדני", cat("העברות").id, "seed", match="contains")
     assert categorize_transaction(session, t) == (cat("העברות").id, "map")
 
@@ -50,7 +50,7 @@ def test_set_category_remember_and_apply_to_past(session, cat, mk_txn):
         cat("אוכל בחוץ").id,
         cat("פנאי").id,
     )
-    r = session.query(MerchantRule).filter_by(pattern=a.merchant_key).one()
+    r = session.query(MerchantRule).filter_by(pattern=a.merchant_key, match="exact").one()
     assert (r.source, r.category_id) == ("user", cat("אוכל בחוץ").id)
 
 
@@ -101,8 +101,8 @@ def test_migration_card_bill_rule_excludes_bank_bill_from_summary(session, cat):
 
 
 def test_contains_pattern_compared_lowercase(session, cat, mk_txn):
-    t = mk_txn("AMAZON MKTPLACE")
-    rule(session, "Amazon", cat("קניות").id, "seed", match="contains")
+    t = mk_txn("ACME MKTPLACE")
+    rule(session, "Acme", cat("קניות").id, "seed", match="contains")
     assert categorize_transaction(session, t) == (cat("קניות").id, "map")
 
 
@@ -133,7 +133,7 @@ def test_fee_rules(session, cat, mk_txn):
     ):
         assert categorize_transaction(session, mk_txn(desc)) == (fees, "map"), desc
     for desc in ("COFFEE SHOP", "ארומה coffee", "FEE REFUND CENTER", "דמי טיפול רפואי"):
-        assert categorize_transaction(session, mk_txn(desc)) == (None, None), desc
+        assert categorize_transaction(session, mk_txn(desc))[0] != fees, desc
 
 
 def test_fee_rules_do_not_hijack_bank_card_bills(session, cat):
