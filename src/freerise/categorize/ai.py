@@ -1,7 +1,21 @@
+import json
 import os
 from typing import Protocol
 
 import httpx
+
+
+def chat_completion(
+    client: httpx.Client, url: str, key: str, model: str, messages: list[dict], **extra
+) -> str:
+    """POST an OpenAI-compatible /chat/completions (OpenRouter and friends); the reply text."""
+    r = client.post(
+        url,
+        headers={"Authorization": f"Bearer {key}"},
+        json={"model": model, "messages": messages, **extra},
+    )
+    r.raise_for_status()
+    return r.json()["choices"][0]["message"]["content"]
 
 
 class AiCategorizer(Protocol):
@@ -26,21 +40,17 @@ class OpenRouterCategorizer:
         key = os.environ.get("OPENROUTER_API_KEY")
         if not key:
             raise NotImplementedError("set OPENROUTER_API_KEY to enable AI categorization")
-        import json
-
         prompt = (
             f"Categories: {', '.join(self.categories)}.\n"
             "Reply with a JSON object mapping each merchant_key to one category.\n"
             f"{json.dumps(items, ensure_ascii=False)}"
         )
-        r = self.client.post(
+        content = chat_completion(
+            self.client,
             self.URL,
-            headers={"Authorization": f"Bearer {key}"},
-            json={
-                "model": os.environ.get("OPENROUTER_MODEL", ""),
-                "messages": [{"role": "user", "content": prompt}],
-                "response_format": {"type": "json_object"},
-            },
+            key,
+            os.environ.get("OPENROUTER_MODEL", ""),
+            [{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
         )
-        r.raise_for_status()
-        return json.loads(r.json()["choices"][0]["message"]["content"])
+        return json.loads(content)

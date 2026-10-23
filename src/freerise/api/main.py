@@ -8,6 +8,7 @@ from freerise.api import (
     routes_auth,
     routes_cashflow,
     routes_categories,
+    routes_chat,
     routes_cost,
     routes_credentials,
     routes_forecast,
@@ -80,6 +81,7 @@ for r in (
     routes_home,
     routes_tracking,
     routes_reviews,
+    routes_chat,
 ):
     protected.include_router(r.router)
 
