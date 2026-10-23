@@ -113,51 +113,44 @@ function Credentials() {
 
       <ul className="flex flex-col gap-2.5">
         {creds?.map((c) => (
-          <li key={c.id} className="card flex flex-col gap-2.5 p-3.5">
-            <div className="flex items-center gap-3">
-              <span className="size-11 shrink-0">
+          <li key={c.id} className="card flex flex-col gap-2 p-3">
+            <div className="flex items-center gap-2.5">
+              <span className="size-9 shrink-0">
                 <ProviderLogo provider={c.provider} />
               </span>
               <div className="min-w-0 flex-1">
-                <div className="truncate font-bold">{c.label}</div>
+                <div className="truncate text-[15px] font-bold leading-tight">{c.label}</div>
                 <div className="truncate text-xs text-muted">
-                  {c.owner} · {providerName(c.provider)}
+                  {[c.owner, providerName(c.provider)].filter(Boolean).join(" · ")}
+                  {c.enabled && !c.last_error && c.last_success_at && (
+                    <>
+                      {" · "}
+                      <span dir="ltr">{formatDate(c.last_success_at)} {time(c.last_success_at)}</span>
+                    </>
+                  )}
                 </div>
               </div>
               <StatusPill c={c} />
             </div>
             <AccountBriefs accounts={c.accounts} />
-            {Object.keys(c.fields).length > 0 && (
-            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 rounded-xl bg-bg px-3 py-2 text-xs">
-              {Object.entries(c.fields).map(([k, v]) => (
-                <div key={k} className="contents">
-                  <dt className="text-muted">{fieldLabel(k)}</dt>
-                  <dd dir="ltr" className="text-end font-mono">{v}</dd>
-                </div>
-              ))}
-            </dl>
-            )}
-            <div className="flex flex-col gap-1 text-xs">
-              {c.last_error ? (
+            {c.last_error && (
+              <div className="text-xs">
                 <CardError c={c} />
-              ) : !c.enabled ? null : c.last_success_at ? (
-                <span className="text-muted">
-                  סונכרן לאחרונה <span dir="ltr">{formatDate(c.last_success_at)} {time(c.last_success_at)}</span>
-                </span>
-              ) : null}
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <button className="btn-secondary" onClick={() => setEditing(editing === c.id ? null : c.id)}>
-                עדכון פרטים
-              </button>
-              <button className="btn-secondary" onClick={() => sync(c.id)} disabled={!c.enabled}>
+              </div>
+            )}
+            {/* ponytail: masked fields list dropped — the edit form shows them as placeholders */}
+            <div className="-mx-1 flex items-center gap-0.5 border-t border-hairline pt-1.5 text-[13px] font-bold">
+              <button className="card-action text-brand" onClick={() => sync(c.id)} disabled={!c.enabled}>
                 <RefreshCw size={14} /> סנכרון
               </button>
-              <button className="btn-ghost text-muted" onClick={() => setEnabled(c, !c.enabled)}>
+              <button className="card-action" onClick={() => setEditing(editing === c.id ? null : c.id)}>
+                עדכון פרטים
+              </button>
+              <button className="card-action text-muted" onClick={() => setEnabled(c, !c.enabled)}>
                 {c.enabled ? "השבתה" : "הפעלה"}
               </button>
-              <button className="btn-ghost text-danger" onClick={() => setDeleting(c)}>
-                מחיקת חיבור
+              <button className="card-action ms-auto text-danger" onClick={() => setDeleting(c)}>
+                מחיקה
               </button>
             </div>
             {editing === c.id && (
@@ -208,10 +201,11 @@ function Credentials() {
         />
       )}
 
-      {adding ? (
+      {adding && (
         <AddCredential
           key={fixing?.id ?? "new"}
           providers={providers}
+          owners={creds?.map((c) => c.owner) ?? []}
           fix={fixing}
           onCancel={() => {
             // a pending connection being fixed is dropped, never left behind hidden
@@ -224,11 +218,10 @@ function Credentials() {
             setConnecting({ id: c.id, provider: c.provider });
           }}
         />
-      ) : (
-        <button className="flex min-h-14 items-center justify-center gap-1.5 rounded-[20px] border-2 border-dashed border-border font-bold text-brand hover:border-brand" onClick={() => setAdding(true)}>
+      )}
+      <button className="flex min-h-14 items-center justify-center gap-1.5 rounded-[20px] border-2 border-dashed border-border font-bold text-brand hover:border-brand" onClick={() => setAdding(true)}>
           <Plus size={18} /> הוספת חיבור
         </button>
-      )}
     </div>
   );
 }
@@ -301,11 +294,13 @@ function ConfirmDelete({ credential: c, onCancel, onDisable, onDelete }: { crede
 /** New connection, or `fix`: correcting a pending one whose check failed (secrets left empty keep their value). */
 function AddCredential({
   providers,
+  owners,
   fix,
   onCancel,
   onStarted,
 }: {
   providers: Provider[];
+  owners: string[];
   fix: Credential | null;
   onCancel: () => void;
   onStarted: (c: Credential) => void;
@@ -315,10 +310,13 @@ function AddCredential({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const provider = providers.find((p) => p.key === key);
-  const formRef = useRef<HTMLFormElement>(null);
-  // Bring the form into view: it opens at the bottom of a long list.
+  // ponytail: one household, so no "whose is it" question; reuse the existing owner (it still feeds account holders/pension).
+  const owner = fix?.owner ?? owners[0] ?? "";
+  const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
-    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const d = ref.current!;
+    d.showModal();
+    return () => d.close();
   }, []);
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
@@ -329,7 +327,7 @@ function AddCredential({
     setBusy(true);
     setError("");
     try {
-      const body = { label: f.get("label"), owner: f.get("owner"), fields };
+      const body = { label: String(f.get("label") ?? "").trim() || providerName(key), owner, fields };
       let c = fix
         ? await send<Credential>("PATCH", `/credentials/${fix.id}`, body)
         : await send<Credential>("POST", "/credentials", { ...body, provider: key });
@@ -343,8 +341,18 @@ function AddCredential({
   }
 
   return (
-    <form ref={formRef} onSubmit={submit} className="flex scroll-mt-24 flex-col gap-3 rounded-[20px] border-2 border-dashed border-border p-4">
-      <h2 className="font-display text-base font-bold">{fix ? "תיקון פרטי החיבור" : "חיבור חדש"}</h2>
+    <dialog
+      ref={ref}
+      aria-labelledby="add-cred-title"
+      onCancel={(e) => {
+        e.preventDefault();
+        onCancel();
+      }}
+      onClick={(e) => e.target === ref.current && onCancel()}
+      className="sheet"
+    >
+    <form onSubmit={submit} className="flex flex-col gap-3">
+      <h2 id="add-cred-title" className="section-title">{fix ? "תיקון פרטי החיבור" : "חיבור חדש"}</h2>
       {fix && <p className="text-xs text-muted">שדה ריק נשאר ללא שינוי. מטעמי אבטחה הסיסמה לא מוצגת.</p>}
       <div className="flex flex-col gap-1.5 text-[13px] text-muted">
         ספק
@@ -369,14 +377,6 @@ function AddCredential({
           />
         )}
       </div>
-      <label className="flex flex-col gap-1.5 text-[13px] text-muted">
-        שם לתצוגה
-        <input name="label" required className="input" placeholder="למשל: עו״ש משותף" defaultValue={fix?.label} />
-      </label>
-      <label className="flex flex-col gap-1.5 text-[13px] text-muted">
-        בעלים
-        <input name="owner" required className="input" defaultValue={fix?.owner} />
-      </label>
       {provider &&
         [...provider.required_fields.map((k) => [k, true] as const), ...provider.optional_fields.map((k) => [k, false] as const)].map(
           ([k, required]) => (
@@ -398,6 +398,12 @@ function AddCredential({
             </label>
           ),
         )}
+      <label className="flex flex-col gap-1.5 text-[13px] text-muted">
+        <span>
+          כינוי<span className="text-faint"> (רשות)</span>
+        </span>
+        <input name="label" className="input" placeholder={providerName(key)} defaultValue={fix?.label} />
+      </label>
       {provider && (
         <p className="flex items-center gap-1.5 text-xs text-muted">
           <Lock size={14} className="shrink-0 text-positive-fill" aria-hidden />
@@ -414,6 +420,7 @@ function AddCredential({
         </button>
       </div>
     </form>
+    </dialog>
   );
 }
 
