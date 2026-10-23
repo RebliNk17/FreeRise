@@ -97,7 +97,7 @@ export default function SettingsPage() {
               <nav className="-my-1 flex flex-col">
                 <NavRow href="/settings/credentials" icon={KeyRound} label="חיבורים לבנקים ואשראי" />
                 <NavRow href="/accounts" icon={Wallet} label="חשבונות וכרטיסים" />
-                <NavRow href="/categorize" icon={Tags} label="סיווג עסקאות" />
+                <NavRow href="/home?categorize=1" icon={Tags} label="סיווג עסקאות" />
                 <NavRow href="/settings/categories" icon={GripVertical} label="סדר הקטגוריות בבית" />
               </nav>
             </Section>
