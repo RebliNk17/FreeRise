@@ -303,3 +303,23 @@ async def test_split_survives_resync(sf, credential):
         s.commit()
     await run_credential(sf, credential.id, "schedule", scraper_factory=fake_factory(three_txns()))
     assert count(sf, TransactionSplit) == 2
+
+
+async def test_zero_amount_rows_are_not_stored(sf, credential):
+    import dataclasses
+
+    pending_usd = dataclasses.replace(
+        txn(0, "AMAZON", identifier="p1", status=TransactionStatus.PENDING), original_currency="USD"
+    )
+    result = ok(
+        account(
+            "1111",
+            txn(-10, "Shop", identifier="a1"),
+            txn(0, "החזר CashCal", identifier="z1"),  # waived/placeholder: no money moved
+            pending_usd,  # foreign charge not converted yet: keep
+        )
+    )
+    run = await run_credential(sf, credential.id, "manual", scraper_factory=fake_factory(result))
+    assert run.added == 2
+    with sf() as s:
+        assert sorted(s.scalars(select(Transaction.description))) == ["AMAZON", "Shop"]
