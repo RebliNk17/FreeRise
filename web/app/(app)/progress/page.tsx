@@ -1,7 +1,6 @@
 "use client";
 
-import { Bar, BarChart, Cell, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { CURSOR, TOOLTIP_STYLE } from "@/components/chart";
+import { MonthBars } from "@/components/charts/MonthBars";
 import { Amount } from "@/components/Amount";
 import { Card, Status } from "@/components/Card";
 import type { CategoryChange, Progress } from "@/lib/api";
@@ -23,8 +22,8 @@ export default function ProgressPage() {
 
 function ProgressView({ p }: { p: Progress }) {
   const n = p.cycles.length;
-  const bars = p.cycles.map((c) => ({ key: c.cycle.start, label: monthName(c.cycle.label_month).slice(0, 3), full: monthName(c.cycle.label_month), net: c.net }));
-  const alt = bars.map((b) => `${b.full}: ${formatILS(b.net)}`).join(", ");
+  const bars = p.cycles.map((c) => ({ key: c.cycle.start, label: monthName(c.cycle.label_month).slice(0, 3), full: `${monthName(c.cycle.label_month)} ${c.cycle.label_year}`, value: c.net }));
+  const alt = `נשאר בסוף החודש: ${bars.map((b) => `${b.full} ${formatILS(Math.round(b.value))}`).join(", ")}`;
 
   return (
     <>
@@ -49,21 +48,7 @@ function ProgressView({ p }: { p: Progress }) {
       </div>
 
       <Card title={`איך נגמרו ${n} החודשים האחרונים`}>
-        <div dir="ltr" className="h-40" role="img" aria-label={alt} title={alt}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={bars} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
-              <XAxis dataKey="label" tickLine={false} axisLine={false} reversed tick={{ fontSize: 12, fill: "var(--muted)" }} />
-              <YAxis hide domain={[(min: number) => Math.min(0, min), (max: number) => Math.max(0, max)]} />
-              <ReferenceLine y={0} stroke="var(--hairline)" />
-              <Tooltip cursor={CURSOR} contentStyle={TOOLTIP_STYLE} formatter={(v) => formatILS(Number(v))} labelFormatter={(_, items) => items?.[0]?.payload?.full ?? ""} />
-              <Bar dataKey="net" radius={[6, 6, 6, 6]} isAnimationActive={false}>
-                {bars.map((b) => (
-                  <Cell key={b.key} fill={b.net >= 0 ? "var(--positive)" : "var(--danger)"} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        <MonthBars data={bars} kind="net" valueLabel="נשאר בסוף החודש" average={p.avg_net} ariaLabel={alt} />
       </Card>
 
       {p.increases.length + p.decreases.length > 0 && (

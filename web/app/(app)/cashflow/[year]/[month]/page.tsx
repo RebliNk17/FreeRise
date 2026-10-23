@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Bar, BarChart, Cell, ReferenceLine, ResponsiveContainer, XAxis, YAxis } from "recharts";
+import { MonthBars } from "@/components/charts/MonthBars";
 import { Amount } from "@/components/Amount";
 import { Card, Status } from "@/components/Card";
 import { CycleSwitcher } from "@/components/CycleSwitcher";
@@ -55,7 +55,7 @@ function CashFlowView({ cf }: { cf: CashFlow }) {
     : ended
       ? `${name} הסתיים בתזרים שלילי`
       : `${name} בתזרים שלילי עד כה`;
-  const history = cf.history.map((h) => ({ key: h.start, label: monthName(Number(h.start.slice(5, 7))).slice(0, 3), full: monthName(Number(h.start.slice(5, 7))), net: h.net, current: h.start === cf.cycle.start }));
+  const history = cf.history.map((h) => ({ key: h.start, label: monthName(Number(h.start.slice(5, 7))).slice(0, 3), full: `${monthName(h.label_month)} ${h.label_year}`, net: h.net, current: h.start === cf.cycle.start }));
 
   const chartAlt = history.map((h) => `${h.full}: ${formatILS(h.net)}`).join(", ");
 
@@ -84,20 +84,7 @@ function CashFlowView({ cf }: { cf: CashFlow }) {
       {cf.fees.total > 0 && <FeesCard fees={cf.fees} />}
 
       <Card title={`${name} ביחס לחודשים אחרים`}>
-        <div dir="ltr" className="h-40" role="img" aria-label={chartAlt} title={chartAlt}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={history} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
-              <XAxis dataKey="label" tickLine={false} axisLine={false} reversed tick={{ fontSize: 12, fill: "var(--muted)" }} />
-              <YAxis hide domain={[(min: number) => Math.min(0, min), (max: number) => Math.max(0, max)]} />
-              <ReferenceLine y={0} stroke="var(--hairline)" />
-              <Bar dataKey="net" radius={[6, 6, 6, 6]} isAnimationActive={false}>
-                {history.map((h) => (
-                  <Cell key={h.key} fill={h.net >= 0 ? "var(--positive)" : "var(--danger)"} fillOpacity={h.current ? 1 : h.net >= 0 ? 0.55 : 0.4} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        <MonthBars data={history.map((h) => ({ ...h, value: h.net }))} kind="net" valueLabel="נשאר בסוף החודש" ariaLabel={chartAlt} currentKey={history.find((h) => h.current)?.key} />
       </Card>
 
       <Card title="סיכום הוצאות חודשיות">

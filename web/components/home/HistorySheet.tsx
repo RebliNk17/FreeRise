@@ -2,10 +2,9 @@
 
 import { useState } from "react";
 import { ChartColumn } from "lucide-react";
-import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Money } from "@/components/Amount";
 import { Status } from "@/components/Card";
-import { CURSOR, TOOLTIP_STYLE } from "@/components/chart";
+import { MonthBars } from "@/components/charts/MonthBars";
 import { Sheet, SheetTitle } from "@/components/Sheet";
 import { formatILS, monthName } from "@/lib/format";
 import { historyPath, type HistoryKind, type HomeHistory } from "@/lib/history";
@@ -29,8 +28,8 @@ export function HistoryButton({ kind, categoryId, title, labels = ["יצא", "צ
 export function HistorySheet({ kind, categoryId, title, labels, onClose }: { kind: HistoryKind; categoryId?: number; title: string; labels: [string, string]; onClose: () => void }) {
   const { cycle } = useHome().data;
   const { data, error } = useApi<HomeHistory>(historyPath(kind, cycle, useHiddenAccounts(), categoryId));
-  const bars = (data?.cycles ?? []).map((c) => ({ key: `${c.label_year}-${c.label_month}`, label: monthName(c.label_month).slice(0, 3), full: `${monthName(c.label_month)} ${c.label_year}`, spent: c.spent, expected: c.expected }));
-  const alt = bars.map((b) => `${b.full}: ${labels[0]} ${formatILS(Math.round(b.spent))}, ${labels[1]} ${formatILS(Math.round(b.expected))}`).join("; ");
+  const bars = (data?.cycles ?? []).map((c) => ({ key: `${c.label_year}-${c.label_month}`, label: monthName(c.label_month).slice(0, 3), full: `${monthName(c.label_month)} ${c.label_year}`, value: c.spent, expected: c.expected }));
+  const alt = bars.map((b) => `${b.full}: ${labels[0]} ${formatILS(Math.round(b.value))}, ${labels[1]} ${formatILS(Math.round(b.expected))}`).join("; ");
   return (
     <Sheet labelledBy="history-title" onClose={onClose} header={<SheetTitle id="history-title" title={`${title}: חודשים קודמים`} onClose={onClose} />}>
       <div className="flex flex-col gap-3">
@@ -48,31 +47,13 @@ export function HistorySheet({ kind, categoryId, title, labels, onClose }: { kin
               </div>
             </div>
             <div className="card p-3">
-              <div className="mb-2 flex items-center gap-3 text-xs text-muted" aria-hidden>
-                <span className="flex items-center gap-1">
-                  <span className="size-2.5 rounded-sm bg-brand" /> {labels[0]}
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="size-2.5 rounded-sm bg-border" /> {labels[1]}
-                </span>
-              </div>
-              <div dir="ltr" className="h-48" role="img" aria-label={alt}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={bars} margin={{ top: 4, right: 0, left: 0, bottom: 0 }} barGap={2}>
-                    <XAxis dataKey="label" tickLine={false} axisLine={false} reversed tick={{ fontSize: 12, fill: "var(--muted)" }} />
-                    <YAxis hide />
-                    <Tooltip cursor={CURSOR} contentStyle={TOOLTIP_STYLE} formatter={(v, name) => [formatILS(Math.round(Number(v))), name === "spent" ? labels[0] : labels[1]]} labelFormatter={(_, items) => items?.[0]?.payload?.full ?? ""} />
-                    <Bar dataKey="expected" fill="var(--border)" radius={[5, 5, 0, 0]} isAnimationActive={false} />
-                    <Bar dataKey="spent" fill="var(--brand)" radius={[5, 5, 0, 0]} isAnimationActive={false} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+              <MonthBars data={bars} valueLabel={labels[0]} expectedLabel={labels[1]} overIsBad={kind !== "income" && kind !== "savings"} ariaLabel={alt} />
             </div>
             <ul className="card flex flex-col divide-y divide-hairline px-3.5 py-1 text-sm">
               {[...bars].reverse().map((b) => (
                 <li key={b.key} className="flex min-h-11 items-center gap-2">
                   <span className="flex-1 font-semibold">{b.full}</span>
-                  <Money value={Math.round(b.spent)} className={`font-bold ${b.spent > b.expected + 0.5 && kind !== "income" && kind !== "savings" ? "text-danger" : ""}`} />
+                  <Money value={Math.round(b.value)} className={`font-bold ${b.value > b.expected + 0.5 && kind !== "income" && kind !== "savings" ? "text-danger" : ""}`} />
                   <span className="text-xs text-muted">
                     מתוך <Money value={Math.round(b.expected)} />
                   </span>
