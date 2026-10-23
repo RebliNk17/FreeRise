@@ -421,3 +421,12 @@ class TransactionReview(Base):
     )
     assignee: Mapped[str | None]  # a household member's name; None = shared "לבדיקה" flag
     note: Mapped[str | None]
+
+
+class RecurringSkip(Base):
+    """A confirmed recurring item that won't happen in one cycle ("לא יורדת החודש")."""
+
+    __tablename__ = "recurring_skips"
+    __table_args__ = (UniqueConstraint("recurring_id", "cycle_start"),)
+    recurring_id: Mapped[int] = _fk("recurring_items")
+    cycle_start: Mapped[date]

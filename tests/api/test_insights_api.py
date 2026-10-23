@@ -69,6 +69,7 @@ def test_insights_list_snooze_dismiss(authed, sf):
         "action_label",
         "link",
         "amount",
+        "actions",
     }
     assert (fee["kind"], fee["severity"], fee["amount"]) == ("fees", "warning", 15.0)
     assert authed.post(f"/api/insights/{key}/snooze").status_code == 204

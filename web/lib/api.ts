@@ -292,6 +292,8 @@ export type Insight = {
   action_label: string | null;
   link: string | null;
   amount: number | null;
+  /** Buttons run in place on the card (e.g. "לא יורדת החודש"); path is under /api. */
+  actions?: { label: string; method: "POST" | "PUT" | "DELETE"; path: string }[] | null;
 };
 
 export type CategoryChange = { category_id: number | null; name: string; previous: number; current: number; change_pct: number };

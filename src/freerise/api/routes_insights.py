@@ -15,6 +15,12 @@ from freerise.insights.progress import progress
 router = APIRouter()
 
 
+class InsightAction(BaseModel):
+    label: str
+    method: Literal["POST", "PUT", "DELETE"]
+    path: str  # under /api
+
+
 class InsightOut(BaseModel):
     key: str
     kind: str
@@ -24,6 +30,7 @@ class InsightOut(BaseModel):
     action_label: str | None
     link: str | None
     amount: float | None
+    actions: list[InsightAction] | None = None
 
 
 class CycleNet(BaseModel):

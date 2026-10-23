@@ -27,6 +27,7 @@ export function illustrationFor(kind: string, severity: Insight["severity"]): Il
     case "saving_capacity":
       return "piggy";
     case "fees":
+    case "fixed_not_charged":
       return "receipt";
     case "unknown_card":
       return "card";

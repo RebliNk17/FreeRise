@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from freerise.accounts import account_labels
 from freerise.cashflow.cycles import Cycle, cycle_for, day_in_cycle, get_start_day, next_cycle
 from freerise.forecast.recurring import recent_previous_account, usual_day
-from freerise.models import Account, Category, RecurringItem, Transaction
+from freerise.models import Account, Category, RecurringItem, RecurringSkip, Transaction
 from freerise.view import counted
 
 CADENCE_MONTHS = {"monthly": 1, "bimonthly": 2, "quarterly": 3, "semiannual": 6, "annual": 12}
@@ -154,9 +154,16 @@ def _recurring_lines(session: Session, cycle: Cycle, today: date) -> list[tuple[
         .where(Account.excluded.is_(False), Transaction.amount > 0)
     ):
         history[k].append(d)
+    skipped = set(
+        session.scalars(
+            select(RecurringSkip.recurring_id).where(RecurringSkip.cycle_start == cycle.start)
+        )
+    )
     out = []
     for it in items:
         hit = charged.get((it.merchant_key, it.direction))
+        if not hit and it.id in skipped:
+            continue  # the user said it won't happen this cycle
         prev = recent_previous_account(it, today)
         if hit:  # checked before staleness: next_expected_date may not be advanced yet
             line = ExpectedLine(
