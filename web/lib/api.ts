@@ -245,19 +245,6 @@ export type TelegramConfig = {
 };
 
 export type ReconcileStatus = "matched" | "mismatch" | "unknown_card";
-export type BillReconciliation = {
-  bank_txn_id: number;
-  date: string;
-  amount: number;
-  issuer: string | null;
-  status: ReconcileStatus;
-  matched_accounts: { id: number; name: string; excluded: boolean }[];
-  matched_account_ids: number[];
-  card_total: number;
-  gap: number;
-  suggestions: { txn_id: number; description: string; amount: number; date: string; account_id: number; reason: string }[];
-};
-export type Reconcile = { cycle: Cycle; bills: BillReconciliation[]; matched_count: number; mismatch_count: number; unknown_count: number };
 
 export type SavingsPlan = {
   id: number;

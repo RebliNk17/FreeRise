@@ -7,7 +7,6 @@ import {
   ArrowLeftRight,
   CalendarClock,
   ChartColumn,
-  CreditCard,
   FlaskConical,
   House,
   KeyRound,
@@ -44,7 +43,6 @@ const MORE: NavLink[] = [
   { href: "/chat", label: "שאל אותי על התזרים", icon: MessagesSquare },
   { href: "/transactions", label: "עסקאות", icon: ArrowLeftRight },
   { href: "/accounts", label: "חשבונות", icon: Wallet },
-  { href: "/reconcile", label: "התאמת חיובי אשראי", icon: CreditCard },
   { href: "/settings/credentials", label: "חיבורים לבנקים ואשראי", icon: KeyRound },
   { href: "/settings", label: "הגדרות", icon: Settings },
 ];

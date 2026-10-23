@@ -140,7 +140,7 @@ def test_notifications_fire_once(session):
         kinds = list(session.scalars(select(Notification.kind)))
         assert kinds.count("card_bill_mismatch") == 1 and kinds.count("card_unknown") == 1
     n = session.scalar(select(Notification).where(Notification.kind == "card_unknown"))
-    assert n.link == "/reconcile/2026/10" and "₪80" in n.body
+    assert n.link == "/accounts#health" and "₪80" in n.body
 
 
 def test_split_debit(session):

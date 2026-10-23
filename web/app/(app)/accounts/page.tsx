@@ -76,7 +76,11 @@ export default function AccountsPage() {
         ))}
       </ul>
       {inactiveToggle}
-      {accounts && accounts.length > 0 && <DataHealth />}
+      {accounts && accounts.length > 0 && (
+        <div id="health" className="scroll-mt-20">
+          <DataHealth />
+        </div>
+      )}
     </div>
   );
 }

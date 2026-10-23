@@ -5,11 +5,13 @@ from datetime import date, timedelta
 from decimal import Decimal
 from itertools import combinations
 from typing import Literal
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from freerise.cashflow.cycles import Cycle, cycle_for, get_start_day
+from freerise.cashflow.cycles import Cycle
+from freerise.config import get_settings
 from freerise.models import Account, Category, Credential, Transaction
 
 # Provider key -> bank description patterns (lowercase). Checked in order.
@@ -23,10 +25,19 @@ ISSUER_PATTERNS = {
 }
 
 
-def reconcile_link(session: Session, d: date) -> str:
-    """The reconcile screen of the cycle holding d (plain /reconcile opens the current one)."""
-    m = cycle_for(d, get_start_day(session)).label_month
-    return f"/reconcile/{m.year}/{m.month}"
+# Reconciliation runs on its own; only problems surface, in the data-health section.
+HEALTH_LINK = "/accounts#health"
+
+
+def cards_synced_after(s: Session, issuer: str, d: date) -> bool:
+    """Every enabled card credential of the issuer synced after d (so its bill is visible)."""
+    tz = ZoneInfo(get_settings().tz)
+    stamps = s.scalars(
+        select(Credential.last_success_at).where(
+            Credential.provider == issuer, Credential.enabled, Credential.verified
+        )
+    ).all()
+    return all(x is not None and x.astimezone(tz).date() > d for x in stamps)
 
 
 ISSUER_NAMES = {
