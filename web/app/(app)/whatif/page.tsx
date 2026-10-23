@@ -6,6 +6,7 @@ import { Amount } from "@/components/Amount";
 import { Card, Status } from "@/components/Card";
 import { api, type Recurring, type WhatIf, type WhatIfNumbers } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
+import { Planner } from "./Planner";
 
 const CADENCE_MONTHS: Record<string, number> = { monthly: 1, bimonthly: 2, quarterly: 3, semiannual: 6, annual: 12 };
 /** Monthly equivalent of a recurring charge (an annual ₪1,200 → ₪100). */
@@ -136,6 +137,8 @@ export default function WhatIfPage() {
           </Card>
         </>
       )}
+
+      <Planner />
     </div>
   );
 }
