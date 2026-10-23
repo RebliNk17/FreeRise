@@ -1,9 +1,11 @@
 import base64
+import csv
+import io
 from datetime import date
 from decimal import Decimal
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, exists, select, tuple_
 from sqlalchemy.orm import joinedload
@@ -83,42 +85,53 @@ def _decode(cursor: str) -> tuple[date, int]:
         raise HTTPException(400, "bad cursor") from None
 
 
-@router.get("/transactions")
-def list_transactions(
-    db: DB,
-    from_: Annotated[date | None, Query(alias="from")] = None,
-    to: date | None = None,
-    account_id: int | None = None,
-    include_excluded: bool = False,
-    q: str | None = None,
-    category_id: int | None = None,
-    uncategorized: bool = False,
-    limit: Annotated[int, Query(ge=1, le=500)] = 100,
-    cursor: str | None = None,
-) -> TxnPage:
+class TxnFilters(BaseModel):
+    """Shared by the list and the CSV export."""
+
+    from_: date | None = Field(None, alias="from")
+    to: date | None = None
+    account_id: int | None = None
+    include_excluded: bool = False
+    q: str | None = None
+    category_id: int | None = None
+    uncategorized: bool = False
+
+
+def _filtered(f: TxnFilters):
     stmt = (
         select(Transaction, Account, Category.name, Category.group, Account.kind)
         .join(Account)
         .outerjoin(Category, Category.id == Transaction.category_id)
     )
-    if from_:
-        stmt = stmt.where(Transaction.date >= from_)
-    if to:
-        stmt = stmt.where(Transaction.date <= to)
-    if account_id is not None:
-        stmt = stmt.where(Transaction.account_id == account_id)
-    if not include_excluded:
+    if f.from_:
+        stmt = stmt.where(Transaction.date >= f.from_)
+    if f.to:
+        stmt = stmt.where(Transaction.date <= f.to)
+    if f.account_id is not None:
+        stmt = stmt.where(Transaction.account_id == f.account_id)
+    if not f.include_excluded:
         stmt = stmt.where(Account.excluded.is_(False))
-    if q:
-        stmt = stmt.where(Transaction.description.icontains(q, autoescape=True))
-    if category_id is not None:  # a split txn matches any of its parts' categories
+    if f.q:
+        stmt = stmt.where(Transaction.description.icontains(f.q, autoescape=True))
+    if f.category_id is not None:  # a split txn matches any of its parts' categories
         part = exists().where(
             TransactionSplit.transaction_id == Transaction.id,
-            TransactionSplit.category_id == category_id,
+            TransactionSplit.category_id == f.category_id,
         )
-        stmt = stmt.where((Transaction.category_id == category_id) | part)
-    if uncategorized:
+        stmt = stmt.where((Transaction.category_id == f.category_id) | part)
+    if f.uncategorized:
         stmt = stmt.where(Transaction.category_id.is_(None))
+    return stmt
+
+
+@router.get("/transactions")
+def list_transactions(
+    db: DB,
+    f: Annotated[TxnFilters, Query()],
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    cursor: str | None = None,
+) -> TxnPage:
+    stmt = _filtered(f)
     if cursor:
         stmt = stmt.where(tuple_(Transaction.date, Transaction.id) < tuple_(*_decode(cursor)))
     stmt = stmt.order_by(Transaction.date.desc(), Transaction.id.desc()).limit(limit + 1)
@@ -287,3 +300,46 @@ def unsplit_transaction(id: int, db: DB) -> TxnOut:
     db.execute(delete(TransactionSplit).where(TransactionSplit.transaction_id == id))
     db.commit()
     return _one(db, t)
+
+
+EXPORT_MAX = 50_000
+CSV_HEADER = ("תאריך", "תאריך חיוב", "תיאור", "קטגוריה", "סכום", "חשבון", "על שם", "הערה", "סטטוס")
+STATUS_HE = {"pending": "בקליטה", "completed": "סופית"}
+
+
+@router.get("/transactions/export.csv")
+def export_transactions(db: DB, f: Annotated[TxnFilters, Query()]) -> Response:
+    """The filtered transactions as CSV for Excel: UTF-8 BOM, Hebrew headers, newest first."""
+    stmt = _filtered(f).options(joinedload(Account.credential))
+    rows = db.execute(
+        stmt.order_by(Transaction.date.desc(), Transaction.id.desc()).limit(EXPORT_MAX)
+    ).all()
+    splits = _splits(db, [t.id for t, *_ in rows])
+    out = io.StringIO()
+    w = csv.writer(out)
+    w.writerow(CSV_HEADER)
+    for t, acct, cat, _, _ in rows:
+        parts = splits.get(t.id)
+        category = (
+            "פיצול: " + "; ".join(f"{p.category_name} {abs(p.amount):g}" for p in parts)
+            if parts
+            else cat or ""
+        )
+        w.writerow(
+            (
+                t.date.isoformat(),
+                t.processed_date.isoformat(),
+                t.description,
+                category,
+                f"{t.amount:.2f}",
+                account_label(acct).replace("\u2066", "").replace("\u2069", ""),
+                account_holder(acct),
+                t.note or "",
+                STATUS_HE.get(t.status, t.status),
+            )
+        )
+    return Response(
+        "\ufeff" + out.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="freerise-transactions.csv"'},
+    )

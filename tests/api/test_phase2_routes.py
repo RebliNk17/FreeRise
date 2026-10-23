@@ -1,3 +1,5 @@
+import csv
+import io
 import itertools
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -529,3 +531,22 @@ def test_hide_accounts_view_filter(authed, ids, sf):
     assert home.json()["variable"]["spent"] == 0
     assert authed.get("/api/home/2026/9").json()["variable"]["spent"] == 140  # not sticky
     assert authed.get("/api/home/2026/9", params={"hide_accounts": "x"}).status_code == 400
+
+
+def test_export_csv(authed, ids, sf):
+    a, b = ids["cats"]["כלכלה"], ids["cats"]["פארמה"]
+    t = _txn(sf, ids["card"], date(2026, 9, 1), -300, 'Super, "Pharm"', cat=a)
+    _txn(sf, ids["bank"], date(2026, 9, 2), -7, "Other")
+    parts = [{"category_id": a, "amount": -200}, {"category_id": b, "amount": -100}]
+    authed.put(f"/api/transactions/{t}/split", json={"parts": parts})
+    r = authed.get("/api/transactions/export.csv", params={"account_id": ids["card"]})
+    assert r.headers["content-type"].startswith("text/csv")
+    assert "attachment" in r.headers["content-disposition"]
+    assert r.content.startswith("﻿".encode())
+    rows = list(csv.reader(io.StringIO(r.content.decode("utf-8-sig"))))
+    assert rows[0][:5] == ["תאריך", "תאריך חיוב", "תיאור", "קטגוריה", "סכום"]
+    assert len(rows) == 2  # filtered to the card
+    row = rows[1]
+    assert row[2] == 'Super, "Pharm"' and row[4] == "-300.00" and row[8] == "סופית"
+    assert row[3] == "פיצול: כלכלה 200; פארמה 100"
+    assert row[6] == "שי"
