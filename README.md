@@ -80,7 +80,7 @@ Demo seeding refuses to run if any real credential exists, so it never mixes wit
 
 ## Development
 
-Prerequisites: [uv](https://docs.astral.sh/uv/), [Bun](https://bun.sh), Node.js 24, Docker,
+Prerequisites: [uv](https://docs.astral.sh/uv/), [Bun](https://bun.sh), Node.js 26, Docker,
 and Google Chrome (the scrapers drive real Chrome).
 
 ```bash
