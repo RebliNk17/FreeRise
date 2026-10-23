@@ -37,11 +37,25 @@ export function WeeklySummary({ s }: { s: NonNullable<HomeData["summary"]> }) {
         <Money value={Math.abs(s.week_left)} className={`mt-1 block text-right text-[44px] leading-[1.1] font-extrabold ${over ? "text-on-fill-danger" : ""}`} />
         {editing ? (
           <form onSubmit={save} className="mt-3.5 flex flex-wrap gap-2">
+            <p className="w-full text-[13px] text-white">
+              {s.goal_plans > 0 ? (
+                <>
+                  כמה להשאיר בצד <b>בנוסף</b> ל-<Money value={s.goal_plans} /> של התוכניות?
+                </>
+              ) : (
+                "כמה להשאיר בצד בסוף החודש?"
+              )}
+            </p>
             <input type="number" required min={0} step="any" inputMode="numeric" dir="ltr" className="input min-h-11 max-w-40 flex-1" value={value} onChange={(e) => setValue(e.target.value)} aria-label="יעד אישי לסוף החודש" autoFocus onFocus={(e) => e.target.select()} />
             <button className="btn-accent min-h-11 rounded-[14px]">שמירה</button>
             <button type="button" className="btn-ghost bg-white/12 text-brand-fg" onClick={() => setEditing(false)}>
               ביטול
             </button>
+            {s.goal_plans > 0 && (
+              <p className="w-full text-xs text-white/85">
+                סה״כ יעד לסוף החודש: <Money value={(Number(value) || 0) + s.goal_plans} className="font-bold" />
+              </p>
+            )}
           </form>
         ) : (
           <div className="mt-3.5 flex flex-wrap items-center gap-2 text-[13px]">
