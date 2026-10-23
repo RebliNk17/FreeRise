@@ -6,7 +6,7 @@ import { CategoryRing } from "@/components/CategoryIcon";
 import { CategorySelect, loadCategories } from "@/components/CategorySelect";
 import { send } from "@/lib/api";
 import { categoryLabel, monthName } from "@/lib/format";
-import { mapTxns, type HomeData, type TrackedCategory } from "@/lib/home";
+import { mapTxns, txnKey, type HomeData, type TrackedCategory } from "@/lib/home";
 import { useHome } from "./context";
 import { Expander } from "./Expander";
 import { Menu } from "./parts";
@@ -206,7 +206,7 @@ function MoveTxns({ c, txns, onClose }: { c: TrackedCategory; txns: TrackedCateg
         ) : (
           <ul className="flex max-h-72 flex-col divide-y divide-hairline overflow-y-auto">
             {txns.map((t) => (
-              <li key={t.id}>
+              <li key={txnKey(t)}>
                 <TxnRow t={t} select={{ checked: sel.includes(t.id), onChange: (v) => setSel((s) => (v ? [...s, t.id] : s.filter((x) => x !== t.id))) }} />
               </li>
             ))}

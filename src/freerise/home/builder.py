@@ -22,6 +22,7 @@ from freerise.cashflow.cycles import (
     next_cycle,
     prev_cycle,
 )
+from freerise.cashflow.parts import txn_parts
 from freerise.cashflow.plan import CENT, HISTORY, clamp, cycle_plan, split_by_days, week_spans
 from freerise.cashflow.savings import monthly_total, plan_statuses
 from freerise.cashflow.summary import GROUPS, UNCATEGORIZED
@@ -34,6 +35,7 @@ from freerise.models import (
     RecurringItem,
     TrackedCategory,
     Transaction,
+    TransactionSplit,
 )
 
 OVERDUE_DAYS = 3
@@ -70,7 +72,17 @@ class Summary:
 
 
 @dataclass
+class SplitPart:
+    category_id: int
+    category_name: str
+    amount: Decimal
+
+
+@dataclass
 class Txn:
+    """A split transaction shows up once per part: amount and category are the part's;
+    split_total is the whole transaction and split lists all parts."""
+
     id: int
     date: date
     amount: Decimal
@@ -90,6 +102,8 @@ class Txn:
     cycle_label: str | None = None  # that cycle, e.g. "ספטמבר 2026"
     fixed_income_id: int | None = None  # confirmed income item of this merchant
     cycle_date_source: str | None = None  # auto|manual
+    split_total: Decimal | None = None
+    split: list[SplitPart] | None = None
 
 
 @dataclass
@@ -326,22 +340,24 @@ def _history(
     idx = {c.start: i for i, c in enumerate(cycles)}
     var: list[dict[int, Decimal]] = [defaultdict(Decimal) for _ in cycles]
     has = [False] * len(cycles)
+    p = txn_parts()
     rows = session.execute(
         select(
             Transaction.effective_date,
-            Transaction.category_id,
+            p.c.category_id,
             Category.group,
-            func.sum(Transaction.amount),
+            func.sum(p.c.amount),
         )
+        .join(p, p.c.txn_id == Transaction.id)
         .join(Account, Account.id == Transaction.account_id)
-        .outerjoin(Category, Category.id == Transaction.category_id)
+        .outerjoin(Category, Category.id == p.c.category_id)
         .where(
             Account.excluded.is_(False),
             Transaction.effective_date >= cycles[0].start,
             Transaction.effective_date <= cycles[-1].end,
             or_(Category.id.is_(None), Category.group.in_(GROUPS)),
         )
-        .group_by(Transaction.effective_date, Transaction.category_id, Category.group)
+        .group_by(Transaction.effective_date, p.c.category_id, Category.group)
     )
     for d, cid, group, total in rows:
         i = idx[cycle_for(d, start_day).start]
@@ -375,6 +391,15 @@ def _seed_tracking(
     session.flush()
 
 
+def split_parts(session: Session, cats: dict[int, Category]) -> dict[int, list[SplitPart]]:
+    """txn id -> its parts, for every split transaction."""
+    out: dict[int, list[SplitPart]] = defaultdict(list)
+    for r in session.scalars(select(TransactionSplit).order_by(TransactionSplit.id)):
+        name = cats[r.category_id].name if r.category_id in cats else UNCATEGORIZED
+        out[r.transaction_id].append(SplitPart(r.category_id, name, r.amount))
+    return out
+
+
 def default_mode(name: str) -> str:
     return "weekly" if name in WEEKLY_DEFAULT else "monthly"
 
@@ -403,17 +428,21 @@ def build_home(session: Session, cycle: Cycle, today: date) -> Home:
     fixed_keys = {k for k, _, _ in income_items}
     confirmed = {k: i for k, i, st in income_items if st == "confirmed"}
 
+    splits = split_parts(session, cats)
+    parts = txn_parts()
+
     def rows(*where) -> list[tuple[str, Txn]]:
         out = []
-        for t in session.scalars(
-            select(Transaction)
+        for t, cid, amount in session.execute(
+            select(Transaction, parts.c.category_id, parts.c.amount)
+            .join(parts, parts.c.txn_id == Transaction.id)
             .join(Account, Account.id == Transaction.account_id)
             .where(Account.excluded.is_(False), *where)
-            .order_by(Transaction.date.desc(), Transaction.id.desc())
+            .order_by(Transaction.date.desc(), Transaction.id.desc(), parts.c.category_id)
         ):
-            cat = cats.get(t.category_id)
+            cat = cats.get(cid)
             if cat is None:
-                group = "income" if t.amount > 0 else "variable"
+                group = "income" if amount > 0 else "variable"
             elif cat.group in GROUPS:
                 group = cat.group
             else:  # transfer / card_bill / ignore
@@ -424,10 +453,10 @@ def build_home(session: Session, cycle: Cycle, today: date) -> Home:
                     Txn(
                         t.id,
                         t.date,
-                        t.amount,
+                        amount,
                         t.description,
                         t.merchant_key,
-                        t.category_id,
+                        cid,
                         cat.name if cat else None,
                         cat.group if cat else None,
                         t.account_id,
@@ -440,6 +469,8 @@ def build_home(session: Session, cycle: Cycle, today: date) -> Home:
                         *cycle_shift(t.date, t.cycle_date, start_day),
                         confirmed.get(t.merchant_key) if t.amount > 0 else None,
                         t.cycle_date_source,
+                        t.amount if t.id in splits else None,
+                        splits.get(t.id),
                     ),
                 )
             )

@@ -399,3 +399,14 @@ class CategoryWeekBudget(Base):
     category_id: Mapped[int] = _fk("categories")
     week_index: Mapped[int]
     amount: Mapped[Decimal] = mapped_column(Money)
+
+
+class TransactionSplit(Base):
+    """One part of a split transaction. A split txn counts as its parts wherever money is
+    summed by category (cashflow.parts.txn_parts); parts sum to the txn amount."""
+
+    __tablename__ = "transaction_splits"
+    __table_args__ = (UniqueConstraint("transaction_id", "category_id"),)
+    transaction_id: Mapped[int] = _fk("transactions")
+    category_id: Mapped[int] = _fk("categories")
+    amount: Mapped[Decimal] = mapped_column(Money)  # signed, like the transaction

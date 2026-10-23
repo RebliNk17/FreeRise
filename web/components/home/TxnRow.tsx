@@ -3,7 +3,7 @@
 import { EllipsisVertical, StickyNote } from "lucide-react";
 import { Money } from "@/components/Amount";
 import { formatDate } from "@/lib/format";
-import { accountWithHolder, shiftChip, type Txn } from "@/lib/home";
+import { accountWithHolder, shiftChip, txnKey, type Txn } from "@/lib/home";
 import { useHome } from "./context";
 
 /** Amount bold; description + account on the second line; date on the side; tap opens the sheet. */
@@ -18,6 +18,7 @@ export function TxnRow({ t, select }: { t: Txn; select?: { checked: boolean; onC
           {t.note && <StickyNote size={14} className="text-muted" aria-label="יש הערה" />}
           {t.status === "pending" && <span className="rounded-full bg-sunken px-2 text-[10px] font-semibold text-muted">בקליטה</span>}
           {shiftChip(t) && <span className="rounded-full bg-brand-soft px-2 text-[10px] font-semibold text-brand">{shiftChip(t)}</span>}
+          {t.split && <span className="rounded-full bg-sun-soft px-2 text-[10px] font-semibold">חלק מפיצול</span>}
         </span>
         <span className="block truncate text-xs text-muted">
           {t.description} · {accountWithHolder(t, data.multi_holder)}
@@ -49,7 +50,7 @@ export function TxnList({ txns, empty = "אין עסקאות" }: { txns: Txn[]; 
   return (
     <ul className="flex flex-col divide-y divide-hairline">
       {txns.map((t) => (
-        <li key={t.id}>
+        <li key={txnKey(t)}>
           <TxnRow t={t} />
         </li>
       ))}

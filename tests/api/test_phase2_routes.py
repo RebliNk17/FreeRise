@@ -495,3 +495,24 @@ def test_settings_validation(authed, restore_settings):
         "income_grace_days": 10,
     }
     assert authed.get("/api/cashflow/2026/9").json()["cycle"]["start"] == "2026-09-15"
+
+
+def test_split_and_unsplit(authed, ids, sf):
+    a, b = ids["cats"]["כלכלה"], ids["cats"]["פארמה"]
+    t = _txn(sf, ids["card"], date(2026, 9, 1), -300, "Super-Pharm")
+    bad = [{"category_id": a, "amount": -200}, {"category_id": b, "amount": -50}]
+    assert authed.put(f"/api/transactions/{t}/split", json={"parts": bad}).status_code == 422
+    same = [{"category_id": a, "amount": -200}, {"category_id": a, "amount": -100}]
+    assert authed.put(f"/api/transactions/{t}/split", json={"parts": same}).status_code == 422
+    sign = [{"category_id": a, "amount": -400}, {"category_id": b, "amount": 100}]
+    assert authed.put(f"/api/transactions/{t}/split", json={"parts": sign}).status_code == 422
+    ok = [{"category_id": a, "amount": -200}, {"category_id": b, "amount": -100}]
+    r = authed.put(f"/api/transactions/{t}/split", json={"parts": ok})
+    assert r.status_code == 200
+    assert [p["amount"] for p in r.json()["split"]] == [-200, -100]
+    listed = authed.get("/api/transactions", params={"category_id": b}).json()["items"]
+    assert [x["id"] for x in listed] == [t]
+    cost = authed.get("/api/cost", params={"category_id": b}).json()
+    assert cost["total"] == 100
+    r = authed.delete(f"/api/transactions/{t}/split")
+    assert r.json()["split"] is None

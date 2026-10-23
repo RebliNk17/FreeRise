@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarClock, ChevronLeft, EyeOff, PiggyBank, Repeat, StickyNote, Tag, Wallet, X } from "lucide-react";
+import { CalendarClock, ChevronLeft, EyeOff, PiggyBank, Plus, Repeat, Split, StickyNote, Tag, Trash2, Undo2, Wallet, X } from "lucide-react";
 import { Money } from "@/components/Amount";
 import { Sheet } from "@/components/Sheet";
 import { Switch } from "@/components/Switch";
 import { CategorySelect, GROUP_LABEL, loadCategories } from "@/components/CategorySelect";
 import { send, type Category, type Group } from "@/lib/api";
 import { categoryLabel, formatDate } from "@/lib/format";
+import { splitBody, splitLeft, splitProblem, type SplitRow } from "@/lib/split";
 import { mapTxns, type Txn } from "@/lib/home";
 import { useHome } from "./context";
 
@@ -32,7 +33,7 @@ type Action = { icon: React.ReactNode; label: string; run: () => void; value?: s
 
 const IGNORE_CATEGORY = "להתעלם";
 
-type Mode = null | "note" | "fixed" | "cycle" | { groups: Group[]; title: string; remember: boolean };
+type Mode = null | "note" | "fixed" | "cycle" | "split" | { groups: Group[]; title: string; remember: boolean };
 
 export function TxnSheet({ t, onClose }: { t: Txn; onClose: () => void }) {
   const { mutate, data } = useHome();
@@ -59,18 +60,24 @@ export function TxnSheet({ t, onClose }: { t: Txn; onClose: () => void }) {
     mutate((d) => d, () => Promise.reject(new Error(`no "${IGNORE_CATEGORY}" category`))); // surfaces the failure banner
   }
 
+  const total = t.split_total ?? t.amount;
+  const split = t.split != null; // category actions would only move the remainder: split ones edit the parts instead
   const actions: Action[] = [];
   // Moved out of the current cycle into one home can't open yet: undo is the first thing offered.
   if (data.moved_next.transactions.some((x) => x.id === t.id)) actions.push({ icon: <CalendarClock size={18} />, label: "החזר לחודש הזה", run: () => cycle("own")() });
-  actions.push(
-    { icon: <Tag size={18} />, label: "שינוי קטגוריה", value: categoryLabel(t.category_name), run: () => setMode({ groups: Object.keys(GROUP_LABEL) as Group[], title: "שינוי קטגוריה", remember: true }) },
-    { icon: <StickyNote size={18} />, label: t.note ? "עריכת הערה" : "הוספת הערה", tone: "sun", run: () => setMode("note") },
-  );
-  if (t.group === "fixed") actions.push({ icon: <Repeat size={18} />, label: "זו לא הוצאה קבועה", run: () => setMode({ groups: ["variable"], title: "לאיזו קטגוריה משתנה?", remember: true }) });
-  if (t.group === "variable") actions.push({ icon: <Repeat size={18} />, label: "זו הוצאה קבועה", run: () => setMode({ groups: ["fixed"], title: "לאיזו קטגוריה קבועה?", remember: true }) });
+  if (split)
+    actions.push(
+      { icon: <Split size={18} />, label: "עריכת הפיצול", value: `${t.split!.length} חלקים`, run: () => setMode("split") },
+      { icon: <Undo2 size={18} />, label: "ביטול הפיצול", run: () => request((x) => x, () => send("DELETE", `/transactions/${t.id}/split`)) },
+    );
+  else actions.push({ icon: <Tag size={18} />, label: "שינוי קטגוריה", value: categoryLabel(t.category_name), run: () => setMode({ groups: Object.keys(GROUP_LABEL) as Group[], title: "שינוי קטגוריה", remember: true }) });
+  actions.push({ icon: <StickyNote size={18} />, label: t.note ? "עריכת הערה" : "הוספת הערה", tone: "sun", run: () => setMode("note") });
+  if (!split) actions.push({ icon: <Split size={18} />, label: "פיצול ההוצאה", run: () => setMode("split") });
+  if (!split && t.group === "fixed") actions.push({ icon: <Repeat size={18} />, label: "זו לא הוצאה קבועה", run: () => setMode({ groups: ["variable"], title: "לאיזו קטגוריה משתנה?", remember: true }) });
+  if (!split && t.group === "variable") actions.push({ icon: <Repeat size={18} />, label: "זו הוצאה קבועה", run: () => setMode({ groups: ["fixed"], title: "לאיזו קטגוריה קבועה?", remember: true }) });
   // The sheet's one primary action (full-width button under the list).
   const primary: Action | null =
-    t.group !== "savings" && t.group !== "income" ? { icon: <PiggyBank size={18} />, label: "זו הפקדה לחיסכון", run: () => setMode({ groups: ["savings"], title: "לאיזה חיסכון?", remember: true }) } : null;
+    !split && t.group !== "savings" && t.group !== "income" ? { icon: <PiggyBank size={18} />, label: "זו הפקדה לחיסכון", run: () => setMode({ groups: ["savings"], title: "לאיזה חיסכון?", remember: true }) } : null;
   if (t.amount > 0 && (t.group === "income" || t.group === null)) {
     const id = t.fixed_income_id;
     if (id != null) actions.push({ icon: <Wallet size={18} />, label: "זו לא הכנסה קבועה", run: () => request((x) => ({ ...x, fixed_income_id: null }), () => send("DELETE", `/recurring/${id}/fixed`)) });
@@ -84,7 +91,7 @@ export function TxnSheet({ t, onClose }: { t: Txn; onClose: () => void }) {
   if (t.cycle_shift) cycleOptions.push({ icon: <CalendarClock size={18} />, label: "שייך לחודש שבו נכנסה", run: cycle("own") });
   if (t.cycle_date_source === "manual") cycleOptions.push({ icon: <CalendarClock size={18} />, label: "שיוך אוטומטי", run: cycle("auto") });
   actions.push({ icon: <CalendarClock size={18} />, label: "שיוך לחודש", value: t.cycle_shift ? t.cycle_label : t.cycle_date_source === "manual" ? "ידני" : "אוטומטי", run: () => setMode("cycle") });
-  actions.push({ icon: <EyeOff size={18} />, label: "להוציא מהתזרים", tone: "danger", run: ignore });
+  if (!split) actions.push({ icon: <EyeOff size={18} />, label: "להוציא מהתזרים", tone: "danger", run: ignore });
 
   /** Close, apply `optimistic` to this txn, run `req`; the home refetch places it right. */
   function request(optimistic: (x: Txn) => Txn, req: () => Promise<unknown>) {
@@ -122,7 +129,7 @@ export function TxnSheet({ t, onClose }: { t: Txn; onClose: () => void }) {
               </p>
             </div>
           </div>
-          <Money value={Math.abs(t.amount)} className="block text-right text-[46px] leading-none font-extrabold" />
+          <Money value={Math.abs(total)} className="block text-right text-[46px] leading-none font-extrabold" />
         </>
       }
     >
@@ -147,6 +154,13 @@ export function TxnSheet({ t, onClose }: { t: Txn; onClose: () => void }) {
                 חזרה
               </button>
             </div>
+          ) : mode === "split" ? (
+            <SplitForm
+              total={total}
+              initial={t.split?.map((p) => ({ category_id: p.category_id, amount: String(Math.abs(p.amount)) })) ?? [{ category_id: t.category_id, amount: String(Math.abs(total)) }, { category_id: null, amount: "" }]}
+              onCancel={() => setMode(null)}
+              onSave={(rows) => request((x) => x, () => send("PUT", `/transactions/${t.id}/split`, splitBody(total, rows)))}
+            />
           ) : mode === "fixed" ? (
             <FixedIncomeForm
               day={Number(t.date.slice(8, 10))}
@@ -273,5 +287,77 @@ function ActionList({ items }: { items: Action[] }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+/** Parts editor: category + amount per row; saving needs the parts to add up to the transaction. */
+function SplitForm({ total, initial, onSave, onCancel }: { total: number; initial: SplitRow[]; onSave: (rows: SplitRow[]) => void; onCancel: () => void }) {
+  const [rows, setRows] = useState(initial);
+  const left = splitLeft(total, rows);
+  const problem = splitProblem(total, rows);
+  // Editing an amount above the last part refills the last part with what's left.
+  const set = (i: number, patch: Partial<SplitRow>) =>
+    setRows((rs) => {
+      const next = rs.map((r, j) => (j === i ? { ...r, ...patch } : r));
+      const last = next.length - 1;
+      if (patch.amount === undefined || i === last) return next;
+      const rest = splitLeft(total, next.slice(0, last));
+      return next.map((r, j) => (j === last ? { ...r, amount: rest > 0 ? String(rest) : "" } : r));
+    });
+  return (
+    <form
+      className="card flex flex-col gap-3 p-3.5"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!problem) onSave(rows);
+      }}
+    >
+      <h3 className="font-bold">פיצול ההוצאה</h3>
+      <ul className="flex flex-col gap-3">
+        {rows.map((r, i) => (
+          <li key={i} className="flex flex-col gap-2 rounded-2xl bg-sunken/60 p-2.5">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-muted">חלק {i + 1}</span>
+              <input
+                className="input ms-auto max-w-36"
+                dir="ltr"
+                type="number"
+                inputMode="decimal"
+                min={0}
+                step="0.01"
+                value={r.amount}
+                onChange={(e) => set(i, { amount: e.target.value })}
+                aria-label={`סכום חלק ${i + 1}`}
+              />
+              {rows.length > 2 && (
+                <button type="button" className="icon-btn size-11" aria-label={`הסרת חלק ${i + 1}`} onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))}>
+                  <Trash2 size={16} />
+                </button>
+              )}
+            </div>
+            <CategorySelect value={r.category_id} onChange={(id) => set(i, { category_id: id })} label={`קטגוריה לחלק ${i + 1}`} groups={total > 0 ? ["income", "variable", "fixed", "savings"] : ["variable", "fixed", "savings"]} />
+          </li>
+        ))}
+      </ul>
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <button type="button" className="btn-ghost" onClick={() => setRows((rs) => [...rs, { category_id: null, amount: left > 0 ? String(left) : "" }])}>
+          <Plus size={16} /> חלק נוסף
+        </button>
+        {left !== 0 && (
+          <span className={left < 0 ? "font-semibold text-danger" : "text-muted"} aria-live="polite">
+            {left > 0 ? "נותר לחלק" : "חריגה של"} <Money value={Math.abs(left)} className="font-bold" />
+          </span>
+        )}
+      </div>
+      {problem && <p className="text-xs text-muted">{problem}</p>}
+      <div className="flex gap-2">
+        <button className="btn flex-1" disabled={problem != null}>
+          שמירת הפיצול
+        </button>
+        <button type="button" className="btn-ghost" onClick={onCancel}>
+          ביטול
+        </button>
+      </div>
+    </form>
   );
 }

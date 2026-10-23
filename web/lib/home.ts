@@ -21,7 +21,12 @@ export type Txn = {
   cycle_label: string | null; // e.g. "ספטמבר 2026"
   fixed_income_id: number | null; // confirmed income item of this merchant
   cycle_date_source: "auto" | "manual" | null;
+  split_total: number | null; // split txn: the whole amount (amount/category are this part's)
+  split: { category_id: number; category_name: string; amount: number }[] | null;
 };
+
+/** List key: a split txn appears once per part. */
+export const txnKey = (t: Pick<Txn, "id" | "category_id">) => `${t.id}:${t.category_id ?? ""}`;
 
 /** "ישראכרט ••5678 (שי)" — the holder only when the household has more than one. */
 export const accountWithHolder = (t: Pick<Txn, "account_label" | "account_holder">, multi: boolean) => (multi && t.account_holder ? `${t.account_label} (${t.account_holder})` : t.account_label);

@@ -11,6 +11,7 @@ from sqlalchemy import or_, select
 
 from freerise.api.deps import DB
 from freerise.cashflow.cycles import cycle_for, get_start_day, next_cycle
+from freerise.cashflow.parts import txn_parts
 from freerise.models import Account, Category, Transaction
 
 router = APIRouter()
@@ -53,21 +54,23 @@ def cost(
 ) -> CostOut:
     # Savings deposits aren't a cost, unless the user asked for that category explicitly.
     skip = NOT_SPENDING if category_id is not None else (*NOT_SPENDING, "savings")
+    p = txn_parts()  # a split txn counts as its parts
     stmt = (
         select(
             Transaction.effective_date,  # cycle membership; ranges are cycle-aligned
-            Transaction.amount,
+            p.c.amount,
             Transaction.merchant_key,
             Transaction.description,
         )
+        .join(p, p.c.txn_id == Transaction.id)
         .join(Account, Account.id == Transaction.account_id)
-        .outerjoin(Category, Category.id == Transaction.category_id)
+        .outerjoin(Category, Category.id == p.c.category_id)
         .where(
             Account.excluded.is_(False),
             or_(
-                (Transaction.amount < 0) & or_(Category.id.is_(None), Category.group.not_in(skip)),
+                (p.c.amount < 0) & or_(Category.id.is_(None), Category.group.not_in(skip)),
                 # refunds: categorized credits outside income
-                (Transaction.amount > 0) & Category.group.not_in((*skip, "income")),
+                (p.c.amount > 0) & Category.group.not_in((*skip, "income")),
             ),
         )
     )
@@ -79,7 +82,7 @@ def cost(
             )
         )
     if category_id is not None:
-        stmt = stmt.where(Transaction.category_id == category_id)
+        stmt = stmt.where(p.c.category_id == category_id)
     if from_:
         stmt = stmt.where(Transaction.effective_date >= from_)
     if to:

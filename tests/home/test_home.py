@@ -164,6 +164,8 @@ def test_structure_matches_contract(session):
         "cycle_label",
         "fixed_income_id",
         "cycle_date_source",
+        "split_total",
+        "split",
     }
     assert (t["amount"], t["note"], t["group"], t["account_label"]) == (
         -50,
