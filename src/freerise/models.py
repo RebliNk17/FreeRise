@@ -25,7 +25,7 @@ FAILURE_KINDS = ("auth_failed", "provider_changed", "timeout", "otp_timeout", "o
 OtpStatus = Literal["waiting", "answered", "expired"]
 CategoryGroup = Literal["income", "fixed", "variable", "savings", "transfer", "card_bill", "ignore"]
 RuleMatch = Literal["exact", "contains"]
-RuleSource = Literal["user", "seed", "ai", "provider"]
+RuleSource = Literal["user", "seed", "ai", "provider", "default"]
 GROUPS = ("income", "fixed", "variable", "savings", "transfer", "card_bill", "ignore")
 
 Money = Numeric(12, 2)
@@ -120,7 +120,7 @@ class Transaction(Base):
     category_id: Mapped[int | None] = mapped_column(
         ForeignKey("categories.id", ondelete="SET NULL")
     )
-    category_source: Mapped[str | None]  # rule|map|provider|ai|manual
+    category_source: Mapped[str | None]  # rule|map|default|provider|ai|manual
     note: Mapped[str | None]
     # Date used for cycle membership when the txn belongs to a neighbour cycle (late/early
     # income); NULL = its own date. Reconciliation and recurring detection use the real date.
@@ -193,7 +193,7 @@ class MerchantRule(Base):
     __table_args__ = (
         UniqueConstraint("pattern", "match"),
         _in("match", ("exact", "contains"), "ck_merchant_rules_match"),
-        _in("source", ("user", "seed", "ai", "provider"), "ck_merchant_rules_source"),
+        _in("source", ("user", "seed", "ai", "provider", "default"), "ck_merchant_rules_source"),
     )
     pattern: Mapped[str]
     match: Mapped[RuleMatch] = mapped_column(String)

@@ -2,29 +2,23 @@ from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
 from freerise.accounts import account_labels
+from freerise.categorize.default_rules import provider_category
+from freerise.categorize.normalize import best_match
 from freerise.models import Account, Category, MerchantRule, RecurringItem, Transaction
 
-# Scraper `Transaction.category` text -> our category name. Extend as real strings show up.
-PROVIDER_CATEGORY_MAP: dict[str, str] = {
-    "מזון וצריכה": "כלכלה",
-    "מסעדות": "אוכל בחוץ",
-    "דלק": "רכב",
-    "תקשורת": "תקשורת",
-}
-
 # rule source -> Transaction.category_source
-_SOURCE = {"user": "rule", "seed": "map", "ai": "ai", "provider": "provider"}
+_SOURCE = {"user": "rule", "seed": "map", "ai": "ai", "provider": "provider", "default": "default"}
+# Assigned automatically from default rules or the card company's category: re-evaluated by
+# recategorize_auto; everything else (manual, user rules, seed, ai) is left alone.
+AUTO_SOURCES = ("default", "provider")
 
 
-def _match(rules: list[MerchantRule], key: str, desc: str) -> MerchantRule | None:
-    for r in rules:
-        if r.match == "exact" and r.pattern == key:
-            return r
-    for r in rules:
-        pat = (r.pattern or "").lower()
-        if r.match == "contains" and pat and (pat in key or pat in desc):
-            return r
-    return None
+def _exact(rules: list[MerchantRule], key: str) -> MerchantRule | None:
+    return next((r for r in rules if r.match == "exact" and r.pattern == key), None)
+
+
+def _contains(rules: list[MerchantRule], key: str, desc: str) -> MerchantRule | None:
+    return best_match(((r.pattern, r) for r in rules if r.match == "contains"), key, desc)
 
 
 def categorize_transaction(
@@ -35,31 +29,39 @@ def categorize_transaction(
     *,
     account_kind: str | None = None,
     card_bill_ids: set[int] | None = None,
+    cat_ids: dict[str, int] | None = None,
 ) -> tuple[int | None, str | None]:
-    """Order: user rules, other rules, provider category hint. `providers` = extra hint texts.
-    Non-user card-bill rules only apply to bank accounts (and win there): on a card statement a
-    description like "דמי כרטיס ישראכרט" is a fee, not the card's bill."""
+    """Order: user rules (exact, contains), other exact rules, other contains rules (seed and
+    default; earliest then longest match wins), then the card company's category. `providers` =
+    extra hint texts. Non-user card-bill rules only apply to bank accounts (and win there): on a
+    card statement a description like "דמי כרטיס ישראכרט" is a fee, not the card's bill."""
     if rules is None:
         rules = list(session.scalars(select(MerchantRule)))
     if account_kind is None:
         account_kind = session.scalar(select(Account.kind).where(Account.id == txn.account_id))
-    others = [r for r in rules if r.source != "user"]
     if card_bill_ids is None:
         card_bill_ids = _card_bill_ids(session)
-    if account_kind == "card":
-        others = [r for r in others if r.category_id not in card_bill_ids]
-    else:  # a bank-side bill beats other contains rules (fee patterns like "דמי כרטיס")
-        others.sort(key=lambda r: r.category_id not in card_bill_ids)
     key, desc = txn.merchant_key or "", (txn.description or "").lower()
     users = [r for r in rules if r.source == "user"]
-    for group in (users, others):
-        r = _match(group, key, desc)
-        if r:
-            return r.category_id, _SOURCE[r.source]
+    others = [r for r in rules if r.source != "user"]
+    bills = [r for r in others if r.category_id in card_bill_ids]
+    rest = [r for r in others if r.category_id not in card_bill_ids]
+    r = (
+        _exact(users, key)
+        or _contains(users, key, desc)
+        or _exact(rest if account_kind == "card" else others, key)
+        or (None if account_kind == "card" else _contains(bills, key, desc))
+        or _contains(rest, key, desc)
+    )
+    if r:
+        return r.category_id, _SOURCE[r.source]
     for hint in [txn.provider_category, *(providers or [])]:
-        name = PROVIDER_CATEGORY_MAP.get(hint or "")
+        name = provider_category(hint)
         if name:
-            cid = session.scalar(select(Category.id).where(Category.name == name))
+            if cat_ids is None:
+                cid = session.scalar(select(Category.id).where(Category.name == name))
+            else:
+                cid = cat_ids.get(name)
             if cid:
                 return cid, "provider"
     return None, None
@@ -69,24 +71,38 @@ def _card_bill_ids(session: Session) -> set[int]:
     return set(session.scalars(select(Category.id).where(Category.group == "card_bill")))
 
 
-def categorize_pending(session: Session) -> int:
+def _recategorize(session: Session, cond) -> int:
     rules = list(session.scalars(select(MerchantRule)))
     bill_ids = _card_bill_ids(session)
+    cat_ids = {c.name: c.id for c in session.scalars(select(Category))}
     n = 0
     rows = session.execute(
         select(Transaction, Account.kind)
         .join(Account, Account.id == Transaction.account_id)
-        .where(Transaction.category_id.is_(None))
+        .where(cond)
     ).all()
     for t, kind in rows:
         cid, src = categorize_transaction(
-            session, t, rules=rules, account_kind=kind, card_bill_ids=bill_ids
+            session, t, rules=rules, account_kind=kind, card_bill_ids=bill_ids, cat_ids=cat_ids
         )
-        if cid is not None:
+        if cid is None and t.category_id is None:
+            continue  # still unknown: keep any category_source as is
+        if (cid, src) != (t.category_id, t.category_source):
             t.category_id, t.category_source = cid, src
             n += 1
     session.flush()
     return n
+
+
+def categorize_pending(session: Session) -> int:
+    """Categorize uncategorized transactions; returns how many got a category."""
+    return _recategorize(session, Transaction.category_id.is_(None))
+
+
+def recategorize_auto(session: Session) -> int:
+    """Re-run the pipeline on rows categorized only by default rules or the card company's
+    category, so rule changes reach them. Never touches manual/user/seed/ai assignments."""
+    return _recategorize(session, Transaction.category_source.in_(AUTO_SOURCES))
 
 
 def _remember(session: Session, merchant_key: str, category_id: int) -> None:

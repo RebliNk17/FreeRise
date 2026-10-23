@@ -5,7 +5,12 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from freerise.categorize.pipeline import categorize_pending, uncategorized_merchants
+from freerise.categorize.default_rules import apply_defaults
+from freerise.categorize.pipeline import (
+    categorize_pending,
+    recategorize_auto,
+    uncategorized_merchants,
+)
 from freerise.categorize.seed import seed_from_riseup
 from freerise.models import Category, MerchantRule
 
@@ -74,6 +79,32 @@ def _seed(args: argparse.Namespace) -> None:
     print(f"seeded {n} rules")
 
 
+def apply_default_rules(session: Session) -> dict[str, int]:
+    """(Re)apply the shipped default rules, then re-run automatic categorization: rows
+    categorized by defaults/provider are re-evaluated, uncategorized ones get a category.
+    Manual choices and user/seed/ai rules are never changed."""
+    added, updated, removed = apply_defaults(session)
+    session.flush()
+    return {
+        "added": added,
+        "updated": updated,
+        "removed": removed,
+        "recategorized": recategorize_auto(session),
+        "categorized": categorize_pending(session),
+    }
+
+
+def _defaults(args: argparse.Namespace) -> None:
+    from freerise.db import SessionLocal
+
+    with SessionLocal.begin() as s:
+        r = apply_default_rules(s)
+    print(
+        f"default rules: {r['added']} added, {r['updated']} updated, {r['removed']} removed; "
+        f"{r['categorized']} transactions categorized, {r['recategorized']} re-categorized"
+    )
+
+
 def _import_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--in", dest="infile", required=True)
 
@@ -86,4 +117,5 @@ COMMANDS = {
     "categorize-export": (lambda p: p.add_argument("--out", required=True), _export),
     "categorize-import": (_import_args, _import),
     "categorize-seed-riseup": (_seed_args, _seed),
+    "categorize-defaults": (lambda p: None, _defaults),
 }

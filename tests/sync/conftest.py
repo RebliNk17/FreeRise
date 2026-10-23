@@ -2,10 +2,11 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 
+from freerise.categorize.default_rules import apply_defaults
 from freerise.crypto import encrypt_json
 from freerise.models import Base, Credential
 
-SEEDED = {"categories", "settings", "merchant_rules"}  # populated by migrations 0002/0007
+SEEDED = {"categories", "settings", "merchant_rules"}  # populated by migrations 0002/0007/0021
 
 
 @pytest.fixture
@@ -16,8 +17,12 @@ def sf(db_engine):
     with db_engine.begin() as conn:
         conn.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))
         conn.execute(
-            text("DELETE FROM merchant_rules WHERE NOT (source = 'seed' AND match = 'contains')")
+            text(
+                "DELETE FROM merchant_rules "
+                "WHERE NOT (source IN ('seed', 'default') AND match = 'contains')"
+            )
         )
+        apply_defaults(conn)  # restore any default rule a test deleted or re-pointed
 
 
 @pytest.fixture
