@@ -1,9 +1,11 @@
 import type { Metadata, Viewport } from "next";
-import { Assistant, Rubik } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
-const assistant = Assistant({ variable: "--font-assistant", subsets: ["hebrew", "latin"], weight: ["400", "600", "700", "800"] });
-const rubik = Rubik({ variable: "--font-rubik", subsets: ["hebrew", "latin"], weight: ["500", "700", "800"] });
+// Self-hosted (Hebrew + Latin subsets of the Google Fonts variable files, OFL) so builds never
+// depend on fonts.googleapis.com. Licenses in ./fonts.
+const assistant = localFont({ src: "./fonts/Assistant.woff2", variable: "--font-assistant", weight: "200 800" });
+const rubik = localFont({ src: "./fonts/Rubik.woff2", variable: "--font-rubik", weight: "300 900" });
 
 export const metadata: Metadata = {
   title: "FreeRise",
