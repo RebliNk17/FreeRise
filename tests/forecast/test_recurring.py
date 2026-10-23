@@ -59,7 +59,7 @@ def test_monthly_fixed_detected(session):
     assert item.expected_amount == Decimal("5000.00")
     assert item.next_expected_date == item.last_date + timedelta(days=30)
     assert item.next_expected_date >= TODAY
-    assert item.status == "pending"
+    assert item.status == "confirmed"  # 3+ months, same amount and day: auto-confirmed
     assert item.basis
 
 
@@ -161,7 +161,8 @@ def test_cancelled_subscription_not_detected(session):
 
 def test_stale_pending_row_removed(session):
     acct = _acct(session)
-    _txns(session, acct, "ספוטיפיי", _monthly(date(2026, 1, 1), [-20] * 6))
+    amounts = [-20, -35, -20, -40, -20, -35]  # uneven: stays pending (not auto-confirmed)
+    _txns(session, acct, "ספוטיפיי", _monthly(date(2026, 1, 1), amounts))
     assert "ספוטיפיי" in _by_key(detect_recurring(session, date(2026, 6, 10)))
     detect_recurring(session, TODAY)
     assert session.scalars(select(RecurringItem)).all() == []
@@ -245,3 +246,39 @@ def test_account_flip_flop_is_not_a_switch(session):
         _txns(session, (a, b)[i % 2], "groceries-co", [(start + timedelta(days=30 * i), 100)])
     item = _by_key(detect_recurring(session, TODAY))["groceries-co"]
     assert (item.account_id, item.previous_account_id) == (a.id, None)
+
+
+def test_strong_monthly_is_auto_confirmed_uncertain_stays_pending(session):
+    acct = _acct(session)
+    _txns(session, acct, "gym", _monthly(date(2026, 7, 2), [-250, -250, -255, -250]))
+    _txns(session, acct, "bill", _monthly(date(2026, 7, 2), [-300, -420, -350, -500]))  # amount
+    days = [date(2026, 7, 2), date(2026, 8, 12), date(2026, 9, 5), date(2026, 10, 9)]
+    _txns(session, acct, "drift", [(d, -100) for d in days])  # day wanders
+    items = _by_key(detect_recurring(session, TODAY))
+    assert items["gym"].status == "confirmed"
+    assert items["bill"].status == "pending"
+    assert "drift" not in items or items["drift"].status == "pending"
+
+
+def test_auto_confirm_never_overrides_dismissed(session):
+    acct = _acct(session)
+    _txns(session, acct, "gym", _monthly(date(2026, 7, 2), [-250] * 4))
+    item = _by_key(detect_recurring(session, TODAY))["gym"]
+    set_status(session, item.id, "dismissed")
+    detect_recurring(session, TODAY)
+    assert item.status == "dismissed"
+
+
+def test_sheet_category_change_follows_recurring(session):
+    from freerise.categorize.pipeline import set_category
+
+    acct = _acct(session)
+    _txns(session, acct, "gym", _monthly(date(2026, 7, 2), [-250] * 4))
+    item = _by_key(detect_recurring(session, TODAY))["gym"]
+    t = session.scalar(select(Transaction).where(Transaction.merchant_key == "gym"))
+    var = session.scalar(select(Category.id).where(Category.name == "ספורט"))
+    fixed = session.scalar(select(Category.id).where(Category.name == "ביטוח"))
+    set_category(session, t.id, var, remember=False)  # "זו לא הוצאה קבועה"
+    assert item.status == "dismissed"
+    set_category(session, t.id, fixed, remember=False)  # "זו הוצאה קבועה"
+    assert item.status == "confirmed"

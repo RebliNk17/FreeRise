@@ -22,7 +22,7 @@ def test_demo_seed_feeds_plan_and_forecast(session):
     assert fc.fixed_items and fc.income_items
     assert fc.installments_stopping_total == 350
     confirmed = session.query(RecurringItem).filter_by(status="confirmed").count()
-    assert confirmed == 7
+    assert confirmed >= 7  # the demo's own picks + strong monthly ones (auto)
     assert session.query(Notification).count() > 0
     bills = reconcile_range(session, date(2026, 1, 1), TODAY)
     statuses = [b.status for b in bills]
