@@ -7,6 +7,7 @@ import { Card, Status } from "@/components/Card";
 import type { CategoryChange, Progress } from "@/lib/api";
 import { categoryLabel, formatDate, formatILS, monthName } from "@/lib/format";
 import { useApi } from "@/lib/useApi";
+import { HistoryChart } from "./HistoryChart";
 
 export default function ProgressPage() {
   const { data, error } = useApi<Progress>("/progress");
@@ -15,6 +16,7 @@ export default function ProgressPage() {
       <h1 className="page-title">המגמות שלי</h1>
       <Status loading={!data} error={error} empty={data && data.cycles.length === 0} />
       {data && data.cycles.length > 0 && <ProgressView p={data} />}
+      {data && data.cycles.length > 0 && <HistoryChart />}
     </div>
   );
 }

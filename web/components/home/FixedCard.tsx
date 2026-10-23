@@ -3,12 +3,13 @@ import { Card } from "@/components/Card";
 import { categoryLabel, formatDate } from "@/lib/format";
 import { FIXED_STATUS, type FixedGroup, type FixedItem, type HomeData } from "@/lib/home";
 import { Expander } from "./Expander";
+import { HistoryButton } from "./HistorySheet";
 import { SpentHeader, TableHead } from "./parts";
 import { TxnList } from "./TxnRow";
 
 export function FixedCard({ f }: { f: HomeData["fixed"] }) {
   return (
-    <Card title="הוצאות קבועות">
+    <Card title="הוצאות קבועות" action={<HistoryButton kind="fixed" title="הוצאות קבועות" />}>
       <SpentHeader spent={f.spent} expected={f.expected} />
       {f.groups.length > 0 && (
         <Expander label={<span className="text-sm font-semibold text-brand">פירוט חודשי</span>} buttonClassName="flex min-h-11 border-t border-hairline pt-2">
