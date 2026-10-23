@@ -66,7 +66,7 @@ export function WeeklySummary({ s }: { s: NonNullable<HomeData["summary"]> }) {
           </div>
         )}
         {s.goal_plans > 0 && !editing && (
-          <p className="mt-2 text-xs text-on-fill-muted">
+          <p className="relative z-10 mt-2 w-fit rounded-full bg-white/12 px-3 py-1 text-xs font-medium text-white">
             אישי <Money value={s.goal_personal} /> +{" "}
             <Link href="/plans" className="underline">
               תוכניות <Money value={s.goal_plans} />
