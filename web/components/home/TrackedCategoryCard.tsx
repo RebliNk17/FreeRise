@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { searchHref } from "@/lib/search";
 import { Money } from "@/components/Amount";
 import { CategoryRing } from "@/components/CategoryIcon";
 import { CategorySelect, loadCategories } from "@/components/CategorySelect";
@@ -18,6 +20,7 @@ type Panel = "history" | "amount" | "move" | null;
 
 export function TrackedCategoryCard({ c }: { c: TrackedCategory }) {
   const { data, mutate } = useHome();
+  const router = useRouter();
   const [panel, setPanel] = useState<Panel>(null);
   const id = c.category_id;
   const cycle_start = data.cycle.start;
@@ -33,6 +36,7 @@ export function TrackedCategoryCard({ c }: { c: TrackedCategory }) {
           label={`אפשרויות עבור ${name}`}
           items={[
             { label: "חודשים קודמים", onSelect: () => setPanel("history") },
+            { label: "כל העסקאות בקטגוריה", onSelect: () => router.push(searchHref({ category_id: id })) },
             { label: "עריכת סכום", onSelect: () => setPanel("amount") },
             { label: "העברת עסקאות", onSelect: () => setPanel("move") },
             {

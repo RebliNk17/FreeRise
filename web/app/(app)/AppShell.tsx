@@ -4,7 +4,6 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  ArrowLeftRight,
   ChartColumn,
   FlaskConical,
   House,
@@ -14,6 +13,7 @@ import {
   MessagesSquare,
   PiggyBank,
   Receipt,
+  Search,
   Settings,
   Target,
   Wallet,
@@ -39,7 +39,7 @@ const MORE: NavLink[] = [
   { href: "/cost", label: "חיפוש הוצאות", icon: Receipt },
   { href: "/whatif", label: "תרחישים", icon: FlaskConical },
   { href: "/chat", label: "שאל אותי על התזרים", icon: MessagesSquare },
-  { href: "/transactions", label: "עסקאות", icon: ArrowLeftRight },
+  { href: "/search", label: "חיפוש עסקאות", icon: Search },
   { href: "/accounts", label: "חשבונות", icon: Wallet },
   { href: "/settings/credentials", label: "חיבורים לבנקים ואשראי", icon: KeyRound },
   { href: "/settings", label: "הגדרות", icon: Settings },
@@ -66,7 +66,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Logo size={36} />
             FreeRise
           </Link>
-          <NotificationBell className="ms-auto" />
+          <Link href="/search" className="icon-btn ms-auto" aria-label="חיפוש עסקאות" title="חיפוש עסקאות">
+            <Search size={19} strokeWidth={1.8} />
+          </Link>
+          <NotificationBell />
           <ThemeButton />
           <button onClick={() => setDrawer(true)} className="icon-btn" aria-label="תפריט" title="תפריט" aria-expanded={drawer}>
             <Menu size={19} strokeWidth={1.8} />

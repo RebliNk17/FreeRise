@@ -1,24 +1,38 @@
 import base64
 import csv
 import io
+import re
 from datetime import date
 from decimal import Decimal
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, exists, select, tuple_
+from sqlalchemy import delete, exists, func, or_, select, tuple_
 from sqlalchemy.orm import joinedload
 
-from freerise.accounts import account_holder, account_label
+from freerise.accounts import PROVIDER_HE, account_holder, account_label
 from freerise.api.deps import DB, get_or_404
 from freerise.cashflow.cycles import cycle_for, cycle_shift, get_start_day, next_cycle, prev_cycle
 from freerise.forecast.attribution import attribute_income
 from freerise.forecast.recurring import mark_fixed_income
-from freerise.models import Account, Category, RecurringItem, Transaction, TransactionSplit
+from freerise.models import (
+    Account,
+    Category,
+    Credential,
+    RecurringItem,
+    Transaction,
+    TransactionReview,
+    TransactionSplit,
+)
 from freerise.reconcile.card_bills import reconcile_range
 
 router = APIRouter()
+
+
+class ReviewFlag(BaseModel):
+    assignee: str | None
+    note: str | None
 
 
 class SplitPartOut(BaseModel):
@@ -53,6 +67,8 @@ class TxnOut(BaseModel):
     cycle_date_source: Literal["auto", "manual"] | None = None
     fixed_income_id: int | None = None  # confirmed income item of this merchant
     split: list[SplitPartOut] | None = None  # parts when split (they sum to amount)
+    group: str | None = None  # category group
+    review: ReviewFlag | None = None  # flagged "לבדוק עם…"
 
 
 class TxnPage(BaseModel):
@@ -70,6 +86,8 @@ _JOINED = {
     "cycle_label",
     "fixed_income_id",
     "split",
+    "group",
+    "review",
 }
 
 
@@ -92,17 +110,57 @@ class TxnFilters(BaseModel):
     to: date | None = None
     account_id: int | None = None
     include_excluded: bool = False
-    q: str | None = None
+    q: str | None = None  # merchant/description, card (last 4, label, holder) or amount
     category_id: int | None = None
     uncategorized: bool = False
+    amount_min: Decimal | None = Field(None, ge=0)  # on the absolute amount
+    amount_max: Decimal | None = Field(None, ge=0)
+
+
+AMOUNT_TOL = Decimal("0.10")  # "120" finds 119.90-120.10
+_AMOUNT = re.compile(r"^₪?\s*(\d[\d,]*(?:\.\d+)?)\s*₪?$")
+_RANGE = re.compile(r"^(\d[\d,]*(?:\.\d+)?)\s*-\s*(\d[\d,]*(?:\.\d+)?)$")
+
+
+def _num(s: str) -> Decimal:
+    return Decimal(s.replace(",", ""))
+
+
+def search_condition(q: str):
+    """One box for everything: text in the merchant/description, the card (last 4 digits,
+    its name, issuer or holder), or an amount (exact ±0.10, or a range "100-200")."""
+    text = [
+        Transaction.description.icontains(q, autoescape=True),
+        Transaction.merchant_key.icontains(q, autoescape=True),
+        Account.display_name.icontains(q, autoescape=True),
+        Account.holder.icontains(q, autoescape=True),
+        Credential.label.icontains(q, autoescape=True),
+        Credential.owner.icontains(q, autoescape=True),
+    ]
+    if providers := [k for k, name in PROVIDER_HE.items() if q in name]:
+        text.append(Credential.provider.in_(providers))
+    if re.fullmatch(r"\d{4}", q):
+        text.append(Account.provider_account_id.endswith(q))
+    if m := _RANGE.match(q):
+        lo, hi = sorted((_num(m[1]), _num(m[2])))
+        text.append(func.abs(Transaction.amount).between(lo, hi))
+    elif m := _AMOUNT.match(q):
+        n = _num(m[1])
+        text.append(func.abs(Transaction.amount).between(n - AMOUNT_TOL, n + AMOUNT_TOL))
+    return or_(*text)
 
 
 def _filtered(f: TxnFilters):
     stmt = (
         select(Transaction, Account, Category.name, Category.group, Account.kind)
         .join(Account)
+        .join(Credential, Credential.id == Account.credential_id)
         .outerjoin(Category, Category.id == Transaction.category_id)
     )
+    if f.amount_min is not None:
+        stmt = stmt.where(func.abs(Transaction.amount) >= f.amount_min)
+    if f.amount_max is not None:
+        stmt = stmt.where(func.abs(Transaction.amount) <= f.amount_max)
     if f.from_:
         stmt = stmt.where(Transaction.date >= f.from_)
     if f.to:
@@ -111,8 +169,8 @@ def _filtered(f: TxnFilters):
         stmt = stmt.where(Transaction.account_id == f.account_id)
     if not f.include_excluded:
         stmt = stmt.where(Account.excluded.is_(False))
-    if f.q:
-        stmt = stmt.where(Transaction.description.icontains(f.q, autoescape=True))
+    if q := (f.q or "").strip():
+        stmt = stmt.where(search_condition(q))
     if f.category_id is not None:  # a split txn matches any of its parts' categories
         part = exists().where(
             TransactionSplit.transaction_id == Transaction.id,
@@ -143,10 +201,11 @@ def list_transactions(
         else {}
     )
     start_day, fixed = get_start_day(db), _fixed_income_ids(db)
-    splits = _splits(db, [t.id for t, *_ in rows[:limit]])
+    ids = [t.id for t, *_ in rows[:limit]]
+    splits, reviews = _splits(db, ids), _reviews(db, ids)
     items = [
-        _out(t, acct, cat, recs.get(t.id), start_day, fixed, splits.get(t.id))
-        for t, acct, cat, _, _ in rows[:limit]  # excluded banks -> no rec
+        _out(t, acct, cat, recs.get(t.id), start_day, fixed, splits.get(t.id), g, reviews.get(t.id))
+        for t, acct, cat, g, _ in rows[:limit]  # excluded banks -> no rec
     ]
     return TxnPage(
         items=items, next_cursor=_encode(rows[limit - 1][0]) if len(rows) > limit else None
@@ -161,6 +220,15 @@ def _fixed_income_ids(db: DB) -> dict[str, int]:
             )
         ).all()
     )
+
+
+def _reviews(db: DB, ids: list[int]) -> dict[int, ReviewFlag]:
+    return {
+        r.transaction_id: ReviewFlag(assignee=r.assignee, note=r.note)
+        for r in db.scalars(
+            select(TransactionReview).where(TransactionReview.transaction_id.in_(ids))
+        )
+    }
 
 
 def _splits(db: DB, ids: list[int]) -> dict[int, list[SplitPartOut]]:
@@ -179,11 +247,21 @@ def _splits(db: DB, ids: list[int]) -> dict[int, list[SplitPartOut]]:
 
 
 def _out(
-    t: Transaction, acct: Account, cat: str | None, rec, start_day: int, fixed, split=None
+    t: Transaction,
+    acct: Account,
+    cat: str | None,
+    rec,
+    start_day: int,
+    fixed,
+    split=None,
+    group: str | None = None,
+    review: ReviewFlag | None = None,
 ) -> TxnOut:
     shift, label = cycle_shift(t.date, t.cycle_date, start_day)
     return TxnOut(
         split=split,
+        group=group,
+        review=review,
         account_name=account_label(acct),
         category_name=cat,
         reconcile_status=rec.status if rec else None,
@@ -201,9 +279,16 @@ def _one(db: DB, t: Transaction) -> TxnOut:
         select(Account).options(joinedload(Account.credential)).where(Account.id == t.account_id)
     )
     cat = db.get(Category, t.category_id) if t.category_id else None
-    name = cat.name if cat else None
     return _out(
-        t, acct, name, None, get_start_day(db), _fixed_income_ids(db), _splits(db, [t.id]).get(t.id)
+        t,
+        acct,
+        cat.name if cat else None,
+        None,
+        get_start_day(db),
+        _fixed_income_ids(db),
+        _splits(db, [t.id]).get(t.id),
+        cat.group if cat else None,
+        _reviews(db, [t.id]).get(t.id),
     )
 
 

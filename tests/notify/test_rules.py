@@ -260,7 +260,7 @@ def test_large_transaction_link_encoded(session):
     a = _acct(session)
     _tx(session, a, TODAY, -4000, desc="a&b #1")
     generate_notifications(session, TODAY)
-    assert session.scalar(select(Notification.link)) == "/transactions?q=a%26b+%231"
+    assert session.scalar(select(Notification.link)) == "/search?q=a%26b+%231"
 
 
 def test_fees_paid_and_new_fee_fire_once(session):

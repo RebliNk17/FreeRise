@@ -185,7 +185,7 @@ def _large_transaction(s: Session, today: date) -> None:
                 "large_transaction",
                 "עסקה גדולה",
                 f"{t.description}: {ils(abs(t.amount))}",
-                f"/transactions?{urlencode({'q': t.description})}",
+                f"/search?{urlencode({'q': t.description})}",
                 f"large_transaction:{t.id}",
                 "warning",
             )
