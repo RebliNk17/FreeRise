@@ -25,8 +25,9 @@
 - **Automatic sync** from 18 Israeli banks and card companies: Hapoalim, Leumi, Discount,
   Mizrahi, Mercantile, Otsar Hahayal, Union, Beinleumi, Massad, Yahav, OneZero, Pagi, Max,
   Cal, Isracard, Amex, Beyahad Bishvilha and Behatsdaa. Also the pension clearing house (Mislaka).
-- **Auto-categorization** with merchant rules. Coming from RiseUp? Import your RiseUp merchant
-  categories to start with them.
+- **Auto-categorization** out of the box: ~950 built-in rules for common Israeli merchants, plus
+  the card company's own category as a fallback. Your choices always win. Coming from RiseUp?
+  Import your RiseUp merchant categories too.
 - **Monthly cash-flow cycles**, budgets, savings plans and a what-if calculator.
 - **Forecast** of next month: recurring charges, installments and fixed income.
 - **Card-bill reconciliation**: matches bank debits with card statements.
@@ -121,6 +122,21 @@ cd web && bun test && bun run lint && bun run typecheck && bun run build
 | `vendor/` | Vendored Python scrapers for providers the npm package doesn't cover |
 | `alembic/` | Database migrations |
 | `docs/` | [Scraper engines](docs/scrapers.md), [deploying to Railway](docs/deploy.md) |
+
+## Default categorization
+
+Migrations install the built-in merchant rules (`src/freerise/categorize/default_rules.py`) and
+every sync categorizes new transactions. After upgrading, re-sync the rules and re-categorize
+right away with:
+
+```bash
+uv run alembic upgrade head
+uv run freerise categorize-defaults
+```
+
+It only re-evaluates transactions categorized by a default rule or the card company's category;
+your manual choices and remembered rules are never changed. To check how many of your
+descriptions the defaults cover: `uv run python scripts/categorize_coverage.py descriptions.txt`.
 
 ## Importing from RiseUp
 
