@@ -12,6 +12,7 @@ from freerise.cashflow.cycles import Cycle, cycle_for, get_start_day, next_cycle
 from freerise.cashflow.summary import UNCATEGORIZED, CycleSummary, cycle_summary
 from freerise.insights.engine import group_total, history
 from freerise.models import Account, Transaction
+from freerise.view import counted
 
 SPENDING = ("fixed", "variable")
 
@@ -87,7 +88,7 @@ def progress(session: Session, today: date) -> Progress:
     first = session.scalar(
         select(func.min(Transaction.effective_date))
         .join(Account, Account.id == Transaction.account_id)
-        .where(Account.excluded.is_(False))
+        .where(counted())
     )
     cumulative = Decimal(0)
     if first:

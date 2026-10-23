@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from freerise.cashflow.cycles import Cycle
 from freerise.models import Account, Balance, Transaction
+from freerise.view import counted
 
 
 @dataclass
@@ -30,7 +31,7 @@ def balances(session: Session, cycle: Cycle) -> Balances:
         select(Account, latest.c.balance, latest.c.as_of)
         .options(joinedload(Account.credential))
         .outerjoin(latest, latest.c.account_id == Account.id)
-        .where(Account.excluded.is_(False))
+        .where(counted())
         .order_by(Account.id)
     ).all()
     banks = [(a, b, t) for a, b, t in rows if a.kind == "bank"]
@@ -45,7 +46,7 @@ def balances(session: Session, cycle: Cycle) -> Balances:
                 .join(Account, Account.id == Transaction.account_id)
                 .where(
                     Account.kind == "card",
-                    Account.excluded.is_(False),
+                    counted(),
                     Transaction.amount < 0,
                     Transaction.date >= cycle.start,
                     Transaction.date <= cycle.end,

@@ -8,6 +8,8 @@ import type { Uncategorized } from "@/lib/api";
 import { pendingCount } from "@/lib/categorize";
 import { findTxn, isIdle, type HomeData, type Txn } from "@/lib/home";
 import { useApi } from "@/lib/useApi";
+import { useHiddenAccounts, withHidden } from "@/lib/viewFilter";
+import { AccountFilter } from "./AccountFilter";
 import { AddTrackedCategory } from "./AddTrackedCategory";
 import { CategorizeChip, CategorizeSheet } from "./CategorizeSheet";
 import { HomeContext, type HomeCtx } from "./context";
@@ -26,7 +28,8 @@ import { WeeklySummary } from "./WeeklySummary";
 
 /** The whole home screen for one cycle. path: "/home/current" or "/home/{y}/{m}". */
 export function HomeView({ path, title }: { path: string; title: string }) {
-  const { data, setData, error, reload } = useApi<HomeData>(path);
+  const hidden = useHiddenAccounts();
+  const { data, setData, error, reload } = useApi<HomeData>(withHidden(path, hidden));
   const [sheet, setSheet] = useState<Txn | null>(null);
   const [failed, setFailed] = useState(false);
   const [version, setVersion] = useState(0);
@@ -83,6 +86,7 @@ export function HomeView({ path, title }: { path: string; title: string }) {
             </>
           }
         />
+        <AccountFilter />
         {failed && (
           <p className="rounded-2xl bg-danger-soft px-4 py-3 text-sm font-semibold text-danger-strong" role="alert">
             השמירה נכשלה — השינוי בוטל.

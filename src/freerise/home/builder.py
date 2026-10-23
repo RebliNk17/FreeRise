@@ -37,6 +37,7 @@ from freerise.models import (
     Transaction,
     TransactionSplit,
 )
+from freerise.view import counted
 
 OVERDUE_DAYS = 3
 WEEKLY_DEFAULT = ("כלכלה",)  # supermarket is tracked weekly by default
@@ -352,7 +353,7 @@ def _history(
         .join(Account, Account.id == Transaction.account_id)
         .outerjoin(Category, Category.id == p.c.category_id)
         .where(
-            Account.excluded.is_(False),
+            counted(),
             Transaction.effective_date >= cycles[0].start,
             Transaction.effective_date <= cycles[-1].end,
             or_(Category.id.is_(None), Category.group.in_(GROUPS)),
@@ -437,7 +438,7 @@ def build_home(session: Session, cycle: Cycle, today: date) -> Home:
             select(Transaction, parts.c.category_id, parts.c.amount)
             .join(parts, parts.c.txn_id == Transaction.id)
             .join(Account, Account.id == Transaction.account_id)
-            .where(Account.excluded.is_(False), *where)
+            .where(counted(), *where)
             .order_by(Transaction.date.desc(), Transaction.id.desc(), parts.c.category_id)
         ):
             cat = cats.get(cid)

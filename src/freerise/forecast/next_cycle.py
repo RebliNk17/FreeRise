@@ -15,6 +15,7 @@ from freerise.accounts import account_labels
 from freerise.cashflow.cycles import Cycle, cycle_for, day_in_cycle, get_start_day, next_cycle
 from freerise.forecast.recurring import recent_previous_account, usual_day
 from freerise.models import Account, Category, RecurringItem, Transaction
+from freerise.view import counted
 
 CADENCE_MONTHS = {"monthly": 1, "bimonthly": 2, "quarterly": 3, "semiannual": 6, "annual": 12}
 STALE_DAYS = 7
@@ -86,7 +87,7 @@ def _txns(session: Session, *where) -> list[Transaction]:
         session.scalars(
             select(Transaction)
             .join(Account, Account.id == Transaction.account_id)
-            .where(Account.excluded.is_(False), *where)
+            .where(counted(), *where)
             .order_by(Transaction.date, Transaction.id)
         )
     )

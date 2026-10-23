@@ -8,6 +8,7 @@ from freerise.api.deps import DB, today
 from freerise.cashflow.cycles import Cycle, cycle_by_label, cycle_for, get_start_day
 from freerise.cashflow.fees import fees_in_cycle
 from freerise.cashflow.summary import cycle_history, cycle_summary
+from freerise.view import hiding
 
 router = APIRouter()
 
@@ -119,8 +120,9 @@ def _cashflow(db: DB, c: Cycle) -> CashflowOut:
 
 
 @router.get("/cashflow/current")
-def cashflow_current(db: DB) -> CashflowOut:
-    return _cashflow(db, cycle_for(today(), get_start_day(db)))
+def cashflow_current(db: DB, hide_accounts: str | None = None) -> CashflowOut:
+    with hiding(hide_accounts):
+        return _cashflow(db, cycle_for(today(), get_start_day(db)))
 
 
 @router.get("/cashflow/{year}/{month}")
@@ -128,5 +130,7 @@ def cashflow_for(
     db: DB,
     year: Annotated[int, Path(ge=2000, le=2100)],
     month: Annotated[int, Path(ge=1, le=12)],
+    hide_accounts: str | None = None,
 ) -> CashflowOut:
-    return _cashflow(db, cycle_by_label(year, month, get_start_day(db)))
+    with hiding(hide_accounts):
+        return _cashflow(db, cycle_by_label(year, month, get_start_day(db)))

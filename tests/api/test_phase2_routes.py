@@ -516,3 +516,16 @@ def test_split_and_unsplit(authed, ids, sf):
     assert cost["total"] == 100
     r = authed.delete(f"/api/transactions/{t}/split")
     assert r.json()["split"] is None
+
+
+def test_hide_accounts_view_filter(authed, ids, sf):
+    _txn(sf, ids["bank"], date(2026, 9, 15), -100, "bank shop")
+    _txn(sf, ids["card"], date(2026, 9, 15), -40, "card shop")
+    assert authed.get("/api/cashflow/2026/9").json()["spending"] == 140
+    hidden = authed.get("/api/cashflow/2026/9", params={"hide_accounts": str(ids["card"])})
+    assert hidden.json()["spending"] == 100
+    both = f"{ids['card']},{ids['bank']}"
+    home = authed.get("/api/home/2026/9", params={"hide_accounts": both})
+    assert home.json()["variable"]["spent"] == 0
+    assert authed.get("/api/home/2026/9").json()["variable"]["spent"] == 140  # not sticky
+    assert authed.get("/api/home/2026/9", params={"hide_accounts": "x"}).status_code == 400

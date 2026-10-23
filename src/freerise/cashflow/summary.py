@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from freerise.cashflow.cycles import Cycle, get_start_day, prev_cycle
 from freerise.cashflow.parts import txn_parts
 from freerise.models import Account, Category, RecurringItem, Transaction
+from freerise.view import counted
 
 UNCATEGORIZED = "לא מסווג"
 GROUPS = ("fixed", "variable", "savings", "income")
@@ -57,7 +58,7 @@ def cycle_summary(session: Session, cycle: Cycle) -> CycleSummary:
         .join(Account, Account.id == Transaction.account_id)
         .outerjoin(Category, Category.id == p.c.category_id)
         .where(
-            Account.excluded.is_(False),
+            counted(),
             Transaction.effective_date >= cycle.start,
             Transaction.effective_date <= cycle.end,
         )

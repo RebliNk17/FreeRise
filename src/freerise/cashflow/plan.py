@@ -15,6 +15,7 @@ from freerise.cashflow.savings import monthly_total, plan_statuses
 from freerise.cashflow.summary import UNCATEGORIZED, CycleSummary, cycle_summary
 from freerise.forecast.next_cycle import ExpectedLine, expected_in_cycle
 from freerise.models import Account, Category, CycleGoal, Setting, Transaction
+from freerise.view import counted
 
 CENT = Decimal("0.01")
 HISTORY = 6
@@ -100,7 +101,7 @@ def _variable_by_week(session: Session, cycle: Cycle) -> dict[date, Decimal]:
         .join(Account, Account.id == Transaction.account_id)
         .outerjoin(Category, Category.id == p.c.category_id)
         .where(
-            Account.excluded.is_(False),
+            counted(),
             Transaction.effective_date >= cycle.start,
             Transaction.effective_date <= cycle.end,
             or_(
