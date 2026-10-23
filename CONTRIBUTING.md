@@ -24,7 +24,7 @@ recreates that database, so never point it at real data.
    ```bash
    uv run ruff check . && uv run ruff format --check .
    uv run pytest -q
-   cd web && bun run lint && bun test && bun run build
+   cd web && bun run lint && bun run typecheck && bun test && bun run build
    ```
 
 4. Use [Conventional Commits](https://www.conventionalcommits.org) for commit messages, for
