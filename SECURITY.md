@@ -5,7 +5,7 @@ FreeRise stores encrypted bank credentials, so we take security reports seriousl
 ## Reporting a vulnerability
 
 **Do not open a public issue.** Report privately through
-[GitHub Security Advisories](https://github.com/RebliNk17/freerise/security/advisories/new).
+[GitHub Security Advisories](https://github.com/RebliNk17/FreeRise/security/advisories/new).
 
 Include what you found, how to reproduce it, and the impact. We aim to reply within 7 days.
 

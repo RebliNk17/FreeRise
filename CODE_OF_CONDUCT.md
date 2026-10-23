@@ -6,6 +6,6 @@ In short: be respectful, assume good intent, and keep discussions about the work
 personal attacks and discriminatory language are not tolerated.
 
 Report unacceptable behavior privately to the maintainers through
-[GitHub Security Advisories](https://github.com/RebliNk17/freerise/security/advisories/new)
+[GitHub Security Advisories](https://github.com/RebliNk17/FreeRise/security/advisories/new)
 or by contacting a maintainer directly. Maintainers may remove comments, commits or contributors
 that break these rules.

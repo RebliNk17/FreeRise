@@ -9,5 +9,5 @@ class AmexScraper(IsracardAmexBaseScraper):
     base URL and company code.
     """
 
-    BASE_URL = "https://he.americanexpress.co.il"
+    BASE_URL = "https://digital.isracard.co.il"
     COMPANY_CODE = "77"

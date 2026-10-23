@@ -4,7 +4,7 @@
 
 **Free, open-source, self-hosted household finance for Israeli banks and credit cards.**
 
-[![CI](https://github.com/RebliNk17/freerise/actions/workflows/ci.yml/badge.svg)](https://github.com/RebliNk17/freerise/actions/workflows/ci.yml)
+[![CI](https://github.com/RebliNk17/FreeRise/actions/workflows/ci.yml/badge.svg)](https://github.com/RebliNk17/FreeRise/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 </div>
@@ -41,7 +41,7 @@
 You need [Docker](https://docs.docker.com/get-docker/).
 
 ```bash
-git clone https://github.com/RebliNk17/freerise.git
+git clone https://github.com/RebliNk17/FreeRise.git
 cd freerise
 cp .env.example .env
 ```
