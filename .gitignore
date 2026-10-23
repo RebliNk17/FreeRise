@@ -8,3 +8,13 @@ node_modules/
 .next/
 .ruff_cache/
 .pytest_cache/
+
+# Local secrets and scratch files: never commit
+.env.*
+!.env.example
+*.dump
+one-zero.json
+bridge/test-*
+docs/superpowers/
+.claude/worktrees/
+.claude/settings.local.json

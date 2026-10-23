@@ -1,0 +1,6 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "OneZero mTLS client certificate shipped publicly by upstream finance-analysis"
+paths = ['''vendor/fa_scraper/scraper/providers/banks/onezero_mtls/''']
