@@ -109,6 +109,12 @@ body {
   h1, h2, h3 { font-family: var(--font-display); }
   :focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
   ::selection { background: var(--brand-soft); }
+  /* Thin themed scrollbars everywhere; the standard props win in Chrome/Firefox, ::-webkit-* covers Safari. */
+  * { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }
+  ::-webkit-scrollbar-thumb:hover { background-color: var(--faint); }
   input[type="checkbox"], input[type="radio"] { accent-color: var(--brand); width: 1.1rem; height: 1.1rem; }
 }
 
@@ -135,6 +141,19 @@ body {
   /* 40px sunken square for header/toolbar icons. */
   .icon-btn {
     @apply relative inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-sunken text-text transition-[filter] hover:brightness-97;
+  }
+  /* Slim text action in a card's footer row. */
+  .card-action {
+    @apply inline-flex min-h-9 items-center gap-1 rounded-lg px-2.5 hover:bg-sunken disabled:opacity-50;
+  }
+  /* Native modal <dialog>: bottom drawer on phones, centered modal from sm up. */
+  .sheet {
+    @apply mx-0 mt-auto mb-0 w-full max-w-none overflow-y-auto rounded-t-3xl border-0 bg-surface p-5 text-text shadow-card sm:m-auto sm:w-[min(28rem,calc(100%-2rem))] sm:rounded-3xl;
+    max-height: 92dvh;
+    padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
+  }
+  .sheet::backdrop {
+    background: var(--backdrop);
   }
   .chip {
     @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold whitespace-nowrap;
@@ -204,3 +223,5 @@ body {
 }
 @keyframes select-in { from { opacity: 0; transform: translateY(-4px) scale(.98); } }
 @keyframes sheet-in { from { transform: translateY(100%); } }
+
+@media (max-width: 39.99rem) and (prefers-reduced-motion: no-preference) { .sheet { animation: sheet-in 220ms ease-out; } }
