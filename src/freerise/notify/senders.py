@@ -6,24 +6,18 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from freerise.models import Notification, NotificationDelivery, Setting
+from freerise.notify import telegram
 
 log = logging.getLogger("freerise.notify")
-SUPPORTED = ("in_app",)  # extend with "telegram" once TelegramSender is implemented
+SUPPORTED = ("in_app", "telegram")
 
 
 class Sender(Protocol):
+    """Optional attributes: since (datetime) skips older notifications, kinds (list) filters."""
+
     channel: str
 
     def send(self, n: Notification) -> None: ...
-
-
-class TelegramSender:
-    """Placeholder; not registered by default."""
-
-    channel = "telegram"
-
-    def send(self, n: Notification) -> None:
-        raise NotImplementedError
 
 
 def enabled_channels(session: Session) -> list[str]:
@@ -32,7 +26,12 @@ def enabled_channels(session: Session) -> list[str]:
 
 
 def build_senders(session: Session) -> list[Sender]:
-    return []  # ponytail: in_app is written by notify(); add Telegram here when it exists
+    # in_app is written by notify() itself
+    cfg = telegram.load(session)
+    if not (cfg.get("token_enc") and cfg.get("chat_id")):
+        return []
+    app_url = session.scalar(select(Setting.value).where(Setting.key == "app_url"))
+    return [telegram.TelegramSender(cfg, app_url)]
 
 
 def deliver_pending(session: Session, senders: list[Sender]) -> int:
@@ -46,7 +45,12 @@ def deliver_pending(session: Session, senders: list[Sender]) -> int:
             NotificationDelivery.channel == sender.channel,
             NotificationDelivery.status == "sent",
         )
-        for n in session.scalars(select(Notification).where(Notification.id.not_in(done))):
+        q = select(Notification).where(Notification.id.not_in(done)).order_by(Notification.id)
+        if (since := getattr(sender, "since", None)) is not None:
+            q = q.where(Notification.created_at >= since)
+        if (kinds := getattr(sender, "kinds", None)) is not None:
+            q = q.where(Notification.kind.in_(kinds))
+        for n in session.scalars(q):
             d = session.scalar(
                 select(NotificationDelivery).where(
                     NotificationDelivery.notification_id == n.id,

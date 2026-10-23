@@ -1,7 +1,10 @@
+from datetime import timedelta
+
 from sqlalchemy import select
 
 from freerise.models import Notification, NotificationDelivery, Setting
-from freerise.notify.senders import TelegramSender, deliver_pending
+from freerise.notify import telegram
+from freerise.notify.senders import deliver_pending
 from freerise.notify.store import notify
 
 
@@ -55,10 +58,41 @@ def test_deliver_failure_recorded_and_retried(session):
     assert d.status == "sent"
 
 
-def test_telegram_placeholder_raises(session):
-    n = _n(session)
-    try:
-        TelegramSender().send(n)
-    except NotImplementedError:
-        return
-    raise AssertionError
+def test_deliver_respects_since_and_kinds(session):
+    old = _n(session, "old")
+    session.add(Setting(key="notification_channels", value=["fake"]))
+    session.flush()
+    f = Fake()
+    f.since = old.created_at + timedelta(seconds=1)
+    assert deliver_pending(session, [f]) == 0
+    f.since, f.kinds = None, ["other"]
+    assert deliver_pending(session, [f]) == 0
+    f.kinds = ["kind"]
+    assert deliver_pending(session, [f]) == 1
+
+
+def test_telegram_format_escapes_and_links(session):
+    n = notify(session, "k", "<a>", "x & y", "/home", "t", "warning")
+    msg = telegram.format_message(n, "https://fr.example/")
+    assert msg.startswith("⚠️ <b>&lt;a&gt;</b>\nx &amp; y")
+    assert 'href="https://fr.example/home"' in msg
+    assert "href" not in telegram.format_message(n, None)
+
+
+def test_find_chat_matches_code_only(monkeypatch):
+    calls = []
+
+    def call(token, method, **p):
+        calls.append(p)
+        return [
+            {"update_id": 5, "message": {"text": "/start nope", "chat": {"id": 1}}},
+            {
+                "update_id": 6,
+                "message": {"text": "/start@Bot abc", "chat": {"id": 2, "first_name": "Dana"}},
+            },
+        ]
+
+    monkeypatch.setattr(telegram, "call", call)
+    assert telegram.find_chat("t", "abc") == {"id": 2, "name": "Dana"}
+    assert calls[1]["offset"] == 7  # read updates are acknowledged
+    assert telegram.find_chat("t", "zzz") is None

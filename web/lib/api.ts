@@ -222,7 +222,27 @@ export type FundDetail = {
 };
 
 export type Notification = { id: number; created_at: string; kind: string; severity: "info" | "warning" | "critical"; title: string; body: string; link: string | null; read_at: string | null };
-export type Settings = { cycle_start_day: number; month_end_goal_default: number };
+export type Settings = {
+  cycle_start_day: number;
+  month_end_goal_default: number;
+  income_grace_days: number;
+  large_txn_min: number;
+  sync_hours: number[];
+  digest_hour: number;
+  app_url: string | null;
+};
+/** GET /settings/telegram. The bot token is never sent back. */
+export type TelegramConfig = {
+  bot_username: string | null;
+  bot_name: string | null;
+  chat_name: string | null;
+  linked: boolean;
+  enabled: boolean;
+  kinds: string[] | null; // null = every kind
+  link_code: string | null; // set while waiting for /start in Telegram
+  link_url: string | null;
+  all_kinds: Record<string, string>;
+};
 
 export type ReconcileStatus = "matched" | "mismatch" | "unknown_card";
 export type BillReconciliation = {

@@ -1,7 +1,7 @@
 import pyotp
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import text
+from sqlalchemy import delete, select, text, update
 from sqlalchemy.orm import sessionmaker
 
 from freerise.api import routes_auth
@@ -9,7 +9,7 @@ from freerise.api.main import app
 from freerise.auth import create_user
 from freerise.crypto import decrypt_str
 from freerise.db import get_session
-from freerise.models import Base
+from freerise.models import Base, Setting
 
 SEEDED = {"categories", "settings", "merchant_rules"}  # populated by migrations 0002/0007
 
@@ -55,3 +55,16 @@ def authed(client, user):
     )
     assert r.status_code == 204
     return client
+
+
+@pytest.fixture
+def restore_settings(sf):
+    """settings survives the per-test truncate (seeded); put it back as it was."""
+    with sf() as s:
+        saved = {x.key: x.value for x in s.scalars(select(Setting))}
+    yield
+    with sf() as s:
+        s.execute(delete(Setting).where(Setting.key.not_in(saved)))
+        for k, v in saved.items():
+            s.execute(update(Setting).where(Setting.key == k).values(value=v))
+        s.commit()

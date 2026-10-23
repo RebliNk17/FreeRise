@@ -21,6 +21,7 @@ from freerise.models import (
     Category,
     Credential,
     RecurringItem,
+    Setting,
     SyncRun,
     Transaction,
 )
@@ -41,7 +42,7 @@ FAILURE_LABELS = {
     "other": "שגיאה",
 }
 NON_SPENDING = ("transfer", "card_bill", "ignore")
-LARGE_MIN = Decimal(1500)
+LARGE_MIN = Decimal(1500)  # default of the large_txn_min setting
 
 
 def ils(x) -> str:
@@ -155,8 +156,10 @@ def _large_transaction(s: Session, today: date) -> None:
     )
     recent = s.scalars(base.where(Transaction.date >= today - timedelta(days=3)))
     since = today - timedelta(days=183)
+    v = s.scalar(select(Setting.value).where(Setting.key == "large_txn_min"))
+    floor = Decimal(str(v)) if v is not None else LARGE_MIN
     for t in recent:
-        limit = LARGE_MIN
+        limit = floor
         if t.category_id is not None:
             amts = [
                 abs(a)
@@ -171,7 +174,7 @@ def _large_transaction(s: Session, today: date) -> None:
                     )
                 )
             ]
-            limit = max(LARGE_MIN, 3 * median(amts))
+            limit = max(floor, 3 * median(amts))
         if abs(t.amount) > limit:
             notify(
                 s,

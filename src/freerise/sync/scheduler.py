@@ -15,7 +15,7 @@ from freerise.config import get_settings
 from freerise.db import SessionLocal
 from freerise.forecast.attribution import attribute_income
 from freerise.forecast.recurring import detect_recurring
-from freerise.models import Credential, SyncRun
+from freerise.models import Credential, Setting, SyncRun
 from freerise.notify.rules import generate_notifications
 from freerise.notify.senders import build_senders, deliver_pending
 from freerise.sync import demo_provider
@@ -161,6 +161,24 @@ async def daily_notifications(session_factory: sessionmaker) -> None:
         deliver_pending(s, build_senders(s))
 
 
+def _hour_setting(session_factory: sessionmaker, key: str, default):
+    with session_factory() as s:
+        v = s.scalar(select(Setting.value).where(Setting.key == key))
+    return default if v is None else v
+
+
+async def scheduled_sync(session_factory: sessionmaker, now: datetime | None = None) -> None:
+    now = now or datetime.now(ZoneInfo(get_settings().tz))
+    if now.hour in _hour_setting(session_factory, "sync_hours", [7, 14, 21]):
+        await run_all(session_factory)
+
+
+async def scheduled_digest(session_factory: sessionmaker, now: datetime | None = None) -> None:
+    now = now or datetime.now(ZoneInfo(get_settings().tz))
+    if now.hour == _hour_setting(session_factory, "digest_hour", 9):
+        await daily_notifications(session_factory)
+
+
 async def main() -> None:
     load_dotenv()  # FREERISE_SCRAPER_PROXY from .env must reach os.environ (vendored code reads it)
     logging.basicConfig(level=logging.INFO)
@@ -173,24 +191,8 @@ async def main() -> None:
     except Exception as e:  # noqa: BLE001 - e.g. fresh install before migrations
         log.error("income attribution failed: %s", type(e).__name__)
     sched = AsyncIOScheduler(timezone="Asia/Jerusalem")
-    sched.add_job(
-        run_all,
-        "cron",
-        hour="7,14,21",
-        minute=0,
-        args=[SessionLocal],
-        max_instances=1,
-        coalesce=True,
-    )
-    sched.add_job(
-        daily_notifications,
-        "cron",
-        hour=9,
-        minute=0,
-        args=[SessionLocal],
-        max_instances=1,
-        coalesce=True,
-    )
+    for job in (scheduled_sync, scheduled_digest):  # hours come from settings, checked hourly
+        sched.add_job(job, "cron", minute=0, args=[SessionLocal], max_instances=1, coalesce=True)
     sched.add_job(
         process_requested,
         "interval",

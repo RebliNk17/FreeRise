@@ -5,7 +5,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, select
 
 from freerise.api.deps import today
 from freerise.cashflow.cycles import cycle_for
@@ -22,7 +22,6 @@ from freerise.models import (
     MerchantRule,
     Notification,
     RecurringItem,
-    Setting,
     Transaction,
 )
 
@@ -469,33 +468,22 @@ def test_notifications_read_flow(authed, sf):
     assert authed.get("/api/notifications/unread-count").json() == {"count": 0}
 
 
-@pytest.fixture
-def restore_settings(sf):
-    with sf() as s:
-        saved = {x.key: x.value for x in s.scalars(select(Setting))}
-    yield
-    with sf() as s:
-        for k, v in saved.items():
-            s.execute(update(Setting).where(Setting.key == k).values(value=v))
-        s.commit()
-
-
 def test_settings_validation(authed, restore_settings):
     assert authed.get("/api/settings").json() == {
         "cycle_start_day": 10,
         "month_end_goal_default": 0,
         "income_grace_days": 10,
+        "large_txn_min": 1500,
+        "sync_hours": [7, 14, 21],
+        "digest_hour": 9,
+        "app_url": None,
     }
     for bad in ({"cycle_start_day": 0}, {"cycle_start_day": 29}, {"month_end_goal_default": -5}):
         assert authed.put("/api/settings", json=bad).status_code == 422
     r = authed.put("/api/settings", json={"cycle_start_day": 15})
-    assert r.json() == {"cycle_start_day": 15, "month_end_goal_default": 0, "income_grace_days": 10}
+    assert r.json()["cycle_start_day"] == 15 and r.json()["month_end_goal_default"] == 0
     r = authed.put("/api/settings", json={"month_end_goal_default": 2000.5})
-    assert r.json() == {
-        "cycle_start_day": 15,
-        "month_end_goal_default": 2000.5,
-        "income_grace_days": 10,
-    }
+    assert r.json()["cycle_start_day"] == 15 and r.json()["month_end_goal_default"] == 2000.5
     assert authed.get("/api/cashflow/2026/9").json()["cycle"]["start"] == "2026-09-15"
 
 
