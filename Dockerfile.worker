@@ -1,6 +1,6 @@
 # israeli-bank-scrapers bridge deps (bridge/run.mjs). --ignore-scripts skips puppeteer's
 # postinstall, which only downloads a browser; the bridge drives the Chrome installed below.
-FROM node:24-bookworm-slim AS bridge
+FROM node:26-bookworm-slim AS bridge
 WORKDIR /bridge
 COPY bridge/package.json bridge/package-lock.json ./
 RUN npm ci --ignore-scripts --omit=dev

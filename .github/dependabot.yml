@@ -15,3 +15,7 @@ updates:
   - package-ecosystem: docker
     directories: [/, /web]
     schedule: { interval: weekly }
+    ignore:
+      # Node majors move to the next even (LTS) release by hand; odd releases are short-lived.
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
