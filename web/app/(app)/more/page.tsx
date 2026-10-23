@@ -1,17 +1,16 @@
 import Link from "next/link";
-import { ArrowLeftRight, Bell, ChevronLeft, CreditCard, FlaskConical, KeyRound, Receipt, Settings, Tags, Target, TrendingUp, Wallet } from "lucide-react";
+import { ArrowLeftRight, ChevronLeft, CreditCard, FlaskConical, KeyRound, MessagesSquare, Receipt, Settings, Target, TrendingUp, Wallet } from "lucide-react";
 
 const LINKS = [
   { href: "/plans", label: "יעדי חיסכון", icon: Target },
   { href: "/cost", label: "חיפוש הוצאות", icon: Receipt },
   { href: "/whatif", label: "תרחישים", icon: FlaskConical },
   { href: "/progress", label: "המגמות שלי", icon: TrendingUp },
+  { href: "/chat", label: "שאל אותי על התזרים", icon: MessagesSquare },
   { href: "/transactions", label: "עסקאות", icon: ArrowLeftRight },
-  { href: "/categorize", label: "סיווג", icon: Tags },
   { href: "/accounts", label: "חשבונות", icon: Wallet },
   { href: "/reconcile", label: "התאמת חיובי אשראי", icon: CreditCard },
   { href: "/settings/credentials", label: "חיבורים לבנקים ואשראי", icon: KeyRound },
-  { href: "/notifications", label: "התראות", icon: Bell },
   { href: "/settings", label: "הגדרות", icon: Settings },
 ];
 

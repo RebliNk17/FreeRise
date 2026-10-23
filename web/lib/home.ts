@@ -21,7 +21,13 @@ export type Txn = {
   cycle_label: string | null; // e.g. "ספטמבר 2026"
   fixed_income_id: number | null; // confirmed income item of this merchant
   cycle_date_source: "auto" | "manual" | null;
+  split_total: number | null; // split txn: the whole amount (amount/category are this part's)
+  split: { category_id: number; category_name: string; amount: number }[] | null;
+  review: { assignee: string | null; note: string | null } | null; // flagged "לבדוק עם…"
 };
+
+/** List key: a split txn appears once per part. */
+export const txnKey = (t: Pick<Txn, "id" | "category_id">) => `${t.id}:${t.category_id ?? ""}`;
 
 /** "ישראכרט ••5678 (שי)" — the holder only when the household has more than one. */
 export const accountWithHolder = (t: Pick<Txn, "account_label" | "account_holder">, multi: boolean) => (multi && t.account_holder ? `${t.account_label} (${t.account_holder})` : t.account_label);
@@ -114,6 +120,20 @@ export const fixedStatusLabel = (s: FixedItem["status"]) => FIXED_STATUS[s].labe
 
 /** Line under a progress bar: what's left, or by how much it went over. */
 export const leftLabel = (spent: number, expected: number) => (spent > expected ? { text: "חריגה של", value: spent - expected, over: true } : { text: "נשאר להוציא", value: expected - spent, over: false });
+
+export type TotalSegment = { key: "fixed" | "variable" | "savings"; label: string; spent: number; expected: number; percent: number; tone: string };
+
+/** "סך ההוצאות החודש": per-group spent vs expected, and each group's share of the stacked bar
+ * (of whichever is bigger, spent or expected, so the bar never overflows). */
+export function totalSegments(d: Pick<HomeData, "fixed" | "variable" | "savings" | "total">): TotalSegment[] {
+  const scale = Math.max(d.total.spent, d.total.expected, 1);
+  const seg = (key: TotalSegment["key"], label: string, spent: number, expected: number, tone: string) => ({ key, label, spent, expected, percent: (Math.max(0, spent) / scale) * 100, tone });
+  return [
+    seg("fixed", "קבועות", d.fixed.spent, d.fixed.expected, "bg-sun"),
+    seg("variable", "משתנות", d.variable.spent, d.variable.allowance, "bg-brand"),
+    seg("savings", "חיסכון", d.savings.spent, d.savings.expected, "bg-info"),
+  ];
+}
 
 /** Map every Txn in the home tree (any `transactions` array); return null to drop it. */
 export function mapTxns<T>(node: T, fn: (t: Txn) => Txn | null): T {

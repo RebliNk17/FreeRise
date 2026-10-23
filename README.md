@@ -142,6 +142,7 @@ All settings are environment variables. See [`.env.example`](.env.example) for t
 | `FREERISE_ENV` | `production` turns on secure cookies and enforced 2FA |
 | `FREERISE_SCRAPER_PROXY` | Optional proxy for scraper traffic |
 | `FREERISE_IBS_PROVIDERS` | Which providers use the npm scraper engine ([docs](docs/scrapers.md)) |
+| `FREERISE_LLM_BASE_URL`, `FREERISE_LLM_API_KEY`, `FREERISE_LLM_MODEL` | Optional cash-flow Q&A chat over an OpenAI-compatible API (e.g. OpenRouter); off unless all three are set. Only aggregated totals are sent |
 
 ## Security
 

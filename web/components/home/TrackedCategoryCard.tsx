@@ -5,10 +5,11 @@ import { Money } from "@/components/Amount";
 import { CategoryRing } from "@/components/CategoryIcon";
 import { CategorySelect, loadCategories } from "@/components/CategorySelect";
 import { send } from "@/lib/api";
-import { categoryLabel, monthName } from "@/lib/format";
-import { mapTxns, type HomeData, type TrackedCategory } from "@/lib/home";
+import { categoryLabel } from "@/lib/format";
+import { mapTxns, txnKey, type HomeData, type TrackedCategory } from "@/lib/home";
 import { useHome } from "./context";
 import { Expander } from "./Expander";
+import { HistorySheet } from "./HistorySheet";
 import { Menu } from "./parts";
 import { TxnList, TxnRow } from "./TxnRow";
 import { WeekTable } from "./WeekTable";
@@ -102,7 +103,7 @@ export function TrackedCategoryCard({ c }: { c: TrackedCategory }) {
           )}
         </div>
       </Expander>
-      {panel === "history" && <History c={c} onClose={() => setPanel(null)} />}
+      {panel === "history" && <HistorySheet kind="category" categoryId={id} title={name} labels={["יצא", "צפוי"]} onClose={() => setPanel(null)} />}
       {panel === "amount" && (
         <AmountEdit
           c={c}
@@ -129,27 +130,6 @@ function PanelBox({ title, onClose, children }: { title: string; onClose: () => 
       </div>
       {children}
     </div>
-  );
-}
-
-function History({ c, onClose }: { c: TrackedCategory; onClose: () => void }) {
-  const max = Math.max(1, ...c.history.map((h) => h.spent));
-  return (
-    <PanelBox title="חודשים קודמים" onClose={onClose}>
-      {c.history.length === 0 ? (
-        <p className="text-sm text-muted">אין עדיין היסטוריה.</p>
-      ) : (
-        <ul className="flex h-32 items-end gap-2" aria-label={`הוצאות ${categoryLabel(c.name)} בחודשים קודמים`}>
-          {c.history.map((h) => (
-            <li key={`${h.label_year}-${h.label_month}`} className="flex h-full flex-1 flex-col items-center justify-end gap-1">
-              <Money value={Math.round(h.spent)} className="text-[10px] text-muted" />
-              <div className="w-full max-w-8 rounded-t-md bg-brand" style={{ height: `${(h.spent / max) * 70}%` }} />
-              <span className="text-[11px] text-muted">{monthName(h.label_month).slice(0, 3)}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </PanelBox>
   );
 }
 
@@ -206,7 +186,7 @@ function MoveTxns({ c, txns, onClose }: { c: TrackedCategory; txns: TrackedCateg
         ) : (
           <ul className="flex max-h-72 flex-col divide-y divide-hairline overflow-y-auto">
             {txns.map((t) => (
-              <li key={t.id}>
+              <li key={txnKey(t)}>
                 <TxnRow t={t} select={{ checked: sel.includes(t.id), onChange: (v) => setSel((s) => (v ? [...s, t.id] : s.filter((x) => x !== t.id))) }} />
               </li>
             ))}

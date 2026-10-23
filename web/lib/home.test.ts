@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { homeFixture } from "./fixtures/home";
-import { accountWithHolder, daysLabel, findTxn, fixedStatusLabel, isIdle, leftLabel, mapTxns, splitMoney, weekDays, weekOver, shiftChip, weekStatus, wrapIndex } from "./home";
+import { accountWithHolder, daysLabel, findTxn, fixedStatusLabel, isIdle, leftLabel, mapTxns, splitMoney, weekDays, weekOver, shiftChip, weekStatus, wrapIndex, totalSegments } from "./home";
 
 test("splitMoney splits integer and decimal parts", () => {
   expect(splitMoney(1819.2)).toEqual({ sign: "", int: "1,819", dec: ".2" });
@@ -72,4 +72,17 @@ test("account holder suffix and cycle shift chip", () => {
   expect(accountWithHolder({ account_label: "ישראכרט ••5678", account_holder: "" }, true)).toBe("ישראכרט ••5678");
   expect(shiftChip({ cycle_shift: "previous", cycle_label: "ספטמבר 2026" })).toBe("שויך לספטמבר");
   expect(shiftChip({ cycle_shift: null, cycle_label: null })).toBeNull();
+});
+
+
+test("totalSegments: shares of the bigger of spent/expected", () => {
+  const d = { fixed: { spent: 300, expected: 400, groups: [] }, variable: { spent: 500, allowance: 500, weeks: [] }, savings: { spent: 200, expected: 100, transactions: [] }, total: { spent: 1000, expected: 1000 } };
+  const s = totalSegments(d);
+  expect(s.map((x) => [x.key, x.percent, x.expected])).toEqual([
+    ["fixed", 30, 400],
+    ["variable", 50, 500],
+    ["savings", 20, 100],
+  ]);
+  const over = totalSegments({ ...d, total: { spent: 2000, expected: 1000 } });
+  expect(over[1].percent).toBe(25);
 });

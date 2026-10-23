@@ -117,6 +117,9 @@ export type Transaction = {
   reconcile_status?: ReconcileStatus | null;
 };
 
+/** GET /reviews: transactions flagged "לבדוק עם…". */
+export type Review = { transaction_id: number; assignee: string | null; note: string | null; created_at: string; date: string; description: string; amount: number; account_label: string; category_name: string | null };
+
 export type Page<T> = { items: T[]; next_cursor: string | null };
 
 export type OtpRequest = { id: number; credential_label: string; provider: string; expires_at: string };
@@ -124,25 +127,9 @@ export type OtpRequest = { id: number; credential_label: string; provider: strin
 // Phases 2–6 (api-contract.md). Money here is number.
 export type Group = "income" | "fixed" | "variable" | "savings" | "transfer" | "card_bill" | "ignore";
 export type Category = { id: number; name: string; group: Group; sort_order: number };
-export type Uncategorized = { merchant_key: string; sample_description: string; count: number; total: number; kind: "bank" | "card" };
+export type Uncategorized = { merchant_key: string; sample_description: string; count: number; total: number; kind: "bank" | "card"; sample_date: string; account_label: string };
 export type Cycle = { start: string; end: string; label_year: number; label_month: number };
 
-export type CashFlow = {
-  cycle: Cycle;
-  income: number;
-  spending: number;
-  net: number;
-  verdict: "positive" | "negative";
-  groups: { group: "fixed" | "variable" | "savings" | "income"; total: number; categories: { category_id: number | null; name: string; total: number; count: number }[] }[];
-  uncategorized_total: number;
-  uncategorized_count: number;
-  pending_count: number;
-  income_fixed: number;
-  income_variable: number;
-  basis: string;
-  history: (Cycle & { net: number })[];
-  fees: Fees;
-};
 
 export type FeeItem = { txn_id: number; date: string; description: string; account_id: number; account_name: string; merchant_key: string; fee_key: string; amount: number };
 export type Fees = { total: number; count: number; previous_total: number; items: FeeItem[]; new_fee_merchants: string[] };
@@ -289,6 +276,8 @@ export type Insight = {
   action_label: string | null;
   link: string | null;
   amount: number | null;
+  /** Buttons run in place on the card (e.g. "לא יורדת החודש"); path is under /api. */
+  actions?: { label: string; method: "POST" | "PUT" | "DELETE"; path: string }[] | null;
 };
 
 export type CategoryChange = { category_id: number | null; name: string; previous: number; current: number; change_pct: number };

@@ -285,3 +285,21 @@ async def test_exception_timeout_recorded(sf, credential):
 
     run = await run_credential(sf, credential.id, "manual", scraper_factory=factory)
     assert run.status == "failed" and run.failure_kind == "timeout"
+
+
+async def test_split_survives_resync(sf, credential):
+    from freerise.models import Category, TransactionSplit
+
+    await run_credential(sf, credential.id, "manual", scraper_factory=fake_factory(three_txns()))
+    with sf() as s:
+        t = s.scalar(select(Transaction).where(Transaction.txn_key == "a1"))
+        a, b = s.scalars(select(Category.id).where(Category.group == "variable").limit(2))
+        s.add_all(
+            [
+                TransactionSplit(transaction_id=t.id, category_id=a, amount=Decimal(-4)),
+                TransactionSplit(transaction_id=t.id, category_id=b, amount=Decimal(-6)),
+            ]
+        )
+        s.commit()
+    await run_credential(sf, credential.id, "schedule", scraper_factory=fake_factory(three_txns()))
+    assert count(sf, TransactionSplit) == 2

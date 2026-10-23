@@ -4,11 +4,12 @@ from typing import Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from freerise.accounts import account_labels
 from freerise.api.deps import DB, get_or_404, today
 from freerise.api.routes_cashflow import CycleOut
+from freerise.cashflow.cycles import cycle_for, get_start_day
 from freerise.forecast.attribution import attribute_income
 from freerise.forecast.next_cycle import next_cycle_forecast
 from freerise.forecast.recurring import (
@@ -17,7 +18,7 @@ from freerise.forecast.recurring import (
     recent_previous_account,
     set_status,
 )
-from freerise.models import Category, RecurringItem
+from freerise.models import Category, RecurringItem, RecurringSkip
 
 router = APIRouter()
 
@@ -176,6 +177,35 @@ def unmark_fixed(id: int, db: DB) -> RecurringOut:
     attribute_income(db)
     db.commit()
     return _recurring(db, id=id)[0]
+
+
+class SkipIn(BaseModel):
+    cycle_start: date | None = None  # default: the current cycle
+
+
+@router.post("/recurring/{id}/skip", status_code=204)
+def skip_recurring(id: int, body: SkipIn, db: DB) -> None:
+    """ "לא יורדת החודש": no expectation for this item in that cycle (a charge still counts)."""
+    get_or_404(db, RecurringItem, id)
+    start = body.cycle_start or cycle_for(today(), get_start_day(db)).start
+    if not db.scalar(
+        select(RecurringSkip.id).where(
+            RecurringSkip.recurring_id == id, RecurringSkip.cycle_start == start
+        )
+    ):
+        db.add(RecurringSkip(recurring_id=id, cycle_start=start))
+    db.commit()
+
+
+@router.delete("/recurring/{id}/skip", status_code=204)
+def unskip_recurring(id: int, db: DB, cycle_start: date | None = None) -> None:
+    start = cycle_start or cycle_for(today(), get_start_day(db)).start
+    db.execute(
+        delete(RecurringSkip).where(
+            RecurringSkip.recurring_id == id, RecurringSkip.cycle_start == start
+        )
+    )
+    db.commit()
 
 
 @router.post("/recurring/detect")

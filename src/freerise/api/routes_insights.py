@@ -1,15 +1,24 @@
 from datetime import date
-from typing import Literal
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from freerise.api.deps import DB, today
 from freerise.api.routes_cashflow import CycleOut
+from freerise.cashflow.cycles import cycle_for, get_start_day
+from freerise.cashflow.summary import cycle_summary
 from freerise.insights.engine import compute_insights, dismiss, run, snooze
+from freerise.insights.history import cycles_before, value_of
 from freerise.insights.progress import progress
 
 router = APIRouter()
+
+
+class InsightAction(BaseModel):
+    label: str
+    method: Literal["POST", "PUT", "DELETE"]
+    path: str  # under /api
 
 
 class InsightOut(BaseModel):
@@ -21,6 +30,7 @@ class InsightOut(BaseModel):
     action_label: str | None
     link: str | None
     amount: float | None
+    actions: list[InsightAction] | None = None
 
 
 class CycleNet(BaseModel):
@@ -85,4 +95,54 @@ def get_progress(db: DB) -> ProgressOut:
         decreases=[CategoryChange(**vars(x)) for x in p.decreases],
         cumulative_net=p.cumulative_net,
         since=p.since,
+    )
+
+
+class MonthTotal(BaseModel):
+    label_year: int
+    label_month: int
+    total: float
+
+
+class CategoryRef(BaseModel):
+    category_id: int
+    name: str
+
+
+class ProgressHistoryOut(BaseModel):
+    """Last `months` complete cycles, oldest first; totals positive."""
+
+    cycles: list[MonthTotal]
+    average: float  # over the cycles that have any data
+    categories: list[CategoryRef]  # this group's categories seen in the period (filter options)
+
+
+@router.get("/progress/history")
+def progress_history(
+    db: DB,
+    group: Literal["income", "fixed", "variable"],
+    months: Annotated[int, Query(ge=1, le=24)] = 6,
+    category_id: int | None = None,
+) -> ProgressHistoryOut:
+    cycles = cycles_before(db, cycle_for(today(), get_start_day(db)), months)
+    sums = [cycle_summary(db, c) for c in cycles]
+    names = {
+        c.category_id: c.name
+        for s in sums
+        for g in s.groups
+        if g.group == group
+        for c in g.categories
+        if c.category_id is not None
+    }
+    values = [value_of(s, group, category_id) for s in sums]
+    with_data = [v for v, s in zip(values, sums, strict=True) if s.income or s.spending]
+    return ProgressHistoryOut(
+        cycles=[
+            MonthTotal(label_year=c.label_month.year, label_month=c.label_month.month, total=v)
+            for c, v in zip(cycles, values, strict=True)
+        ],
+        average=sum(with_data) / len(with_data) if with_data else 0,
+        categories=[
+            CategoryRef(category_id=k, name=v) for k, v in sorted(names.items(), key=lambda x: x[1])
+        ],
     )

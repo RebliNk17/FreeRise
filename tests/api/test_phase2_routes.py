@@ -1,3 +1,5 @@
+import csv
+import io
 import itertools
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -139,7 +141,10 @@ def test_uncategorized_and_merchant_bulk(authed, ids, sf):
         "count": 2,
         "total": -50.0,
         "kind": "card",
+        "sample_date": "2026-09-02",
+        "account_label": unc[0]["account_label"],
     }
+    assert unc[0]["account_label"]
     assert (
         authed.get("/api/transactions", params={"uncategorized": True}).json()["items"].__len__()
         == 3
@@ -158,6 +163,20 @@ def test_uncategorized_and_merchant_bulk(authed, ids, sf):
     assert [u["merchant_key"] for u in authed.get("/api/categories/uncategorized").json()] == [
         "Other"
     ]
+    usage = authed.get("/api/categories/usage").json()
+    assert usage[0] == cid and other in usage
+
+
+def test_merchant_category_without_rule(authed, ids, sf):
+    cid = ids["cats"]["אוכל בחוץ"]
+    _txn(sf, ids["card"], date(2026, 9, 1), -30, "Once", key="once")
+    r = authed.put(
+        "/api/categories/merchant",
+        json={"merchant_key": "once", "category_id": cid, "remember": False},
+    )
+    assert r.json() == {"changed": 1}
+    with sf() as s:
+        assert s.scalar(select(MerchantRule).where(MerchantRule.pattern == "once")) is None
 
 
 def test_cashflow_endpoint_shape(authed, ids, sf):
@@ -478,3 +497,56 @@ def test_settings_validation(authed, restore_settings):
         "income_grace_days": 10,
     }
     assert authed.get("/api/cashflow/2026/9").json()["cycle"]["start"] == "2026-09-15"
+
+
+def test_split_and_unsplit(authed, ids, sf):
+    a, b = ids["cats"]["כלכלה"], ids["cats"]["פארמה"]
+    t = _txn(sf, ids["card"], date(2026, 9, 1), -300, "Super-Pharm")
+    bad = [{"category_id": a, "amount": -200}, {"category_id": b, "amount": -50}]
+    assert authed.put(f"/api/transactions/{t}/split", json={"parts": bad}).status_code == 422
+    same = [{"category_id": a, "amount": -200}, {"category_id": a, "amount": -100}]
+    assert authed.put(f"/api/transactions/{t}/split", json={"parts": same}).status_code == 422
+    sign = [{"category_id": a, "amount": -400}, {"category_id": b, "amount": 100}]
+    assert authed.put(f"/api/transactions/{t}/split", json={"parts": sign}).status_code == 422
+    ok = [{"category_id": a, "amount": -200}, {"category_id": b, "amount": -100}]
+    r = authed.put(f"/api/transactions/{t}/split", json={"parts": ok})
+    assert r.status_code == 200
+    assert [p["amount"] for p in r.json()["split"]] == [-200, -100]
+    listed = authed.get("/api/transactions", params={"category_id": b}).json()["items"]
+    assert [x["id"] for x in listed] == [t]
+    cost = authed.get("/api/cost", params={"category_id": b}).json()
+    assert cost["total"] == 100
+    r = authed.delete(f"/api/transactions/{t}/split")
+    assert r.json()["split"] is None
+
+
+def test_hide_accounts_view_filter(authed, ids, sf):
+    _txn(sf, ids["bank"], date(2026, 9, 15), -100, "bank shop")
+    _txn(sf, ids["card"], date(2026, 9, 15), -40, "card shop")
+    assert authed.get("/api/cashflow/2026/9").json()["spending"] == 140
+    hidden = authed.get("/api/cashflow/2026/9", params={"hide_accounts": str(ids["card"])})
+    assert hidden.json()["spending"] == 100
+    both = f"{ids['card']},{ids['bank']}"
+    home = authed.get("/api/home/2026/9", params={"hide_accounts": both})
+    assert home.json()["variable"]["spent"] == 0
+    assert authed.get("/api/home/2026/9").json()["variable"]["spent"] == 140  # not sticky
+    assert authed.get("/api/home/2026/9", params={"hide_accounts": "x"}).status_code == 400
+
+
+def test_export_csv(authed, ids, sf):
+    a, b = ids["cats"]["כלכלה"], ids["cats"]["פארמה"]
+    t = _txn(sf, ids["card"], date(2026, 9, 1), -300, 'Super, "Pharm"', cat=a)
+    _txn(sf, ids["bank"], date(2026, 9, 2), -7, "Other")
+    parts = [{"category_id": a, "amount": -200}, {"category_id": b, "amount": -100}]
+    authed.put(f"/api/transactions/{t}/split", json={"parts": parts})
+    r = authed.get("/api/transactions/export.csv", params={"account_id": ids["card"]})
+    assert r.headers["content-type"].startswith("text/csv")
+    assert "attachment" in r.headers["content-disposition"]
+    assert r.content.startswith("﻿".encode())
+    rows = list(csv.reader(io.StringIO(r.content.decode("utf-8-sig"))))
+    assert rows[0][:5] == ["תאריך", "תאריך חיוב", "תיאור", "קטגוריה", "סכום"]
+    assert len(rows) == 2  # filtered to the card
+    row = rows[1]
+    assert row[2] == 'Super, "Pharm"' and row[4] == "-300.00" and row[8] == "סופית"
+    assert row[3] == "פיצול: כלכלה 200; פארמה 100"
+    assert row[6] == "שי"

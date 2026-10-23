@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from freerise.cashflow.balances import Balances, balances
 from freerise.cashflow.cycles import Cycle, cycle_for, get_start_day
 from freerise.cashflow.fees import fees_in_cycle
+from freerise.cashflow.parts import txn_parts
 from freerise.cashflow.plan import (
     MIN_PACE_DAYS,
     CyclePlan,
@@ -22,11 +23,20 @@ from freerise.cashflow.plan import (
     projected_month_end,
 )
 from freerise.cashflow.summary import UNCATEGORIZED, CycleSummary
-from freerise.models import CycleGoal, InsightState, RecurringItem
+from freerise.models import (
+    Account,
+    Category,
+    CycleGoal,
+    InsightState,
+    RecurringItem,
+    Transaction,
+)
 from freerise.reconcile.card_bills import reconcile_link, reconcile_range
+from freerise.view import counted
 
 log = logging.getLogger("freerise.insights")
 SNOOZE_DAYS = 7
+OVERDUE_DAYS = 3  # as home's "לא ירד עדיין"
 PRUNE_DAYS = 120  # insight states untouched this long are forgotten
 CAP = 6
 DISPLAY = {"כלכלה": "סופר"}  # same as web CATEGORY_DISPLAY
@@ -44,6 +54,8 @@ class Insight:
     action_label: str | None = None
     link: str | None = None
     amount: Decimal | None = None
+    # Extra buttons the card runs in place: {"label", "method", "path"} (API path under /api).
+    actions: list[dict] | None = None
 
 
 def ils(x) -> str:
@@ -83,7 +95,7 @@ class Ctx:
     @property
     def cashflow_link(self) -> str:
         m = self.cycle.label_month
-        return f"/cashflow/{m.year}/{m.month}"
+        return f"/home/{m.year}/{m.month}"
 
     @cached_property
     def projected_end(self) -> Decimal:
@@ -375,6 +387,90 @@ def variable_income_expected(ctx: Ctx) -> list[Insight]:
     ]
 
 
+EATING_OUT = "אוכל בחוץ"
+WEEKEND = (4, 5)  # Friday, Saturday (date.weekday())
+RATIO = Decimal("1.5")
+
+
+def eating_out_weekend(ctx: Ctx) -> list[Insight]:
+    """Eating out per day on weekends vs. weekdays over the last 3 complete cycles."""
+    cycles = [s.cycle for s in ctx.hist[:3]]
+    if len(cycles) < 2:
+        return []
+    start, end = min(c.start for c in cycles), max(c.end for c in cycles)
+    p = txn_parts()
+    rows = ctx.session.execute(
+        select(Transaction.date, p.c.amount)
+        .join(p, p.c.txn_id == Transaction.id)
+        .join(Account, Account.id == Transaction.account_id)
+        .join(Category, Category.id == p.c.category_id)
+        .where(counted(), Category.name == EATING_OUT, Transaction.date.between(start, end))
+    )
+    spent = {True: Decimal(0), False: Decimal(0)}
+    for d, amt in rows:
+        spent[d.weekday() in WEEKEND] -= amt
+    days = {True: 0, False: 0}
+    d = start
+    while d <= end:
+        days[d.weekday() in WEEKEND] += 1
+        d += timedelta(days=1)
+    we, wd = spent[True] / days[True], spent[False] / days[False]
+    if spent[True] + spent[False] < 300 or min(we, wd) <= 0:
+        return []
+    weekend_more = we >= wd * RATIO
+    if not weekend_more and wd < we * RATIO:
+        return []
+    hi, lo = (we, wd) if weekend_more else (wd, we)
+    when, other = ("בסופי השבוע", "באמצע השבוע") if weekend_more else ("באמצע השבוע", "בסופי השבוע")
+    return [
+        Insight(
+            f"eating_out_weekend:{ctx.cycle.start}",
+            "eating_out_weekend",
+            "info",
+            f"אוכל בחוץ: {when} יותר",
+            f"בשלושת החודשים האחרונים יצאו על אוכל בחוץ {when} בממוצע {ils(hi)} ביום, "
+            f"לעומת {ils(lo)} ביום {other}, פי {hi / lo:.1f}.",
+            "לתזרים",
+            ctx.cashflow_link,
+            spent[weekend_more] - lo * days[weekend_more],
+        )
+    ]
+
+
+def fixed_not_charged(ctx: Ctx) -> list[Insight]:
+    """A confirmed fixed expense whose usual day passed without a charge this cycle."""
+    late = ctx.today - timedelta(days=OVERDUE_DAYS)
+    out = []
+    for x in ctx.plan.still_expected:
+        if x.source != "recurring" or x.recurring_id is None or x.date >= late:
+            continue
+        key = f"fixed_not_charged:{ctx.cycle.start}:{x.recurring_id}"
+        out.append(
+            Insight(
+                key,
+                "fixed_not_charged",
+                "warning",
+                "הוצאה קבועה שעוד לא ירדה",
+                f"ההוצאה הקבועה {x.label} בסך {ils(x.amount)} לא ירדה עדיין "
+                f"(בדרך כלל יורדת ב־{x.date:%d.%m}).",
+                amount=x.amount,
+                actions=[
+                    {
+                        "label": "לא יורדת החודש",
+                        "method": "POST",
+                        "path": f"/recurring/{x.recurring_id}/skip",
+                    },
+                    {
+                        "label": "עדיין צפויה",
+                        "method": "POST",
+                        "path": f"/insights/{key}/snooze",
+                    },
+                ],
+            )
+        )
+    return out
+
+
 RULES = (
     negative_cycle,
     low_balance_before_income,
@@ -387,6 +483,8 @@ RULES = (
     fees,
     unknown_card,
     variable_income_expected,
+    eating_out_weekend,
+    fixed_not_charged,
 )
 
 

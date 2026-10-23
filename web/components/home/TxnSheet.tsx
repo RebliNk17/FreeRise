@@ -1,12 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { CalendarClock, ChevronLeft, EyeOff, PiggyBank, Repeat, StickyNote, Tag, Wallet, X } from "lucide-react";
+import { useState } from "react";
+import { CalendarClock, Check, ChevronLeft, EyeOff, MessageCircleQuestion, PiggyBank, Plus, Repeat, Split, StickyNote, Tag, Trash2, Undo2, Wallet, X } from "lucide-react";
 import { Money } from "@/components/Amount";
+import { Sheet } from "@/components/Sheet";
+import { Switch } from "@/components/Switch";
 import { CategorySelect, GROUP_LABEL, loadCategories } from "@/components/CategorySelect";
 import { send, type Category, type Group } from "@/lib/api";
 import { categoryLabel, formatDate } from "@/lib/format";
+import { splitBody, splitLeft, splitProblem, type SplitRow } from "@/lib/split";
 import { mapTxns, type Txn } from "@/lib/home";
+import { useApi } from "@/lib/useApi";
 import { useHome } from "./context";
 
 const CHIP: Partial<Record<Group, string>> = {
@@ -30,32 +34,26 @@ type Action = { icon: React.ReactNode; label: string; run: () => void; value?: s
 
 const IGNORE_CATEGORY = "להתעלם";
 
-type Mode = null | "note" | "fixed" | "cycle" | { groups: Group[]; title: string; remember: boolean };
+type Mode = null | "note" | "fixed" | "cycle" | "split" | "review" | { groups: Group[]; title: string; remember: boolean };
 
-/** Bottom sheet (native modal <dialog>: focus trap + Escape); backdrop tap or swipe-down closes too. */
 export function TxnSheet({ t, onClose }: { t: Txn; onClose: () => void }) {
   const { mutate, data } = useHome();
-  const ref = useRef<HTMLDialogElement>(null);
   const [mode, setMode] = useState<Mode>(null);
-  const [dy, setDy] = useState<number | null>(null);
-  const startY = useRef<number | null>(null);
+  const people = useApi<string[]>("/reviews/people").data ?? [];
+  // "לבדוק עם <the other one>": anyone but this card's holder; one person → a shared "לבדיקה" flag.
+  const other = people.length > 1 ? (people.find((p) => p !== t.account_holder) ?? people[0]) : null;
 
-  useEffect(() => {
-    const d = ref.current!;
-    const opener = document.activeElement as HTMLElement | null;
-    d.showModal();
-    return () => {
-      d.close();
-      opener?.focus();
-    };
-  }, []);
-
-  async function setCategory(category_id: number, remember: boolean) {
+  /** all: also every past and future transaction of this merchant (rule + PUT /categories/merchant). */
+  async function setCategory(category_id: number, all: boolean) {
     const c = (await loadCategories().catch(() => [] as Category[])).find((x) => x.id === category_id);
+    const merchant = all && t.merchant_key ? t.merchant_key : null;
     onClose();
     mutate(
-      (d) => mapTxns(d, (x) => (x.id === t.id ? (c?.group === "ignore" ? null : { ...x, category_id, category_name: c?.name ?? null, group: c?.group ?? x.group }) : x)),
-      () => send("PUT", `/transactions/${t.id}/category`, { category_id, remember, apply_to_past: false }),
+      (d) => mapTxns(d, (x) => (x.id === t.id || (merchant && x.merchant_key === merchant) ? (c?.group === "ignore" ? null : { ...x, category_id, category_name: c?.name ?? null, group: c?.group ?? x.group }) : x)),
+      async () => {
+        await send("PUT", `/transactions/${t.id}/category`, { category_id, remember: false, apply_to_past: false });
+        if (merchant) await send("PUT", "/categories/merchant", { merchant_key: merchant, category_id, apply_to_past: true });
+      },
     );
   }
 
@@ -66,18 +64,32 @@ export function TxnSheet({ t, onClose }: { t: Txn; onClose: () => void }) {
     mutate((d) => d, () => Promise.reject(new Error(`no "${IGNORE_CATEGORY}" category`))); // surfaces the failure banner
   }
 
+  const total = t.split_total ?? t.amount;
+  const split = t.split != null; // category actions would only move the remainder: split ones edit the parts instead
   const actions: Action[] = [];
   // Moved out of the current cycle into one home can't open yet: undo is the first thing offered.
   if (data.moved_next.transactions.some((x) => x.id === t.id)) actions.push({ icon: <CalendarClock size={18} />, label: "החזר לחודש הזה", run: () => cycle("own")() });
-  actions.push(
-    { icon: <Tag size={18} />, label: "שינוי קטגוריה", value: categoryLabel(t.category_name), run: () => setMode({ groups: Object.keys(GROUP_LABEL) as Group[], title: "שינוי קטגוריה", remember: true }) },
-    { icon: <StickyNote size={18} />, label: t.note ? "עריכת הערה" : "הוספת הערה", tone: "sun", run: () => setMode("note") },
-  );
-  if (t.group === "fixed") actions.push({ icon: <Repeat size={18} />, label: "זו לא הוצאה קבועה", run: () => setMode({ groups: ["variable"], title: "לאיזו קטגוריה משתנה?", remember: true }) });
-  if (t.group === "variable") actions.push({ icon: <Repeat size={18} />, label: "זו הוצאה קבועה", run: () => setMode({ groups: ["fixed"], title: "לאיזו קטגוריה קבועה?", remember: true }) });
+  if (split)
+    actions.push(
+      { icon: <Split size={18} />, label: "עריכת הפיצול", value: `${t.split!.length} חלקים`, run: () => setMode("split") },
+      { icon: <Undo2 size={18} />, label: "ביטול הפיצול", run: () => request((x) => x, () => send("DELETE", `/transactions/${t.id}/split`)) },
+    );
+  else actions.push({ icon: <Tag size={18} />, label: "שינוי קטגוריה", value: categoryLabel(t.category_name), run: () => setMode({ groups: Object.keys(GROUP_LABEL) as Group[], title: "שינוי קטגוריה", remember: true }) });
+  actions.push({ icon: <StickyNote size={18} />, label: t.note ? "עריכת הערה" : "הוספת הערה", tone: "sun", run: () => setMode("note") });
+  if (t.review)
+    actions.push({
+      icon: <Check size={18} />,
+      label: "סימון כטופל",
+      value: t.review.assignee ? `לבדוק עם ${t.review.assignee}` : "לבדיקה",
+      run: () => request((x) => ({ ...x, review: null }), () => send("DELETE", `/transactions/${t.id}/review`)),
+    });
+  else actions.push({ icon: <MessageCircleQuestion size={18} />, label: other ? `לבדוק עם ${other}` : "לסמן לבדיקה", tone: "sun", run: () => setMode("review") });
+  if (!split) actions.push({ icon: <Split size={18} />, label: "פיצול ההוצאה", run: () => setMode("split") });
+  if (!split && t.group === "fixed") actions.push({ icon: <Repeat size={18} />, label: "זו לא הוצאה קבועה", run: () => setMode({ groups: ["variable"], title: "לאיזו קטגוריה משתנה?", remember: true }) });
+  if (!split && t.group === "variable") actions.push({ icon: <Repeat size={18} />, label: "זו הוצאה קבועה", run: () => setMode({ groups: ["fixed"], title: "לאיזו קטגוריה קבועה?", remember: true }) });
   // The sheet's one primary action (full-width button under the list).
   const primary: Action | null =
-    t.group !== "savings" && t.group !== "income" ? { icon: <PiggyBank size={18} />, label: "זו הפקדה לחיסכון", run: () => setMode({ groups: ["savings"], title: "לאיזה חיסכון?", remember: true }) } : null;
+    !split && t.group !== "savings" && t.group !== "income" ? { icon: <PiggyBank size={18} />, label: "זו הפקדה לחיסכון", run: () => setMode({ groups: ["savings"], title: "לאיזה חיסכון?", remember: true }) } : null;
   if (t.amount > 0 && (t.group === "income" || t.group === null)) {
     const id = t.fixed_income_id;
     if (id != null) actions.push({ icon: <Wallet size={18} />, label: "זו לא הכנסה קבועה", run: () => request((x) => ({ ...x, fixed_income_id: null }), () => send("DELETE", `/recurring/${id}/fixed`)) });
@@ -91,7 +103,7 @@ export function TxnSheet({ t, onClose }: { t: Txn; onClose: () => void }) {
   if (t.cycle_shift) cycleOptions.push({ icon: <CalendarClock size={18} />, label: "שייך לחודש שבו נכנסה", run: cycle("own") });
   if (t.cycle_date_source === "manual") cycleOptions.push({ icon: <CalendarClock size={18} />, label: "שיוך אוטומטי", run: cycle("auto") });
   actions.push({ icon: <CalendarClock size={18} />, label: "שיוך לחודש", value: t.cycle_shift ? t.cycle_label : t.cycle_date_source === "manual" ? "ידני" : "אוטומטי", run: () => setMode("cycle") });
-  actions.push({ icon: <EyeOff size={18} />, label: "להוציא מהתזרים", tone: "danger", run: ignore });
+  if (!split) actions.push({ icon: <EyeOff size={18} />, label: "להוציא מהתזרים", tone: "danger", run: ignore });
 
   /** Close, apply `optimistic` to this txn, run `req`; the home refetch places it right. */
   function request(optimistic: (x: Txn) => Txn, req: () => Promise<unknown>) {
@@ -99,37 +111,17 @@ export function TxnSheet({ t, onClose }: { t: Txn; onClose: () => void }) {
     mutate((d) => mapTxns(d, (x) => (x.id === t.id ? optimistic(x) : x)), req);
   }
 
-  const swipe = {
-    onPointerDown: (e: React.PointerEvent) => void (startY.current = e.clientY),
-    onPointerMove: (e: React.PointerEvent) => startY.current != null && setDy(Math.max(0, e.clientY - startY.current)),
-    onPointerUp: () => {
-      startY.current = null;
-      if ((dy ?? 0) > 80) onClose();
-      setDy(null);
-    },
-    onPointerCancel: () => ((startY.current = null), setDy(null)),
-  };
-
   return (
-    <dialog
-      ref={ref}
-      aria-labelledby="txn-sheet-title"
-      onCancel={(e) => {
-        e.preventDefault();
-        onClose();
-      }}
-      onClick={(e) => e.target === ref.current && onClose()}
-      style={dy != null ? { translate: `0 ${dy}px`, transition: "none" } : undefined}
-      className="mx-auto mt-auto mb-0 max-h-[90dvh] w-full max-w-lg overflow-hidden rounded-t-[28px] border-0 bg-bg p-0 text-text shadow-[0_-10px_40px_rgb(0_0_0/0.25)] transition-[translate] duration-300 ease-out backdrop:bg-(--backdrop) starting:translate-y-full motion-reduce:transition-none"
-    >
-      <div className="flex max-h-[90dvh] flex-col">
-        <header className="flex touch-none flex-col gap-3.5 px-5 pt-2.5 pb-4" {...swipe}>
-          <div className="mx-auto h-[5px] w-11 rounded-full bg-border" aria-hidden />
+    <Sheet
+      labelledBy="txn-sheet-title"
+      onClose={onClose}
+      header={
+        <>
           <div className="flex items-center gap-2">
             <p className={`chip min-w-0 truncate px-3 py-1.5 text-[13px] ${CHIP[t.group ?? "variable"] ?? "bg-sunken text-text"}`}>
               {t.group ? GROUP_LABEL[t.group] : "לא מסווג"} · {categoryLabel(t.category_name)}
             </p>
-            <button type="button" className="icon-btn ms-auto size-9" aria-label="סגירה" onClick={onClose}>
+            <button type="button" className="icon-btn ms-auto size-11" aria-label="סגירה" onClick={onClose}>
               <X size={18} />
             </button>
           </div>
@@ -149,10 +141,17 @@ export function TxnSheet({ t, onClose }: { t: Txn; onClose: () => void }) {
               </p>
             </div>
           </div>
-          <Money value={Math.abs(t.amount)} className="block text-right text-[46px] leading-none font-extrabold" />
-        </header>
-        <div className="overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <Money value={Math.abs(total)} className="block text-right text-[46px] leading-none font-extrabold" />
+        </>
+      }
+    >
           {t.note && mode !== "note" && <p className="mb-3 rounded-2xl bg-sun-soft p-3 text-sm whitespace-pre-wrap">{t.note}</p>}
+          {t.review && (
+            <p className="mb-3 rounded-2xl bg-band-info p-3 text-sm">
+              <strong>{t.review.assignee ? `לבדוק עם ${t.review.assignee}` : "לבדיקה"}</strong>
+              {t.review.note && ` · ${t.review.note}`}
+            </p>
+          )}
           {mode === "note" ? (
             <NoteForm
               initial={t.note ?? ""}
@@ -173,6 +172,20 @@ export function TxnSheet({ t, onClose }: { t: Txn; onClose: () => void }) {
                 חזרה
               </button>
             </div>
+          ) : mode === "review" ? (
+            <ReviewForm
+              people={people}
+              initial={other}
+              onCancel={() => setMode(null)}
+              onSave={(assignee, note) => request((x) => ({ ...x, review: { assignee, note } }), () => send("PUT", `/transactions/${t.id}/review`, { assignee, note }))}
+            />
+          ) : mode === "split" ? (
+            <SplitForm
+              total={total}
+              initial={t.split?.map((p) => ({ category_id: p.category_id, amount: String(Math.abs(p.amount)) })) ?? [{ category_id: t.category_id, amount: String(Math.abs(total)) }, { category_id: null, amount: "" }]}
+              onCancel={() => setMode(null)}
+              onSave={(rows) => request((x) => x, () => send("PUT", `/transactions/${t.id}/split`, splitBody(total, rows)))}
+            />
           ) : mode === "fixed" ? (
             <FixedIncomeForm
               day={Number(t.date.slice(8, 10))}
@@ -180,7 +193,7 @@ export function TxnSheet({ t, onClose }: { t: Txn; onClose: () => void }) {
               onSave={(expected_day, expected_amount) => request((x) => x, () => send("POST", `/transactions/${t.id}/fixed-income`, { expected_day, expected_amount }))}
             />
           ) : mode ? (
-            <CategoryForm key={mode.title} {...mode} current={t.category_id} onCancel={() => setMode(null)} onSave={setCategory} />
+            <CategoryForm key={mode.title} {...mode} merchant={t.merchant_key ? t.description : null} current={t.category_id} onCancel={() => setMode(null)} onSave={setCategory} />
           ) : (
             <>
               <ActionList items={actions} />
@@ -192,9 +205,7 @@ export function TxnSheet({ t, onClose }: { t: Txn; onClose: () => void }) {
               )}
             </>
           )}
-        </div>
-      </div>
-    </dialog>
+    </Sheet>
   );
 }
 
@@ -219,7 +230,7 @@ function NoteForm({ initial, onSave, onCancel }: { initial: string; onSave: (not
   );
 }
 
-function CategoryForm({ groups, title, remember: rememberDefault, current, onSave, onCancel }: { groups: Group[]; title: string; remember: boolean; current: number | null; onSave: (id: number, remember: boolean) => void; onCancel: () => void }) {
+function CategoryForm({ groups, title, remember: rememberDefault, merchant, current, onSave, onCancel }: { groups: Group[]; title: string; remember: boolean; merchant: string | null; current: number | null; onSave: (id: number, all: boolean) => void; onCancel: () => void }) {
   const [cat, setCat] = useState<number | null>(null);
   const [remember, setRemember] = useState(rememberDefault);
   return (
@@ -227,15 +238,17 @@ function CategoryForm({ groups, title, remember: rememberDefault, current, onSav
       className="card flex flex-col gap-3 p-3.5"
       onSubmit={(e) => {
         e.preventDefault();
-        if (cat != null) onSave(cat, remember);
+        if (cat != null) onSave(cat, remember && merchant != null);
       }}
     >
       <h3 className="font-bold">{title}</h3>
       <CategorySelect value={cat} onChange={setCat} groups={groups} exclude={current} autoFocus />
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-        לזכור לבית העסק הזה בפעם הבאה
-      </label>
+      {merchant && (
+        <div className="flex flex-col gap-1 rounded-2xl bg-sunken/60 p-3">
+          <p className="text-sm font-semibold">להחיל על כל העסקאות של {merchant}?</p>
+          <Switch checked={remember} onChange={setRemember} label={remember ? "כן, גם על קודמות ועתידיות" : "רק על העסקה הזו"} />
+        </div>
+      )}
       <div className="flex gap-2">
         <button className="btn flex-1" disabled={cat == null}>
           שמירה
@@ -299,5 +312,111 @@ function ActionList({ items }: { items: Action[] }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+/** Parts editor: category + amount per row; saving needs the parts to add up to the transaction. */
+function SplitForm({ total, initial, onSave, onCancel }: { total: number; initial: SplitRow[]; onSave: (rows: SplitRow[]) => void; onCancel: () => void }) {
+  const [rows, setRows] = useState(initial);
+  const left = splitLeft(total, rows);
+  const problem = splitProblem(total, rows);
+  // Editing an amount above the last part refills the last part with what's left.
+  const set = (i: number, patch: Partial<SplitRow>) =>
+    setRows((rs) => {
+      const next = rs.map((r, j) => (j === i ? { ...r, ...patch } : r));
+      const last = next.length - 1;
+      if (patch.amount === undefined || i === last) return next;
+      const rest = splitLeft(total, next.slice(0, last));
+      return next.map((r, j) => (j === last ? { ...r, amount: rest > 0 ? String(rest) : "" } : r));
+    });
+  return (
+    <form
+      className="card flex flex-col gap-3 p-3.5"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!problem) onSave(rows);
+      }}
+    >
+      <h3 className="font-bold">פיצול ההוצאה</h3>
+      <ul className="flex flex-col gap-3">
+        {rows.map((r, i) => (
+          <li key={i} className="flex flex-col gap-2 rounded-2xl bg-sunken/60 p-2.5">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-muted">חלק {i + 1}</span>
+              <input
+                className="input ms-auto max-w-36"
+                dir="ltr"
+                type="number"
+                inputMode="decimal"
+                min={0}
+                step="0.01"
+                value={r.amount}
+                onChange={(e) => set(i, { amount: e.target.value })}
+                aria-label={`סכום חלק ${i + 1}`}
+              />
+              {rows.length > 2 && (
+                <button type="button" className="icon-btn size-11" aria-label={`הסרת חלק ${i + 1}`} onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))}>
+                  <Trash2 size={16} />
+                </button>
+              )}
+            </div>
+            <CategorySelect value={r.category_id} onChange={(id) => set(i, { category_id: id })} label={`קטגוריה לחלק ${i + 1}`} groups={total > 0 ? ["income", "variable", "fixed", "savings"] : ["variable", "fixed", "savings"]} />
+          </li>
+        ))}
+      </ul>
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <button type="button" className="btn-ghost" onClick={() => setRows((rs) => [...rs, { category_id: null, amount: left > 0 ? String(left) : "" }])}>
+          <Plus size={16} /> חלק נוסף
+        </button>
+        {left !== 0 && (
+          <span className={left < 0 ? "font-semibold text-danger" : "text-muted"} aria-live="polite">
+            {left > 0 ? "נותר לחלק" : "חריגה של"} <Money value={Math.abs(left)} className="font-bold" />
+          </span>
+        )}
+      </div>
+      {problem && <p className="text-xs text-muted">{problem}</p>}
+      <div className="flex gap-2">
+        <button className="btn flex-1" disabled={problem != null}>
+          שמירת הפיצול
+        </button>
+        <button type="button" className="btn-ghost" onClick={onCancel}>
+          ביטול
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/** Who should look at it (when there's more than one person) + an optional question. */
+function ReviewForm({ people, initial, onSave, onCancel }: { people: string[]; initial: string | null; onSave: (assignee: string | null, note: string | null) => void; onCancel: () => void }) {
+  const [who, setWho] = useState(initial);
+  const [note, setNote] = useState("");
+  return (
+    <form
+      className="card flex flex-col gap-3 p-3.5"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSave(who, note.trim() || null);
+      }}
+    >
+      <h3 className="font-bold">{who ? `לבדוק עם ${who}` : "לסמן לבדיקה"}</h3>
+      {people.length > 1 && (
+        <div className="flex flex-wrap gap-2" role="group" aria-label="עם מי לבדוק">
+          {people.map((p) => (
+            <button key={p} type="button" aria-pressed={who === p} className={`chip min-h-11 px-4 text-sm ${who === p ? "bg-brand-fill text-brand-fg" : "bg-sunken text-text"}`} onClick={() => setWho(p)}>
+              {p}
+            </button>
+          ))}
+        </div>
+      )}
+      <textarea className="input min-h-20" value={note} onChange={(e) => setNote(e.target.value)} placeholder="מה לשאול? (לא חובה)" aria-label="הערה לבדיקה" maxLength={500} />
+      <p className="text-xs text-muted">תופיע התראה באפליקציה והעסקה תיכנס לרשימת &quot;לבדיקה&quot; בבית.</p>
+      <div className="flex gap-2">
+        <button className="btn flex-1">שליחה לבדיקה</button>
+        <button type="button" className="btn-ghost" onClick={onCancel}>
+          ביטול
+        </button>
+      </div>
+    </form>
   );
 }

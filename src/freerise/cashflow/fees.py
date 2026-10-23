@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from freerise.accounts import account_label
 from freerise.cashflow.cycles import Cycle, get_start_day, prev_cycle
 from freerise.models import Account, Category, Transaction
+from freerise.view import counted
 
 FEES = "עמלות"
 NEW_LOOKBACK = 6  # cycles
@@ -48,7 +49,7 @@ def _fees(session: Session, start: date, end: date) -> list[FeeItem]:
         .join(Account, Account.id == Transaction.account_id)
         .join(Category, Category.id == Transaction.category_id)
         .where(
-            Account.excluded.is_(False),
+            counted(),
             Category.name == FEES,
             Transaction.amount < 0,
             Transaction.effective_date >= start,

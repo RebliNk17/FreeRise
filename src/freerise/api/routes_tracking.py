@@ -8,11 +8,12 @@ from sqlalchemy import delete, select
 
 from freerise.api.deps import DB, get_or_404
 from freerise.categorize.pipeline import set_category
-from freerise.home.builder import default_mode
+from freerise.home.builder import MANUAL_ORDER, default_mode
 from freerise.models import (
     Category,
     CategoryBudget,
     CategoryWeekBudget,
+    Setting,
     TrackedCategory,
     Transaction,
 )
@@ -41,6 +42,34 @@ def _variable_cat(db: DB, category_id: int) -> Category:
     if cat.group != "variable":
         raise HTTPException(422, "only variable categories can be tracked")
     return cat
+
+
+class OrderIn(BaseModel):
+    category_ids: list[int] = Field(max_length=200)
+
+
+@router.put("/tracking/order", status_code=204)
+def put_order(body: OrderIn, db: DB) -> None:
+    """The user's order for tracked categories on home (first = top). Others keep theirs after."""
+    rows = {r.category_id: r for r in db.scalars(select(TrackedCategory))}
+    if any(cid not in rows for cid in body.category_ids):
+        raise HTTPException(404, "not a tracked category")
+    rest = sorted(
+        (r for c, r in rows.items() if c not in body.category_ids), key=lambda r: r.sort_order
+    )
+    for i, r in enumerate([*(rows[c] for c in body.category_ids), *rest]):
+        r.sort_order = i
+    flag = db.scalar(select(Setting).where(Setting.key == MANUAL_ORDER))
+    if flag is None:
+        db.add(Setting(key=MANUAL_ORDER, value=True))
+    db.commit()
+
+
+@router.delete("/tracking/order", status_code=204)
+def reset_order(db: DB) -> None:
+    """Back to automatic: biggest expected first."""
+    db.execute(delete(Setting).where(Setting.key == MANUAL_ORDER))
+    db.commit()
 
 
 @router.put("/tracking/{category_id}", status_code=204)

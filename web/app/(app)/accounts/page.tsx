@@ -11,6 +11,7 @@ import { ProviderLogo } from "@/components/ProviderLogo";
 import { api, send, type Account } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import { providerName } from "@/lib/providers";
+import { DataHealth } from "./DataHealth";
 
 const KIND: Record<Account["kind"], string> = { bank: "בנק", card: "כרטיס אשראי", fund: "קרן" };
 
@@ -75,6 +76,7 @@ export default function AccountsPage() {
         ))}
       </ul>
       {inactiveToggle}
+      {accounts && accounts.length > 0 && <DataHealth />}
     </div>
   );
 }

@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Search } from "lucide-react";
-import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis } from "recharts";
-import { CURSOR, TOOLTIP_STYLE } from "@/components/chart";
+import { MonthBars } from "@/components/charts/MonthBars";
 import { Amount } from "@/components/Amount";
 import { Card, Status } from "@/components/Card";
 import { CategorySelect } from "@/components/CategorySelect";
@@ -45,8 +44,8 @@ export default function CostPage() {
 
   const txParams = new URLSearchParams(params);
   txParams.set("label", "חיפוש הוצאות");
-  const chart = (data?.monthly ?? []).map((m) => ({ key: `${m.label_year}-${m.label_month}`, label: monthName(m.label_month).slice(0, 3), name: `${monthName(m.label_month)} ${m.label_year}`, total: m.total }));
-  const chartAlt = chart.map((m) => `${m.name}: ${formatILS(m.total)}`).join(", ");
+  const chart = (data?.monthly ?? []).map((m) => ({ key: `${m.label_year}-${m.label_month}`, label: monthName(m.label_month).slice(0, 3), full: `${monthName(m.label_month)} ${m.label_year}`, value: m.total }));
+  const chartAlt = chart.map((m) => `${m.full}: ${formatILS(Math.round(m.value))}`).join(", ");
 
   return (
     <div className="flex flex-col gap-4">
@@ -96,15 +95,7 @@ export default function CostPage() {
 
           {chart.length > 1 && (
             <Card title="לפי חודש">
-              <div dir="ltr" className="h-44" role="img" aria-label={chartAlt} title={chartAlt}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chart} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
-                    <XAxis dataKey="label" tickLine={false} axisLine={false} reversed interval={0} tick={{ fontSize: 11, fill: "var(--muted)" }} />
-                    <Tooltip cursor={CURSOR} contentStyle={TOOLTIP_STYLE} formatter={(v) => formatILS(Number(v))} labelFormatter={(_, p) => p?.[0]?.payload?.name ?? ""} />
-                    <Bar dataKey="total" fill="var(--brand)" radius={[6, 6, 0, 0]} isAnimationActive={false} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+              <MonthBars data={chart} valueLabel="יצא" average={data.avg_per_month} ariaLabel={chartAlt} />
             </Card>
           )}
 

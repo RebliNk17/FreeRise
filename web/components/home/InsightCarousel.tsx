@@ -26,7 +26,8 @@ const useHidden = () => useSyncExternalStore(subscribeVis, () => document.hidden
 
 /** One insight at a time: slide (transform), swipe, ‹ ›, dots; auto-advance 12s after the intro, paused on hover/focus/hidden tab, off after any interaction or under reduced motion. */
 export function InsightCarousel() {
-  const { data, setData } = useApi<Insight[]>("/insights", useHome().version);
+  const { version, mutate } = useHome();
+  const { data, setData } = useApi<Insight[]>("/insights", version);
   const items = data ?? [];
   const n = items.length;
   const [rawIndex, setIndex] = useState(0);
@@ -51,6 +52,12 @@ export function InsightCarousel() {
 
   if (!n) return null;
   const cur = items[i];
+
+  /** Run a card's own action (e.g. "לא יורדת החודש"), then drop the card; home refetches. */
+  function act(key: string, a: NonNullable<Insight["actions"]>[number]) {
+    setData((d) => d?.filter((x) => x.key !== key));
+    mutate((d) => d, () => send(a.method, a.path));
+  }
 
   function hide(key: string, how: "dismiss" | "snooze") {
     setData((d) => d?.filter((x) => x.key !== key));
@@ -127,6 +134,15 @@ export function InsightCarousel() {
                     <Link href={it.link} className="link mt-1 self-start" draggable={false}>
                       {cta} ←
                     </Link>
+                  )}
+                  {it.actions && it.actions.length > 0 && (
+                    <div className="mt-1.5 flex flex-wrap gap-2">
+                      {it.actions.map((a) => (
+                        <button key={a.label} type="button" className="btn-secondary min-h-11" onClick={() => act(it.key, a)}>
+                          {a.label}
+                        </button>
+                      ))}
+                    </div>
                   )}
                 </div>
               </li>

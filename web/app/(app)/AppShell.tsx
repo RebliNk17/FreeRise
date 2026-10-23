@@ -8,15 +8,15 @@ import { ThemeButton } from "@/components/ThemeToggle";
 import { Logo } from "@/components/Logo";
 import { send } from "@/lib/api";
 import { OtpPrompt } from "./sync/OtpPrompt";
-import { NotificationBell } from "./notifications/NotificationBell";
+import { NotificationBell } from "@/components/NotificationBell";
 
 // match: path prefixes that light the tab up (עוד owns every secondary screen).
 const TABS: { href: string; label: string; icon: LucideIcon; match: string[] }[] = [
   { href: "/home", label: "בית", icon: House, match: ["/home"] },
-  { href: "/cashflow", label: "תזרים", icon: ChartColumn, match: ["/cashflow"] },
+  { href: "/progress", label: "המגמות שלי", icon: ChartColumn, match: ["/progress"] },
   { href: "/forecast", label: "תחזית", icon: CalendarClock, match: ["/forecast"] },
   { href: "/pension", label: "פנסיה", icon: PiggyBank, match: ["/pension"] },
-  { href: "/more", label: "עוד", icon: Menu, match: ["/more", "/transactions", "/categorize", "/accounts", "/settings", "/notifications", "/plans", "/cost", "/whatif", "/progress", "/reconcile"] },
+  { href: "/more", label: "עוד", icon: Menu, match: ["/more", "/transactions", "/accounts", "/settings", "/plans", "/cost", "/whatif", "/reconcile", "/review", "/chat"] },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {

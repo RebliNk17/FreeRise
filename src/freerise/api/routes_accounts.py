@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
@@ -7,7 +7,8 @@ from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.orm import joinedload
 
 from freerise.accounts import account_holder, account_label, active_card_ids
-from freerise.api.deps import DB, get_or_404
+from freerise.api.deps import DB, get_or_404, today
+from freerise.health import data_health
 from freerise.models import Account, Balance, Credential
 
 router = APIRouter()
@@ -82,3 +83,50 @@ def update_account(id: int, body: AccountPatch, db: DB) -> AccountOut:
         setattr(a, k, v.strip() if k == "holder" else v)
     db.commit()
     return _rows(db, id)[0]
+
+
+class ConnectionOut(BaseModel):
+    id: int
+    label: str
+    provider: str
+    owner: str
+    enabled: bool
+    last_success_at: datetime | None
+    last_error: str | None
+    months_without_data: list[str]
+
+
+class IdleAccountOut(BaseModel):
+    id: int
+    label: str
+    kind: str
+    last_txn: date | None
+
+
+class BillIssueOut(BaseModel):
+    bank_txn_id: int
+    date: date
+    issuer: str
+    amount: float
+    status: str
+    gap: float
+
+
+class DataHealthOut(BaseModel):
+    ok: bool
+    connections: list[ConnectionOut]
+    idle_accounts: list[IdleAccountOut]
+    card_bills: list[BillIssueOut]
+    uncategorized: int
+
+
+@router.get("/data-health")
+def get_data_health(db: DB) -> DataHealthOut:
+    h = data_health(db, today())
+    return DataHealthOut(
+        ok=h.ok,
+        connections=[ConnectionOut(**vars(c)) for c in h.connections],
+        idle_accounts=[IdleAccountOut(**vars(a)) for a in h.idle_accounts],
+        card_bills=[BillIssueOut(**vars(b)) for b in h.card_bills],
+        uncategorized=h.uncategorized,
+    )

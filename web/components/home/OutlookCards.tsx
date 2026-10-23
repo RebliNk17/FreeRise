@@ -8,6 +8,7 @@ import { ExpectedItems } from "@/components/ExpectedItems";
 import type { Forecast, Plan } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import { useApi } from "@/lib/useApi";
+import { useHiddenAccounts, withHidden } from "@/lib/viewFilter";
 import { useHome } from "./context";
 import { Expander } from "./Expander";
 
@@ -16,7 +17,7 @@ import { Expander } from "./Expander";
 
 /** "מצב העו״ש והאשראי": bank balance per account, total, upcoming card charges, fees. */
 export function BalancesCard() {
-  const { data } = useApi<Plan>("/plan/current", useHome().version);
+  const { data } = useApi<Plan>(withHidden("/plan/current", useHiddenAccounts()), useHome().version);
   if (!data) return null;
   const b = data.balances;
   if (!b.accounts.length && !b.upcoming_card_charges) return null;

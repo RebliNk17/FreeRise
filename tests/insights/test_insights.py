@@ -250,7 +250,7 @@ def test_fees(session):
     assert "fees" not in _kinds(session)
     _tx(session, a, date(2026, 10, 12), -15, "עמלות")
     i = _kinds(session)["fees"]
-    assert i.amount == Decimal(15) and i.link == "/cashflow/2026/10"
+    assert i.amount == Decimal(15) and i.link == "/home/2026/10"
 
 
 def test_unknown_card(session):
@@ -382,3 +382,45 @@ def test_progress_empty(session):
     p = progress(session, TODAY)
     assert p.cycles == [] and p.avg_net == 0 and p.cumulative_net == 0 and p.since is None
     assert p.increases == p.decreases == []
+
+
+def test_eating_out_weekend_vs_weekdays(session):
+    a = _acct(session)
+    _history(session, a, out=0)
+    for m in (7, 8, 9):  # Fridays/Saturdays: 3 x 300; one weekday 100
+        for d in (date(2026, m, 24), date(2026, m, 25)):
+            fri_or_sat = d.weekday() in (4, 5)
+            _tx(session, a, d, -300 if fri_or_sat else -100, "אוכל בחוץ")
+    i = _kinds(session).get("eating_out_weekend")
+    assert i is not None and i.severity == "info"
+    assert "בסופי השבוע" in i.title and "פי" in i.body
+
+
+def test_eating_out_weekend_quiet_when_even(session):
+    a = _acct(session)
+    _history(session, a, out=0)
+    for m in (7, 8, 9):
+        for day in range(11, 25):
+            _tx(session, a, date(2026, m, day), -50, "אוכל בחוץ")
+    assert "eating_out_weekend" not in _kinds(session)
+
+
+def test_fixed_not_charged_and_skip(session):
+    from freerise.forecast.next_cycle import expected_in_cycle
+    from freerise.models import RecurringSkip
+
+    a = _acct(session)
+    _rec(session, "gym", "expense", 250, date(2026, 10, 18), account=a)  # due 5 days ago
+    _rec(session, "phone", "expense", 90, date(2026, 10, 22), account=a)  # only 1 day late
+    i = _kinds(session)["fixed_not_charged"]
+    assert "gym" in i.body and "₪250" in i.body
+    assert [x["label"] for x in i.actions] == ["לא יורדת החודש", "עדיין צפויה"]
+    rid = session.scalar(select(RecurringItem.id).where(RecurringItem.merchant_key == "gym"))
+    assert i.actions[0]["path"] == f"/recurring/{rid}/skip"
+    assert i.actions[1]["path"] == f"/insights/{i.key}/snooze"
+
+    session.add(RecurringSkip(recurring_id=rid, cycle_start=OCT.start))
+    session.flush()
+    assert "fixed_not_charged" not in _kinds(session)
+    labels = [x.label for x in expected_in_cycle(session, OCT, TODAY).fixed_items]
+    assert labels == ["phone"]  # skipped this cycle only

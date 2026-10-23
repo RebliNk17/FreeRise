@@ -26,6 +26,9 @@ export default function SettingsPage() {
         <Link href="/accounts" className="flex min-h-11 items-center justify-between border-t border-hairline pt-3 font-semibold">
           חשבונות <ChevronLeft size={18} className="text-faint" />
         </Link>
+        <Link href="/settings/categories" className="flex min-h-11 items-center justify-between border-t border-hairline pt-3 font-semibold">
+          סדר הקטגוריות בבית <ChevronLeft size={18} className="text-faint" />
+        </Link>
       </Card>
     </div>
   );

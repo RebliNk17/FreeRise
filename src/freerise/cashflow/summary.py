@@ -6,7 +6,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from freerise.cashflow.cycles import Cycle, get_start_day, prev_cycle
+from freerise.cashflow.parts import txn_parts
 from freerise.models import Account, Category, RecurringItem, Transaction
+from freerise.view import counted
 
 UNCATEGORIZED = "לא מסווג"
 GROUPS = ("fixed", "variable", "savings", "income")
@@ -49,12 +51,14 @@ class CycleSummary:
 
 
 def cycle_summary(session: Session, cycle: Cycle) -> CycleSummary:
+    p = txn_parts()  # a split txn counts as its parts
     rows = session.execute(
-        select(Transaction, Category)
+        select(Transaction, Category, p.c.amount)
+        .join(p, p.c.txn_id == Transaction.id)
         .join(Account, Account.id == Transaction.account_id)
-        .outerjoin(Category, Category.id == Transaction.category_id)
+        .outerjoin(Category, Category.id == p.c.category_id)
         .where(
-            Account.excluded.is_(False),
+            counted(),
             Transaction.effective_date >= cycle.start,
             Transaction.effective_date <= cycle.end,
         )
@@ -69,22 +73,23 @@ def cycle_summary(session: Session, cycle: Cycle) -> CycleSummary:
 
     # (group, category_id, name) -> [signed sum, count]
     acc: dict[tuple[str, int | None, str], list] = {}
-    unc_total, unc_count, pending, income_fixed = Decimal(0), 0, 0, Decimal(0)
-    for t, cat in rows:
+    unc_total, unc_count, income_fixed = Decimal(0), 0, Decimal(0)
+    pending: set[int] = set()
+    for t, cat, amount in rows:
         if t.status == "pending":
-            pending += 1
+            pending.add(t.id)
         if cat is None:
-            unc_total += abs(t.amount)
+            unc_total += abs(amount)
             unc_count += 1
-            key = ("income" if t.amount > 0 else "variable", None, UNCATEGORIZED)
+            key = ("income" if amount > 0 else "variable", None, UNCATEGORIZED)
         elif cat.group in GROUPS:
             key = (cat.group, cat.id, cat.name)
         else:  # transfer / card_bill / ignore
             continue
         if key[0] == "income" and t.merchant_key and t.merchant_key in fixed_keys:
-            income_fixed += t.amount
+            income_fixed += amount
         e = acc.setdefault(key, [Decimal(0), 0])
-        e[0] += t.amount
+        e[0] += amount
         e[1] += 1
 
     groups = []
@@ -109,7 +114,7 @@ def cycle_summary(session: Session, cycle: Cycle) -> CycleSummary:
         groups,
         unc_total,
         unc_count,
-        pending,
+        len(pending),
         income_fixed,
         by["income"] - income_fixed,
     )

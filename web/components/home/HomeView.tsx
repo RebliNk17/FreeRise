@@ -4,16 +4,25 @@ import { useState } from "react";
 import { CycleSwitcher } from "@/components/CycleSwitcher";
 import { Status } from "@/components/Card";
 import { formatCycleRange, monthName } from "@/lib/format";
+import Link from "next/link";
+import { ChevronLeft, MessageCircleQuestion } from "lucide-react";
+import type { Review, Uncategorized } from "@/lib/api";
+import { pendingCount } from "@/lib/categorize";
 import { findTxn, isIdle, type HomeData, type Txn } from "@/lib/home";
 import { useApi } from "@/lib/useApi";
+import { useHiddenAccounts, withHidden } from "@/lib/viewFilter";
+import { AccountFilter } from "./AccountFilter";
 import { AddTrackedCategory } from "./AddTrackedCategory";
+import { CategorizeChip, CategorizeSheet } from "./CategorizeSheet";
 import { HomeContext, type HomeCtx } from "./context";
 import { Expander } from "./Expander";
+import { HistoryButton } from "./HistorySheet";
 import { FixedCard } from "./FixedCard";
 import { IncomeCard } from "./IncomeCard";
 import { InsightCarousel } from "./InsightCarousel";
 import { BalancesCard, NextCycleCard } from "./OutlookCards";
-import { SectionHeader, TotalLine } from "./parts";
+import { SectionHeader } from "./parts";
+import { TotalCard } from "./TotalCard";
 import { SavingsCard } from "./SavingsCard";
 import { TrackedCategoryCard } from "./TrackedCategoryCard";
 import { TxnList } from "./TxnRow";
@@ -23,10 +32,15 @@ import { WeeklySummary } from "./WeeklySummary";
 
 /** The whole home screen for one cycle. path: "/home/current" or "/home/{y}/{m}". */
 export function HomeView({ path, title }: { path: string; title: string }) {
-  const { data, setData, error, reload } = useApi<HomeData>(path);
+  const hidden = useHiddenAccounts();
+  const { data, setData, error, reload } = useApi<HomeData>(withHidden(path, hidden));
   const [sheet, setSheet] = useState<Txn | null>(null);
   const [failed, setFailed] = useState(false);
   const [version, setVersion] = useState(0);
+  const unc = useApi<Uncategorized[]>("/categories/uncategorized", version);
+  const reviews = useApi<Review[]>("/reviews", version).data ?? [];
+  // /home?categorize=1 (e.g. from the "waiting to be categorized" notification) opens the sheet.
+  const [sorting, setSorting] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).has("categorize"));
 
   if (!data)
     return (
@@ -77,6 +91,7 @@ export function HomeView({ path, title }: { path: string; title: string }) {
             </>
           }
         />
+        <AccountFilter />
         {failed && (
           <p className="rounded-2xl bg-danger-soft px-4 py-3 text-sm font-semibold text-danger-strong" role="alert">
             השמירה נכשלה — השינוי בוטל.
@@ -84,10 +99,20 @@ export function HomeView({ path, title }: { path: string; title: string }) {
         )}
         {!empty && data.summary && <WeeklySummary s={data.summary} />}
         {cycle.is_current && <InsightCarousel />}
+        <CategorizeChip count={pendingCount(unc.data ?? [])} onOpen={() => setSorting(true)} />
+        {reviews.length > 0 && (
+          <Link href="/review" className="card flex min-h-12 items-center gap-3 px-4 py-2.5 hover:bg-sunken/60">
+            <span className="flex size-[34px] shrink-0 items-center justify-center rounded-[11px] bg-brand-soft text-brand">
+              <MessageCircleQuestion size={18} aria-hidden />
+            </span>
+            <span className="flex-1 font-bold">לבדיקה ({reviews.length})</span>
+            <ChevronLeft size={18} className="text-faint" aria-hidden />
+          </Link>
+        )}
         <Status loading={false} error={false} empty={empty} />
         {!empty && (
           <>
-            <SectionHeader title="הוצאות משתנות" />
+            <SectionHeader title="הוצאות משתנות" action={<HistoryButton kind="variable" title="הוצאות משתנות" />} />
             <VariableCard v={data.variable} />
             {active.length > 0 && (
               <ul className="card flex flex-col divide-y divide-hairline px-3.5 py-1.5" aria-label="קטגוריות במעקב">
@@ -112,7 +137,7 @@ export function HomeView({ path, title }: { path: string; title: string }) {
             <AddTrackedCategory />
             <SavingsCard s={data.savings} />
             <FixedCard f={data.fixed} />
-            <TotalLine spent={data.total.spent} expected={data.total.expected} />
+            <TotalCard d={data} />
             <IncomeCard inc={data.income} />
             {cycle.is_current && (
               <>
@@ -131,6 +156,18 @@ export function HomeView({ path, title }: { path: string; title: string }) {
         )}
       </div>
       {open && <TxnSheet key={open.id} t={open} onClose={() => setSheet(null)} />}
+      {sorting && unc.data && (
+        <CategorizeSheet
+          list={unc.data}
+          onClose={(changed) => {
+            setSorting(false);
+            if (changed) {
+              reload();
+              setVersion((v) => v + 1);
+            }
+          }}
+        />
+      )}
     </HomeContext>
   );
 }

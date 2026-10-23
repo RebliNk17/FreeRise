@@ -3,7 +3,8 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Check, Search, TriangleAlert, X } from "lucide-react";
+import { Check, Download, Search, TriangleAlert, X } from "lucide-react";
+import { exportHref } from "@/lib/exportCsv";
 import { Amount } from "@/components/Amount";
 import { CategoryPicker } from "@/components/CategoryPicker";
 import { Switch } from "@/components/Switch";
@@ -16,6 +17,13 @@ const WEEKDAY = new Intl.DateTimeFormat("he-IL", { weekday: "long" });
 // Drill-down filters from cash flow / reconcile (?category_id|uncategorized|account_id, from, to; label is display-only).
 // ?q and ?include_excluded only seed the search box and switch.
 const FILTER_KEYS = ["category_id", "uncategorized", "account_id", "from", "to"];
+
+function exportParams(filters: string, q: string, includeExcluded: boolean) {
+  const p = new URLSearchParams(filters);
+  if (q) p.set("q", q);
+  if (includeExcluded) p.set("include_excluded", "true");
+  return p;
+}
 
 function query(filters: string, q: string, includeExcluded: boolean, cursor?: string) {
   const p = new URLSearchParams(filters);
@@ -95,6 +103,9 @@ function Transactions() {
           />
         </div>
         <Switch checked={includeExcluded} onChange={setIncludeExcluded} label="הצגת חשבונות מוחרגים" />
+        <a className="btn-secondary" href={exportHref(exportParams(filters, q.trim(), includeExcluded))} download>
+          <Download size={16} aria-hidden /> ייצוא לאקסל
+        </a>
       </div>
 
       {filters && (

@@ -293,7 +293,7 @@ def test_fees_paid_and_new_fee_fire_once(session):
     assert _kinds(session).count("new_fee") == 1
     n = session.scalar(select(Notification).where(Notification.kind == "fees_paid"))
     assert n.body == "עד כה החודש שילמתם ₪10.90 עמלות ב-5 חיובים (a)"
-    assert n.link == "/cashflow/2026/10" and n.severity == "info"
+    assert n.link == "/home/2026/10" and n.severity == "info"
     new = session.scalar(select(Notification).where(Notification.kind == "new_fee"))
     assert new.title == "עמלות חדשות" and new.body.endswith(" ועוד 1")
     assert new.body.startswith("עמלת המרה 00 10 ₪1.00 (a), דמי כרטיס 10 10 ₪1.00 (a)")

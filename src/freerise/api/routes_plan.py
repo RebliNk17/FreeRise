@@ -13,6 +13,7 @@ from freerise.cashflow.cycles import cycle_for, get_start_day
 from freerise.cashflow.fees import fees_in_cycle
 from freerise.cashflow.plan import cycle_plan, set_goal
 from freerise.forecast.next_cycle import next_cycle_forecast
+from freerise.view import hiding
 
 router = APIRouter()
 
@@ -103,7 +104,12 @@ def _balances(db: DB, cycle) -> Balances:
 
 
 @router.get("/plan/current")
-def plan_current(db: DB) -> PlanOut:
+def plan_current(db: DB, hide_accounts: str | None = None) -> PlanOut:
+    with hiding(hide_accounts):
+        return _plan_current(db)
+
+
+def _plan_current(db: DB) -> PlanOut:
     t = today()
     p = cycle_plan(db, t)
     f = next_cycle_forecast(db, t)

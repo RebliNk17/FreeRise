@@ -10,10 +10,12 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from freerise.cashflow.cycles import Cycle, cycle_for, get_start_day, prev_cycle
+from freerise.cashflow.parts import txn_parts
 from freerise.cashflow.savings import monthly_total, plan_statuses
 from freerise.cashflow.summary import UNCATEGORIZED, CycleSummary, cycle_summary
 from freerise.forecast.next_cycle import ExpectedLine, expected_in_cycle
 from freerise.models import Account, Category, CycleGoal, Setting, Transaction
+from freerise.view import counted
 
 CENT = Decimal("0.01")
 HISTORY = 6
@@ -92,17 +94,19 @@ def _group(s: CycleSummary, g: str):
 
 def _variable_by_week(session: Session, cycle: Cycle) -> dict[date, Decimal]:
     """Variable spending (positive, net of refunds) keyed by week start (Sunday)."""
+    p = txn_parts()
     rows = session.execute(
-        select(Transaction.date, Transaction.amount)
+        select(Transaction.date, p.c.amount)
+        .join(p, p.c.txn_id == Transaction.id)
         .join(Account, Account.id == Transaction.account_id)
-        .outerjoin(Category, Category.id == Transaction.category_id)
+        .outerjoin(Category, Category.id == p.c.category_id)
         .where(
-            Account.excluded.is_(False),
+            counted(),
             Transaction.effective_date >= cycle.start,
             Transaction.effective_date <= cycle.end,
             or_(
                 Category.group == "variable",
-                Category.id.is_(None) & (Transaction.amount < 0),
+                Category.id.is_(None) & (p.c.amount < 0),
             ),
         )
     )
