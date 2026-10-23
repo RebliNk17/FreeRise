@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarClock, ChevronLeft, EyeOff, PiggyBank, Plus, Repeat, Split, StickyNote, Tag, Trash2, Undo2, Wallet, X } from "lucide-react";
+import { CalendarClock, Check, ChevronLeft, EyeOff, MessageCircleQuestion, PiggyBank, Plus, Repeat, Split, StickyNote, Tag, Trash2, Undo2, Wallet, X } from "lucide-react";
 import { Money } from "@/components/Amount";
 import { Sheet } from "@/components/Sheet";
 import { Switch } from "@/components/Switch";
@@ -10,6 +10,7 @@ import { send, type Category, type Group } from "@/lib/api";
 import { categoryLabel, formatDate } from "@/lib/format";
 import { splitBody, splitLeft, splitProblem, type SplitRow } from "@/lib/split";
 import { mapTxns, type Txn } from "@/lib/home";
+import { useApi } from "@/lib/useApi";
 import { useHome } from "./context";
 
 const CHIP: Partial<Record<Group, string>> = {
@@ -33,11 +34,14 @@ type Action = { icon: React.ReactNode; label: string; run: () => void; value?: s
 
 const IGNORE_CATEGORY = "להתעלם";
 
-type Mode = null | "note" | "fixed" | "cycle" | "split" | { groups: Group[]; title: string; remember: boolean };
+type Mode = null | "note" | "fixed" | "cycle" | "split" | "review" | { groups: Group[]; title: string; remember: boolean };
 
 export function TxnSheet({ t, onClose }: { t: Txn; onClose: () => void }) {
   const { mutate, data } = useHome();
   const [mode, setMode] = useState<Mode>(null);
+  const people = useApi<string[]>("/reviews/people").data ?? [];
+  // "לבדוק עם <the other one>": anyone but this card's holder; one person → a shared "לבדיקה" flag.
+  const other = people.length > 1 ? (people.find((p) => p !== t.account_holder) ?? people[0]) : null;
 
   /** all: also every past and future transaction of this merchant (rule + PUT /categories/merchant). */
   async function setCategory(category_id: number, all: boolean) {
@@ -72,6 +76,14 @@ export function TxnSheet({ t, onClose }: { t: Txn; onClose: () => void }) {
     );
   else actions.push({ icon: <Tag size={18} />, label: "שינוי קטגוריה", value: categoryLabel(t.category_name), run: () => setMode({ groups: Object.keys(GROUP_LABEL) as Group[], title: "שינוי קטגוריה", remember: true }) });
   actions.push({ icon: <StickyNote size={18} />, label: t.note ? "עריכת הערה" : "הוספת הערה", tone: "sun", run: () => setMode("note") });
+  if (t.review)
+    actions.push({
+      icon: <Check size={18} />,
+      label: "סימון כטופל",
+      value: t.review.assignee ? `לבדוק עם ${t.review.assignee}` : "לבדיקה",
+      run: () => request((x) => ({ ...x, review: null }), () => send("DELETE", `/transactions/${t.id}/review`)),
+    });
+  else actions.push({ icon: <MessageCircleQuestion size={18} />, label: other ? `לבדוק עם ${other}` : "לסמן לבדיקה", tone: "sun", run: () => setMode("review") });
   if (!split) actions.push({ icon: <Split size={18} />, label: "פיצול ההוצאה", run: () => setMode("split") });
   if (!split && t.group === "fixed") actions.push({ icon: <Repeat size={18} />, label: "זו לא הוצאה קבועה", run: () => setMode({ groups: ["variable"], title: "לאיזו קטגוריה משתנה?", remember: true }) });
   if (!split && t.group === "variable") actions.push({ icon: <Repeat size={18} />, label: "זו הוצאה קבועה", run: () => setMode({ groups: ["fixed"], title: "לאיזו קטגוריה קבועה?", remember: true }) });
@@ -134,6 +146,12 @@ export function TxnSheet({ t, onClose }: { t: Txn; onClose: () => void }) {
       }
     >
           {t.note && mode !== "note" && <p className="mb-3 rounded-2xl bg-sun-soft p-3 text-sm whitespace-pre-wrap">{t.note}</p>}
+          {t.review && (
+            <p className="mb-3 rounded-2xl bg-band-info p-3 text-sm">
+              <strong>{t.review.assignee ? `לבדוק עם ${t.review.assignee}` : "לבדיקה"}</strong>
+              {t.review.note && ` · ${t.review.note}`}
+            </p>
+          )}
           {mode === "note" ? (
             <NoteForm
               initial={t.note ?? ""}
@@ -154,6 +172,13 @@ export function TxnSheet({ t, onClose }: { t: Txn; onClose: () => void }) {
                 חזרה
               </button>
             </div>
+          ) : mode === "review" ? (
+            <ReviewForm
+              people={people}
+              initial={other}
+              onCancel={() => setMode(null)}
+              onSave={(assignee, note) => request((x) => ({ ...x, review: { assignee, note } }), () => send("PUT", `/transactions/${t.id}/review`, { assignee, note }))}
+            />
           ) : mode === "split" ? (
             <SplitForm
               total={total}
@@ -354,6 +379,40 @@ function SplitForm({ total, initial, onSave, onCancel }: { total: number; initia
         <button className="btn flex-1" disabled={problem != null}>
           שמירת הפיצול
         </button>
+        <button type="button" className="btn-ghost" onClick={onCancel}>
+          ביטול
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/** Who should look at it (when there's more than one person) + an optional question. */
+function ReviewForm({ people, initial, onSave, onCancel }: { people: string[]; initial: string | null; onSave: (assignee: string | null, note: string | null) => void; onCancel: () => void }) {
+  const [who, setWho] = useState(initial);
+  const [note, setNote] = useState("");
+  return (
+    <form
+      className="card flex flex-col gap-3 p-3.5"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSave(who, note.trim() || null);
+      }}
+    >
+      <h3 className="font-bold">{who ? `לבדוק עם ${who}` : "לסמן לבדיקה"}</h3>
+      {people.length > 1 && (
+        <div className="flex flex-wrap gap-2" role="group" aria-label="עם מי לבדוק">
+          {people.map((p) => (
+            <button key={p} type="button" aria-pressed={who === p} className={`chip min-h-11 px-4 text-sm ${who === p ? "bg-brand-fill text-brand-fg" : "bg-sunken text-text"}`} onClick={() => setWho(p)}>
+              {p}
+            </button>
+          ))}
+        </div>
+      )}
+      <textarea className="input min-h-20" value={note} onChange={(e) => setNote(e.target.value)} placeholder="מה לשאול? (לא חובה)" aria-label="הערה לבדיקה" maxLength={500} />
+      <p className="text-xs text-muted">תופיע התראה באפליקציה והעסקה תיכנס לרשימת &quot;לבדיקה&quot; בבית.</p>
+      <div className="flex gap-2">
+        <button className="btn flex-1">שליחה לבדיקה</button>
         <button type="button" className="btn-ghost" onClick={onCancel}>
           ביטול
         </button>

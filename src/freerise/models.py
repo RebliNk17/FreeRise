@@ -410,3 +410,14 @@ class TransactionSplit(Base):
     transaction_id: Mapped[int] = _fk("transactions")
     category_id: Mapped[int] = _fk("categories")
     amount: Mapped[Decimal] = mapped_column(Money)  # signed, like the transaction
+
+
+class TransactionReview(Base):
+    """ "לבדוק עם…": a transaction flagged for the household to look at together."""
+
+    __tablename__ = "transaction_reviews"
+    transaction_id: Mapped[int] = mapped_column(
+        ForeignKey("transactions.id", ondelete="CASCADE"), unique=True
+    )
+    assignee: Mapped[str | None]  # a household member's name; None = shared "לבדיקה" flag
+    note: Mapped[str | None]

@@ -117,6 +117,9 @@ export type Transaction = {
   reconcile_status?: ReconcileStatus | null;
 };
 
+/** GET /reviews: transactions flagged "לבדוק עם…". */
+export type Review = { transaction_id: number; assignee: string | null; note: string | null; created_at: string; date: string; description: string; amount: number; account_label: string; category_name: string | null };
+
 export type Page<T> = { items: T[]; next_cursor: string | null };
 
 export type OtpRequest = { id: number; credential_label: string; provider: string; expires_at: string };

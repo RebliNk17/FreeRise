@@ -23,6 +23,7 @@ export type Txn = {
   cycle_date_source: "auto" | "manual" | null;
   split_total: number | null; // split txn: the whole amount (amount/category are this part's)
   split: { category_id: number; category_name: string; amount: number }[] | null;
+  review: { assignee: string | null; note: string | null } | null; // flagged "לבדוק עם…"
 };
 
 /** List key: a split txn appears once per part. */

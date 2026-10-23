@@ -18,6 +18,7 @@ from freerise.api import (
     routes_plan,
     routes_plans,
     routes_reconcile,
+    routes_reviews,
     routes_settings,
     routes_sync,
     routes_tracking,
@@ -78,6 +79,7 @@ for r in (
     routes_insights,
     routes_home,
     routes_tracking,
+    routes_reviews,
 ):
     protected.include_router(r.router)
 

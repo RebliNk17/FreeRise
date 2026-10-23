@@ -36,6 +36,7 @@ from freerise.models import (
     Setting,
     TrackedCategory,
     Transaction,
+    TransactionReview,
     TransactionSplit,
 )
 from freerise.view import counted
@@ -74,6 +75,12 @@ class Summary:
 
 
 @dataclass
+class Review:
+    assignee: str | None
+    note: str | None
+
+
+@dataclass
 class SplitPart:
     category_id: int
     category_name: str
@@ -106,6 +113,7 @@ class Txn:
     cycle_date_source: str | None = None  # auto|manual
     split_total: Decimal | None = None
     split: list[SplitPart] | None = None
+    review: Review | None = None  # flagged "לבדוק עם…"
 
 
 @dataclass
@@ -438,6 +446,10 @@ def build_home(session: Session, cycle: Cycle, today: date) -> Home:
     confirmed = {k: i for k, i, st in income_items if st == "confirmed"}
 
     splits = split_parts(session, cats)
+    reviews = {
+        r.transaction_id: Review(r.assignee, r.note)
+        for r in session.scalars(select(TransactionReview))
+    }
     parts = txn_parts()
 
     def rows(*where) -> list[tuple[str, Txn]]:
@@ -480,6 +492,7 @@ def build_home(session: Session, cycle: Cycle, today: date) -> Home:
                         t.cycle_date_source,
                         t.amount if t.id in splits else None,
                         splits.get(t.id),
+                        reviews.get(t.id),
                     ),
                 )
             )
