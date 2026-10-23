@@ -1,0 +1,217 @@
+import base64
+from datetime import date
+from decimal import Decimal
+from typing import Annotated, Literal
+
+from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, Field
+from sqlalchemy import select, tuple_
+from sqlalchemy.orm import joinedload
+
+from freerise.accounts import account_holder, account_label
+from freerise.api.deps import DB, get_or_404
+from freerise.cashflow.cycles import cycle_for, cycle_shift, get_start_day, next_cycle, prev_cycle
+from freerise.forecast.attribution import attribute_income
+from freerise.forecast.recurring import mark_fixed_income
+from freerise.models import Account, Category, RecurringItem, Transaction
+from freerise.reconcile.card_bills import reconcile_range
+
+router = APIRouter()
+
+
+class TxnOut(BaseModel):
+    id: int
+    account_id: int
+    account_name: str  # account_label(): "ישראכרט ••1234" or the user's own name
+    date: date
+    processed_date: date
+    amount: float
+    original_amount: float | None
+    original_currency: str | None
+    description: str
+    memo: str | None
+    installment_number: int | None
+    installment_total: int | None
+    status: str
+    category_id: int | None
+    category_name: str | None
+    category_source: str | None
+    merchant_key: str
+    note: str | None
+    reconcile_status: str | None = None
+    account_holder: str = ""  # whose card: account.holder, else the credential's owner
+    cycle_shift: Literal["previous", "next"] | None = None  # attributed to a neighbour cycle
+    cycle_label: str | None = None  # that cycle's label month, e.g. "ספטמבר 2026"
+    cycle_date_source: Literal["auto", "manual"] | None = None
+    fixed_income_id: int | None = None  # confirmed income item of this merchant
+
+
+class TxnPage(BaseModel):
+    items: list[TxnOut]
+    next_cursor: str | None
+
+
+BANK_BILL = ("card_bill", "bank")
+_JOINED = {
+    "account_name",
+    "category_name",
+    "reconcile_status",
+    "account_holder",
+    "cycle_shift",
+    "cycle_label",
+    "fixed_income_id",
+}
+
+
+def _encode(t: Transaction) -> str:
+    return base64.urlsafe_b64encode(f"{t.date.isoformat()}|{t.id}".encode()).decode()
+
+
+def _decode(cursor: str) -> tuple[date, int]:
+    try:
+        d, i = base64.urlsafe_b64decode(cursor.encode()).decode().split("|")
+        return date.fromisoformat(d), int(i)
+    except ValueError:  # binascii.Error and UnicodeDecodeError are ValueErrors
+        raise HTTPException(400, "bad cursor") from None
+
+
+@router.get("/transactions")
+def list_transactions(
+    db: DB,
+    from_: Annotated[date | None, Query(alias="from")] = None,
+    to: date | None = None,
+    account_id: int | None = None,
+    include_excluded: bool = False,
+    q: str | None = None,
+    category_id: int | None = None,
+    uncategorized: bool = False,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    cursor: str | None = None,
+) -> TxnPage:
+    stmt = (
+        select(Transaction, Account, Category.name, Category.group, Account.kind)
+        .join(Account)
+        .outerjoin(Category, Category.id == Transaction.category_id)
+    )
+    if from_:
+        stmt = stmt.where(Transaction.date >= from_)
+    if to:
+        stmt = stmt.where(Transaction.date <= to)
+    if account_id is not None:
+        stmt = stmt.where(Transaction.account_id == account_id)
+    if not include_excluded:
+        stmt = stmt.where(Account.excluded.is_(False))
+    if q:
+        stmt = stmt.where(Transaction.description.icontains(q, autoescape=True))
+    if category_id is not None:
+        stmt = stmt.where(Transaction.category_id == category_id)
+    if uncategorized:
+        stmt = stmt.where(Transaction.category_id.is_(None))
+    if cursor:
+        stmt = stmt.where(tuple_(Transaction.date, Transaction.id) < tuple_(*_decode(cursor)))
+    stmt = stmt.order_by(Transaction.date.desc(), Transaction.id.desc()).limit(limit + 1)
+    rows = db.execute(stmt).all()
+    bill_dates = [t.date for t, _, _, group, kind in rows[:limit] if (group, kind) == BANK_BILL]
+    recs = (
+        {r.bank_txn_id: r for r in reconcile_range(db, min(bill_dates), max(bill_dates))}
+        if bill_dates
+        else {}
+    )
+    start_day, fixed = get_start_day(db), _fixed_income_ids(db)
+    items = [
+        _out(t, acct, cat, recs.get(t.id), start_day, fixed)  # excluded banks -> no rec
+        for t, acct, cat, _, _ in rows[:limit]
+    ]
+    return TxnPage(
+        items=items, next_cursor=_encode(rows[limit - 1][0]) if len(rows) > limit else None
+    )
+
+
+def _fixed_income_ids(db: DB) -> dict[str, int]:
+    return dict(
+        db.execute(
+            select(RecurringItem.merchant_key, RecurringItem.id).where(
+                RecurringItem.direction == "income", RecurringItem.status == "confirmed"
+            )
+        ).all()
+    )
+
+
+def _out(t: Transaction, acct: Account, cat: str | None, rec, start_day: int, fixed) -> TxnOut:
+    shift, label = cycle_shift(t.date, t.cycle_date, start_day)
+    return TxnOut(
+        account_name=account_label(acct),
+        category_name=cat,
+        reconcile_status=rec.status if rec else None,
+        account_holder=account_holder(acct),
+        cycle_shift=shift,
+        cycle_label=label,
+        fixed_income_id=fixed.get(t.merchant_key) if t.amount > 0 else None,
+        **{f: getattr(t, f) for f in TxnOut.model_fields if f not in _JOINED},
+    )
+
+
+def _one(db: DB, t: Transaction) -> TxnOut:
+    db.refresh(t)
+    acct = db.scalar(
+        select(Account).options(joinedload(Account.credential)).where(Account.id == t.account_id)
+    )
+    cat = db.get(Category, t.category_id) if t.category_id else None
+    name = cat.name if cat else None
+    return _out(t, acct, name, None, get_start_day(db), _fixed_income_ids(db))
+
+
+class FixedIncomeIn(BaseModel):
+    expected_day: int | None = Field(None, ge=1, le=31)  # default: the txn's day
+    expected_amount: Decimal | None = Field(None, gt=0)  # given -> fixed amount
+
+
+@router.post("/transactions/{id}/fixed-income")
+def mark_fixed(id: int, body: FixedIncomeIn, db: DB) -> TxnOut:
+    """Mark this income's merchant as fixed monthly income (user-defined RecurringItem)."""
+    t = get_or_404(db, Transaction, id)
+    if t.amount <= 0 or not t.merchant_key:
+        raise HTTPException(400, "not an income transaction")
+    cat = db.get(Category, t.category_id) if t.category_id else None
+    mark_fixed_income(
+        db,
+        t.merchant_key,
+        cat.name if cat else t.description,
+        t.category_id,
+        t.account_id,
+        t.date,
+        body.expected_day or t.date.day,
+        body.expected_amount or t.amount,
+        body.expected_amount is not None,
+    )
+    attribute_income(db)
+    db.commit()
+    return _one(db, t)
+
+
+class CycleIn(BaseModel):
+    # previous/next: relative to the txn's real cycle; own: pinned to it; auto: let the rule decide
+    target: Literal["previous", "next", "own", "auto"]
+
+
+@router.put("/transactions/{id}/cycle")
+def set_cycle(id: int, body: CycleIn, db: DB) -> TxnOut:
+    """Attribute a txn to the previous/next cycle (manual), or back to automatic."""
+    t = get_or_404(db, Transaction, id)
+    start_day = get_start_day(db)
+    own = cycle_for(t.date, start_day)
+    if body.target == "auto":
+        t.cycle_date, t.cycle_date_source = None, None
+        db.flush()
+        attribute_income(db)
+    else:
+        t.cycle_date = {
+            "previous": prev_cycle(own, start_day).end,
+            "next": next_cycle(own, start_day).start,
+            "own": t.date,
+        }[body.target]
+        t.cycle_date_source = "manual"
+        db.flush()
+        attribute_income(db)  # a neighbour's automatic move may no longer be needed
+    db.commit()
+    return _one(db, t)

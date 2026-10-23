@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Name and Logo Options</title>
+<style>
+:root{--bg:#f7f6f2;--card:#fff;--ink:#16181d;--muted:#6b7280;--line:#e6e4dd}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#111317;--card:#1a1d23;--ink:#eceef2;--muted:#9aa1ad;--line:#2a2e36}}
+:root[data-theme="dark"]{--bg:#111317;--card:#1a1d23;--ink:#eceef2;--muted:#9aa1ad;--line:#2a2e36}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Arial,sans-serif}
+main{max-width:1000px;margin:0 auto;padding:24px 16px 48px}
+h1{margin:0 0 4px;font-size:24px}.sub{color:var(--muted);margin:0 0 24px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px}
+.row{display:flex;align-items:center;gap:14px;margin-bottom:14px}
+.word{font-size:28px;font-weight:750;letter-spacing:-.5px}
+.he{color:var(--muted);font-size:15px}
+.icons{display:flex;gap:12px;align-items:flex-end;margin:14px 0}
+.phone{width:76px;height:76px;border-radius:18px;overflow:hidden;box-shadow:0 2px 8px #0002}
+.small{width:32px;height:32px;border-radius:8px;overflow:hidden}
+p{margin:6px 0;color:var(--muted)}
+.tag{display:inline-block;font-size:12px;padding:2px 8px;border-radius:99px;background:#1f9d6b22;color:#1f9d6b;font-weight:600}
+</style>
+</head>
+<body>
+<main>
+<h1>שם ולוגו לאפליקציה</h1>
+<p class="sub">שלוש אפשרויות. כל אחת מוצגת כלוגו מלא, אייקון לטלפון ואייקון קטן.</p>
+<div class="grid">
+
+<div class="card">
+  <span class="tag">ההמלצה שלי</span>
+  <div class="row" style="margin-top:10px">
+    <svg width="56" height="56" viewBox="0 0 64 64"><rect width="64" height="64" rx="15" fill="#0f5c4a"/><circle cx="32" cy="38" r="12" fill="#f5c451"/><rect x="0" y="38" width="64" height="26" fill="#0f5c4a"/><path d="M10 38h44" stroke="#eaf6f1" stroke-width="3" stroke-linecap="round"/><path d="M16 46h32M22 53h20" stroke="#7fd1b5" stroke-width="3" stroke-linecap="round"/></svg>
+    <div><div class="word">FreeRise</div><div class="he">פרי־רייז</div></div>
+  </div>
+  <div class="icons">
+    <svg class="phone" viewBox="0 0 64 64"><rect width="64" height="64" fill="#0f5c4a"/><circle cx="32" cy="38" r="12" fill="#f5c451"/><rect x="0" y="38" width="64" height="26" fill="#0f5c4a"/><path d="M10 38h44" stroke="#eaf6f1" stroke-width="3" stroke-linecap="round"/><path d="M16 46h32M22 53h20" stroke="#7fd1b5" stroke-width="3" stroke-linecap="round"/></svg>
+    <svg class="small" viewBox="0 0 64 64"><rect width="64" height="64" fill="#0f5c4a"/><circle cx="32" cy="38" r="14" fill="#f5c451"/><rect x="0" y="38" width="64" height="26" fill="#0f5c4a"/><path d="M8 38h48" stroke="#eaf6f1" stroke-width="5" stroke-linecap="round"/></svg>
+  </div>
+  <p><b>FreeRise = rise, for free.</b> The app's real job is seeing ahead: next month, the installments ending, retirement. A sun rising over a horizon.</p>
+  <p>Short, easy in Hebrew and English.</p>
+</div>
+
+<div class="card">
+  <div class="row">
+    <svg width="56" height="56" viewBox="0 0 64 64"><rect width="64" height="64" rx="15" fill="#2f4fd8"/><path d="M8 40c8 0 8-14 16-14s8 14 16 14 8-14 16-14" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/><circle cx="56" cy="26" r="4" fill="#ffd166"/></svg>
+    <div><div class="word">Zrima</div><div class="he">זרימה</div></div>
+  </div>
+  <div class="icons">
+    <svg class="phone" viewBox="0 0 64 64"><rect width="64" height="64" fill="#2f4fd8"/><path d="M8 40c8 0 8-14 16-14s8 14 16 14 8-14 16-14" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/><circle cx="56" cy="26" r="4" fill="#ffd166"/></svg>
+    <svg class="small" viewBox="0 0 64 64"><rect width="64" height="64" fill="#2f4fd8"/><path d="M6 40c9 0 9-16 18-16s9 16 18 16 9-16 18-16" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round"/></svg>
+  </div>
+  <p><b>זרימה = flow.</b> Named after the cash flow (תזרים) the whole app is built around. A wave of money moving in and out.</p>
+  <p>Friendlier, softer feel.</p>
+</div>
+
+<div class="card">
+  <div class="row">
+    <svg width="56" height="56" viewBox="0 0 64 64"><rect width="64" height="64" rx="15" fill="#1d1f24"/><circle cx="32" cy="32" r="20" fill="none" stroke="#3a3f49" stroke-width="3"/><path d="M32 14l6 18-6 18-6-18z" fill="#e9604f"/><path d="M32 32l6 0-6 18-6-18z" fill="#f2efe8"/><circle cx="32" cy="32" r="3" fill="#1d1f24"/></svg>
+    <div><div class="word">Matzpen</div><div class="he">מצפן</div></div>
+  </div>
+  <div class="icons">
+    <svg class="phone" viewBox="0 0 64 64"><rect width="64" height="64" fill="#1d1f24"/><circle cx="32" cy="32" r="20" fill="none" stroke="#3a3f49" stroke-width="3"/><path d="M32 14l6 18-6 18-6-18z" fill="#e9604f"/><path d="M32 32l6 0-6 18-6-18z" fill="#f2efe8"/><circle cx="32" cy="32" r="3" fill="#1d1f24"/></svg>
+    <svg class="small" viewBox="0 0 64 64"><rect width="64" height="64" fill="#1d1f24"/><path d="M32 8l9 24-9 24-9-24z" fill="#e9604f"/><path d="M32 32h9l-9 24-9-24z" fill="#f2efe8"/></svg>
+  </div>
+  <p><b>מצפן = compass.</b> It tells you which way your money is heading. A compass needle, half red, half white.</p>
+  <p>Note: "Matzpen" was also the name of a 1960s Israeli political group, which some people may recognize.</p>
+</div>
+
+</div>
+</main>
+</body>
+</html>

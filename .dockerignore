@@ -1,0 +1,12 @@
+.git
+.venv
+.env
+.superpowers
+.ruff_cache
+.pytest_cache
+**/__pycache__
+data
+docs
+tests
+web
+bridge/node_modules

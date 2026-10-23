@@ -1,0 +1,13 @@
+FROM python:3.14-slim
+COPY --from=ghcr.io/astral-sh/uv:0.8.17 /uv /usr/local/bin/uv
+ENV UV_LINK_MODE=copy UV_COMPILE_BYTECODE=1 PATH=/app/.venv/bin:$PATH TZ=Asia/Jerusalem
+WORKDIR /app
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
+# Editable install from /app/src: freerise.sync finds vendor/ via parents[3] == /app.
+COPY src/ src/
+COPY vendor/ vendor/
+COPY alembic/ alembic/
+COPY alembic.ini ./
+RUN uv sync --frozen --no-dev && python -c "import freerise.sync, scraper"
+CMD ["sh", "-c", "alembic upgrade head && exec uvicorn freerise.api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

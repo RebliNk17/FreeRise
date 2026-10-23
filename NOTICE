@@ -1,0 +1,11 @@
+FreeRise
+Copyright 2026 Shai Cohen and FreeRise contributors
+
+This product includes software developed as part of finance-analysis
+(https://github.com/tomerroditi/finance-analysis), licensed under the
+Apache License, Version 2.0. The vendored copy lives in vendor/ and the
+local modifications are listed in vendor/SOURCE.md.
+
+This product uses israeli-bank-scrapers
+(https://github.com/eshaham/israeli-bank-scrapers), licensed under the
+MIT License, as an npm dependency of bridge/.

@@ -1,0 +1,32 @@
+name: Bug report
+description: Something doesn't work
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Never paste credentials, account numbers, real transactions or unredacted screenshots.**
+        Security issues go to SECURITY.md, not here.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: input
+    id: provider
+    attributes:
+      label: Bank or card provider (if sync related)
+  - type: dropdown
+    id: install
+    attributes:
+      label: How do you run FreeRise?
+      options: [Docker Compose, Native dev, Railway, Other]
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs (redacted)
+      render: text

@@ -1,0 +1,42 @@
+services:
+  postgres:
+    image: postgres:18
+    env_file: .env
+    environment:
+      POSTGRES_DB: freerise
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+
+  api:
+    build: { context: ., dockerfile: Dockerfile.api }
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-freerise}:${POSTGRES_PASSWORD:-freerise}@postgres:5432/freerise
+    depends_on: [postgres]
+    restart: unless-stopped # retries until postgres accepts connections
+    ports:
+      - "8000:8000"
+
+  worker:
+    build: { context: ., dockerfile: Dockerfile.worker }
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-freerise}:${POSTGRES_PASSWORD:-freerise}@postgres:5432/freerise
+    depends_on: [api] # api runs the migrations
+    restart: unless-stopped
+
+  web:
+    build:
+      context: web
+      args:
+        API_URL: http://api:8000
+    environment:
+      API_URL: http://api:8000
+    depends_on: [api]
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:

@@ -1,0 +1,34 @@
+# israeli-bank-scrapers bridge deps (bridge/run.mjs). --ignore-scripts skips puppeteer's
+# postinstall, which only downloads a browser; the bridge drives the Chrome installed below.
+FROM node:24-bookworm-slim AS bridge
+WORKDIR /bridge
+COPY bridge/package.json bridge/package-lock.json ./
+RUN npm ci --ignore-scripts --omit=dev
+
+# No official Playwright image ships Python 3.14, so install the browser into python:3.14-slim.
+FROM python:3.14-slim
+COPY --from=ghcr.io/astral-sh/uv:0.8.17 /uv /usr/local/bin/uv
+ENV UV_LINK_MODE=copy UV_COMPILE_BYTECODE=1 PATH=/app/.venv/bin:$PATH TZ=Asia/Jerusalem \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+WORKDIR /app
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
+# The scrapers launch channel="chrome" (real Google Chrome), which only exists for amd64.
+# ponytail: on arm64 (local Apple Silicon builds) Playwright's Chromium stands in at Chrome's path.
+RUN if [ "$(dpkg --print-architecture)" = "amd64" ]; then \
+      playwright install --with-deps chrome; \
+    else \
+      playwright install --with-deps chromium \
+      && mkdir -p /opt/google/chrome \
+      && ln -s "$(find /ms-playwright -path '*chrome-linux*' -name chrome -type f | head -1)" /opt/google/chrome/chrome; \
+    fi
+COPY --from=bridge /usr/local/bin/node /usr/local/bin/node
+COPY --from=bridge /bridge/node_modules bridge/node_modules
+COPY bridge/package.json bridge/run.mjs bridge/
+COPY src/ src/
+COPY vendor/ vendor/
+COPY alembic/ alembic/
+COPY alembic.ini ./
+RUN uv sync --frozen --no-dev && python -c "import freerise.sync, scraper" \
+    && cd bridge && node -e "import('israeli-bank-scrapers')"
+CMD ["freerise", "worker"]

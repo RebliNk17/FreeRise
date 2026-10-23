@@ -1,0 +1,10 @@
+{
+  "name": "freerise-bridge",
+  "private": true,
+  "type": "module",
+  "description": "Runs israeli-bank-scrapers for the FreeRise sync worker over a JSON-lines stdio protocol.",
+  "engines": { "node": ">=22.22.2" },
+  "dependencies": {
+    "israeli-bank-scrapers": "6.12.2"
+  }
+}
