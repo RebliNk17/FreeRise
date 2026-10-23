@@ -27,6 +27,33 @@ const CHROME =
     ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
     : '/opt/google/chrome/chrome');
 const MAX_HOME_PAGE_DATA = 'https://www.max.co.il/api/registered/getHomePageData';
+const FALLBACK_CHROME_MAJOR_VERSION = '127';
+
+// Masks automation fingerprints (navigator.webdriver, matching sec-ch-ua headers)
+// to prevent bot-detection/Cloudflare blocks (e.g. on Amex, Cal).
+async function maskBrowserAutomation(page) {
+  try {
+    const browserVersion = await page.browser().version();
+    const chromeMajorVersion = browserVersion.match(/Chrome\/(\d+)/)?.[1] ?? FALLBACK_CHROME_MAJOR_VERSION;
+    const userAgent =
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
+      `(KHTML, like Gecko) Chrome/${chromeMajorVersion}.0.0.0 Safari/537.36`;
+
+    await page.setUserAgent(userAgent);
+    await page.setExtraHTTPHeaders({
+      'sec-ch-ua':
+        `"Chromium";v="${chromeMajorVersion}", "Not)A;Brand";v="99", ` + `"Google Chrome";v="${chromeMajorVersion}"`,
+      'sec-ch-ua-mobile': '?0',
+      'sec-ch-ua-platform': '"Windows"',
+      'accept-language': 'he-IL,he;q=0.9,en-US;q=0.8,en;q=0.7',
+    });
+    await page.evaluateOnNewDocument(() => {
+      Object.defineProperty(navigator, 'webdriver', { get: () => false });
+    });
+  } catch (e) {
+    console.error(`maskBrowserAutomation failed: ${e?.message}`);
+  }
+}
 
 // Same as the vendored engine's Playwright launch: in the container we run as root.
 const BASE_ARGS = process.getuid?.() === 0 ? ['--no-sandbox', '--disable-dev-shm-usage'] : [];
@@ -59,6 +86,7 @@ async function main() {
     storeFailureScreenShotPath: req.screenshotPath || undefined,
     preparePage: async page => {
       if (proxy.auth) await page.authenticate(proxy.auth);
+      await maskBrowserAutomation(page);
       if (req.companyId === 'max') {
         page.on('response', response => {
           if (response.url() !== MAX_HOME_PAGE_DATA) return;

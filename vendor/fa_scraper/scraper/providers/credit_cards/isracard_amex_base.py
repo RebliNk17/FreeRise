@@ -518,7 +518,10 @@ class IsracardAmexBaseScraper(BrowserScraper):
 
         await self.page.route("**/*", handle_route)
 
-        # Mask headless user agent
+        # Mask headless user agent and automation flag
+        await self.page.add_init_script(
+            "Object.defineProperty(navigator, 'webdriver', { get: () => false });"
+        )
         user_agent = await self.page.evaluate("() => navigator.userAgent")
         masked_agent = user_agent.replace("HeadlessChrome/", "Chrome/")
         await self.page.set_extra_http_headers({"User-Agent": masked_agent})
