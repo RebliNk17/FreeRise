@@ -7,7 +7,7 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
-from freerise.accounts import PROVIDER_HE, account_label
+from freerise.accounts import PROVIDER_HE, account_label, active_card_ids
 from freerise.models import Account, Credential, Transaction
 from freerise.reconcile.card_bills import reconcile_range
 
@@ -125,10 +125,12 @@ def data_health(session: Session, today: date) -> DataHealth:
                 gaps,
             )
         )
+    # Expired/replaced cards (no charge in 6 months, no balance) aren't a problem, just old.
+    active = active_card_ids(session, accounts)
     idle = [
         IdleAccount(a.id, account_label(a), a.kind, last.get(a.id))
         for a in accounts
-        if (last.get(a.id) or date.min) < today - timedelta(days=IDLE_DAYS)
+        if a.id in active and (last.get(a.id) or date.min) < today - timedelta(days=IDLE_DAYS)
     ]
     bills = [
         BillIssue(
