@@ -54,6 +54,7 @@ test("weekOver: negative left or spent above expected", () => {
 
 test("isIdle only for 0 spent and 0 expected", () => {
   expect(isIdle({ spent: 0, expected: 0 })).toBe(true);
+  expect(isIdle({ spent: 0, expected: 0, pinned: true })).toBe(false); // starter set always shows
   expect(isIdle({ spent: 0, expected: 10 })).toBe(false);
   expect(isIdle({ spent: 5, expected: 0 })).toBe(false);
 });

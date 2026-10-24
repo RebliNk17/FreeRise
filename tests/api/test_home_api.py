@@ -6,6 +6,7 @@ import pytest
 from sqlalchemy import select
 
 from freerise.api import routes_home
+from freerise.home.builder import DEFAULT_TRACKED
 from freerise.models import Account, Category, Credential, MerchantRule, Transaction
 
 TODAY = date(2026, 10, 23)
@@ -54,11 +55,20 @@ def home_api(authed, sf, monkeypatch):
 def test_home_and_tracking_api(home_api, sf):
     c, _, cats = home_api
     h = c.get("/api/home/current").json()
-    assert h["cycle"]["start"] == "2026-10-10" and h["tracked"] == []  # no history -> none
+    assert h["cycle"]["start"] == "2026-10-10"
+    # no history yet: the starter set is tracked anyway, and pinned (never folded as idle)
+    assert {t["name"] for t in h["tracked"]} == set(DEFAULT_TRACKED)
+    assert all(t["pinned"] for t in h["tracked"])
     assert c.get("/api/home/2026/9").json()["summary"] is None
     food = cats["כלכלה"]
+
+    def food_card():
+        return next(
+            t for t in c.get("/api/home/current").json()["tracked"] if t["category_id"] == food
+        )
+
     assert c.put(f"/api/tracking/{food}", json={"tracked": True}).status_code == 204
-    (t,) = c.get("/api/home/current").json()["tracked"]
+    t = food_card()
     assert (t["name"], t["mode"], t["spent"]) == ("כלכלה", "weekly", 180)
     r = c.put(f"/api/tracking/{food}/expected", json={"cycle_start": "2026-10-10", "amount": 900})
     assert r.status_code == 204
@@ -67,15 +77,16 @@ def test_home_and_tracking_api(home_api, sf):
         json={"cycle_start": "2026-10-10", "week_index": 4, "amount": 50},
     )
     assert r.status_code == 204
-    (t,) = c.get("/api/home/current").json()["tracked"]
+    t = food_card()
     assert t["expected"] == 900 and t["expected_overridden"] and t["weeks"][4]["expected"] == 50
     c.put(f"/api/tracking/{food}", json={"tracked": True, "mode": "monthly"})
     c.put(f"/api/tracking/{food}/expected", json={"cycle_start": "2026-10-10", "amount": None})
-    (t,) = c.get("/api/home/current").json()["tracked"]
+    t = food_card()
     assert (t["mode"], t["weeks"], t["expected_overridden"]) == ("monthly", None, False)
     c.put(f"/api/tracking/{food}", json={"tracked": False})
     h = c.get("/api/home/current").json()
-    assert h["tracked"] == [] and food in {x["category_id"] for x in h["untracked_available"]}
+    assert food not in {t["category_id"] for t in h["tracked"]}  # removed defaults stay removed
+    assert food in {x["category_id"] for x in h["untracked_available"]}
     assert c.put(f"/api/tracking/{cats['משכנתא']}", json={"tracked": True}).status_code == 422
     assert c.put("/api/tracking/99999", json={"tracked": True}).status_code == 404
 

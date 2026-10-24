@@ -43,6 +43,9 @@ from freerise.view import counted
 
 OVERDUE_DAYS = 3
 WEEKLY_DEFAULT = ("כלכלה",)  # supermarket is tracked weekly by default
+# Always on home, like RiseUp's starter set, even at ₪0 (migration 0023 adds them to
+# existing installs). The user can still remove one; it isn't re-added.
+DEFAULT_TRACKED = ("כלכלה", "אוכל בחוץ", "תחבורה ציבורית", "ביגוד והנעלה", "פנאי")
 MIN_ACTIVE_CYCLES = 2  # default tracking: spent in >= this many of the last HISTORY cycles
 ZERO = Decimal(0)
 
@@ -155,6 +158,7 @@ class TrackedOut:
     weeks: list[Week] | None
     transactions: list[Txn]
     history: list[HistoryPoint]
+    pinned: bool = False  # a DEFAULT_TRACKED card: shown even with no activity
 
 
 @dataclass
@@ -380,15 +384,18 @@ def _history(
 def _seed_tracking(
     session: Session, var_cats: dict[int, Category], hist: list[dict], expected: dict
 ) -> None:
-    """Default: variable categories with spending in >= MIN_ACTIVE_CYCLES past cycles and a
-    non-zero expected (median) — a card that would show 0 of 0 is noise."""
-    picked = [
+    """Default: the DEFAULT_TRACKED starter set, then variable categories with spending in
+    >= MIN_ACTIVE_CYCLES past cycles and a non-zero expected (median), biggest first."""
+    by_name = {c.name: cid for cid, c in var_cats.items()}
+    picked = [by_name[n] for n in DEFAULT_TRACKED if n in by_name]
+    active = [
         cid
         for cid in var_cats
-        if sum(h.get(cid, ZERO) > 0 for h in hist) >= MIN_ACTIVE_CYCLES
+        if cid not in picked
+        and sum(h.get(cid, ZERO) > 0 for h in hist) >= MIN_ACTIVE_CYCLES
         and expected.get(cid, ZERO) > 0
     ]
-    picked.sort(key=lambda cid: expected.get(cid, ZERO), reverse=True)
+    picked += sorted(active, key=lambda cid: expected.get(cid, ZERO), reverse=True)
     for n, cid in enumerate(picked):
         session.add(
             TrackedCategory(
@@ -603,6 +610,7 @@ def build_home(session: Session, cycle: Cycle, today: date) -> Home:
                     )
                     for c, h in zip(hist_cycles, hist, strict=True)
                 ],
+                pinned=var_cats[r.category_id].name in DEFAULT_TRACKED,
             )
         )
     order = {r.category_id: r.sort_order for r in tracked_rows}

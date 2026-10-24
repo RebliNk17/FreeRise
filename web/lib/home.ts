@@ -58,6 +58,7 @@ export type TrackedCategory = {
   weeks: Week[] | null;
   transactions: Txn[];
   history: { label_year: number; label_month: number; spent: number }[];
+  pinned?: boolean; // a default starter category: always shown, even with no activity
 };
 
 export type FixedItem = {
@@ -106,7 +107,7 @@ export const weekDays = (w: Pick<Week, "start" | "end">) => Math.round((Date.par
 export const daysLabel = (n: number) => (n === 1 ? "יום אחד" : `${n} ימים`);
 
 /** Tracked cards with no spending and nothing expected — hidden behind a collapsed row. */
-export const isIdle = (c: Pick<TrackedCategory, "spent" | "expected">) => c.spent === 0 && c.expected === 0;
+export const isIdle = (c: Pick<TrackedCategory, "spent" | "expected" | "pinned">) => !c.pinned && c.spent === 0 && c.expected === 0;
 
 /** Carousel index with wraparound in both directions; 0 for an empty list. */
 export const wrapIndex = (i: number, n: number) => (n <= 0 ? 0 : ((i % n) + n) % n);
