@@ -22,8 +22,8 @@ from freerise.sync.service import login_paused
 router = APIRouter()
 Me = Annotated[User, Depends(current_user)]
 
-# Registry order is banks, credit cards, insurances; hafenix is deprecated (superseded by mislaka).
-REAL_PROVIDERS = tuple(k for k in PROVIDER_CONFIGS if k not in ("hafenix", demo_provider.KEY))
+# Registry order is banks, credit cards, insurances.
+REAL_PROVIDERS = tuple(k for k in PROVIDER_CONFIGS if k != demo_provider.KEY)
 
 
 def providers_offered() -> tuple[str, ...]:
