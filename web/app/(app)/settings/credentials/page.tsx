@@ -334,7 +334,7 @@ function AddCredential({
       if (!c.verify_run_id) c = await send<Credential>("POST", `/credentials/${c.id}/verify`); // nothing secret changed
       onStarted(c);
     } catch (err) {
-      setError(err instanceof ApiError && err.status === 422 ? "חסרים שדות חובה או שהערכים אינם תקינים." : "השמירה נכשלה.");
+      setError(saveError(err, "חסרים שדות חובה או שהערכים אינם תקינים."));
     } finally {
       setBusy(false);
     }
@@ -424,6 +424,16 @@ function AddCredential({
   );
 }
 
+/** 409 = this login is already connected (credentials API refuses duplicates). */
+function saveError(err: unknown, invalid: string): string {
+  if (!(err instanceof ApiError)) return "השמירה נכשלה.";
+  if (err.status === 409) {
+    const label = (err.body as { detail?: { label?: string } })?.detail?.label;
+    return `החשבון הזה כבר מחובר${label ? ` (${label})` : ""}. אפשר לעדכן את הפרטים בחיבור הקיים.`;
+  }
+  return err.status === 422 ? invalid : "השמירה נכשלה.";
+}
+
 function EditCredential({
   credential,
   provider,
@@ -438,10 +448,18 @@ function EditCredential({
   const keys = provider ? [...provider.required_fields, ...provider.optional_fields] : Object.keys(credential.fields);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // Non-secret fields (ID, card digits, username) in clear; passwords are never sent back.
+  const [details, setDetails] = useState<Record<string, string> | null>(null);
+  useEffect(() => {
+    api<Record<string, string>>(`/credentials/${credential.id}/details`)
+      .then(setDetails)
+      .catch(() => setDetails({}));
+  }, [credential.id]);
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const fields = filledFields(keys, new FormData(e.currentTarget));
+    const filled = filledFields(keys, new FormData(e.currentTarget));
+    const fields = Object.fromEntries(Object.entries(filled).filter(([k, v]) => details?.[k] !== v));
     if (!Object.keys(fields).length) return onDone();
     setBusy(true);
     setError("");
@@ -451,22 +469,24 @@ function EditCredential({
       if (c.verify_run_id) onVerify(c.id);
       else onDone();
     } catch (err) {
-      setError(err instanceof ApiError && err.status === 422 ? "הערכים אינם תקינים." : "השמירה נכשלה.");
+      setError(saveError(err, "הערכים אינם תקינים."));
     } finally {
       setBusy(false);
     }
   }
 
+  if (!details) return <p className="border-t border-hairline pt-3 text-sm text-muted">טוען…</p>;
   return (
     <form onSubmit={submit} className="flex flex-col gap-2 border-t border-hairline pt-3">
-      <p className="text-xs text-muted">שדה ריק נשאר ללא שינוי. הפרטים הקיימים נשארים בשימוש עד שהחדשים יאומתו.</p>
+      <p className="text-xs text-muted">סיסמה ריקה נשארת ללא שינוי. הפרטים הקיימים נשארים בשימוש עד שהחדשים יאומתו.</p>
       {keys.map((k) => (
         <label key={k} className="flex flex-col gap-1.5 text-[13px] text-muted">
           {fieldLabel(k)}
           <input
             name={`field:${k}`}
             type={isSecretField(k) ? "password" : "text"}
-            placeholder={credential.fields[k] ?? ""}
+            defaultValue={isSecretField(k) ? "" : (details[k] ?? "")}
+            placeholder={isSecretField(k) ? "••••" : ""}
             autoComplete="off"
             className="input"
             dir="ltr"

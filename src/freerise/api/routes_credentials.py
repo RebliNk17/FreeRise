@@ -190,6 +190,11 @@ def _start_verify(db: Session, c: Credential, user: User) -> int:
 def create_credential(body: CredentialIn, db: DB, me: Me) -> CredentialOut:
     """Saved unverified (hidden, never scheduled) until its verify run succeeds."""
     _check_fields(body.provider, body.fields, body.fields)
+    if dup := _duplicate_of(db, body.provider, body.fields):
+        if dup.verified:
+            _refuse_duplicate(dup)
+        db.delete(dup)  # an abandoned, never-verified attempt for the same login: replace it
+        db.flush()
     c = Credential(
         provider=body.provider,
         label=body.label,
@@ -204,6 +209,38 @@ def create_credential(body: CredentialIn, db: DB, me: Me) -> CredentialOut:
     return _out(c).model_copy(update={"verify_run_id": run_id})
 
 
+def _identity(fields: dict) -> dict[str, str]:
+    """Who the login is for: every non-secret field (id, username, card digits...)."""
+    return {k: str(v).strip().lower() for k, v in fields.items() if v and not _secret(k)}
+
+
+def _duplicate_of(db: Session, provider: str, fields: dict, exclude: int | None = None):
+    """An existing connection to the same provider for the same login, else None."""
+    mine = _identity(fields)
+    for c in db.scalars(select(Credential).where(Credential.provider == provider)):
+        other = _identity(decrypt_json(c.secret_enc))
+        shared = mine.keys() & other.keys()
+        if c.id != exclude and shared and all(mine[k] == other[k] for k in shared):
+            return c
+    return None
+
+
+def _refuse_duplicate(dup: Credential) -> None:
+    raise HTTPException(409, {"code": "duplicate", "credential_id": dup.id, "label": dup.label})
+
+
+@router.get("/credentials/{id}/details")
+def credential_details(id: int, db: DB) -> dict[str, str]:
+    """Non-secret fields in clear (id, card digits, username) to prefill the edit form;
+    passwords and tokens are never sent back."""
+    c = get_or_404(db, Credential, id)
+    return {
+        k: v
+        for k, v in decrypt_json(c.pending_secret_enc or c.secret_enc).items()
+        if v and not _secret(k)
+    }
+
+
 @router.patch("/credentials/{id}")
 def update_credential(id: int, body: CredentialPatch, db: DB, me: Me) -> CredentialOut:
     c = get_or_404(db, Credential, id)
@@ -215,6 +252,8 @@ def update_credential(id: int, body: CredentialPatch, db: DB, me: Me) -> Credent
     if new := {k: v for k, v in (body.fields or {}).items() if v}:
         merged = decrypt_json(c.secret_enc) | new
         _check_fields(c.provider, body.fields, merged)
+        if dup := _duplicate_of(db, c.provider, merged, exclude=c.id):
+            _refuse_duplicate(dup)
         if c.verified:  # the old details stay in use until the new ones verify
             c.pending_secret_enc = encrypt_json(merged)
         else:
