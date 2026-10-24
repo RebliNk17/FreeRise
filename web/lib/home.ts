@@ -91,6 +91,7 @@ export type HomeData = {
   income: { received: number; expected: number; fixed_groups: FixedGroup[]; variable: { received: number; transactions: Txn[] } };
   multi_holder: boolean; // accounts belong to more than one person
   moved_next: { transactions: Txn[] }; // current cycle: happened here, attributed to the not-yet-open next cycle
+  fees: FixedGroup | null; // the עמלות category: its own card, not part of fixed
 };
 
 /** 1819.2 → {sign: "", int: "1,819", dec: ".2"}; at most 2 decimals, trailing zeros dropped. */
@@ -127,19 +128,21 @@ export const fixedStatusLabel = (s: FixedItem["status"]) => FIXED_STATUS[s].labe
 /** Line under a progress bar: what's left, or by how much it went over. */
 export const leftLabel = (spent: number, expected: number) => (spent > expected ? { text: "חריגה של", value: spent - expected, over: true } : { text: "נשאר להוציא", value: expected - spent, over: false });
 
-export type TotalSegment = { key: "fixed" | "variable" | "savings"; label: string; spent: number; expected: number; percent: number; tone: string };
+export type TotalSegment = { key: "fixed" | "variable" | "savings" | "fees"; label: string; spent: number; expected: number; percent: number; tone: string };
 
 /** "סך ההוצאות החודש": per-group spent vs expected, and each group's share of the stacked bar
  * (of whichever is bigger, spent or expected, so the bar never overflows). "משתנות" is the
  * tracked categories plus the rest of variable spending: whatever the total has beyond fixed
  * and savings (the API's total counts each transaction once). */
-export function totalSegments(d: Pick<HomeData, "fixed" | "savings" | "total">): TotalSegment[] {
+export function totalSegments(d: Pick<HomeData, "fixed" | "savings" | "total"> & { fees?: HomeData["fees"] }): TotalSegment[] {
   const scale = Math.max(d.total.spent, d.total.expected, 1);
   const seg = (key: TotalSegment["key"], label: string, spent: number, expected: number, tone: string) => ({ key, label, spent, expected, percent: (Math.max(0, spent) / scale) * 100, tone });
+  const fees = d.fees ?? { spent: 0, expected: 0 };
   return [
     seg("fixed", "קבועות", d.fixed.spent, d.fixed.expected, "bg-sun"),
-    seg("variable", "משתנות", d.total.spent - d.fixed.spent - d.savings.spent, d.total.expected - d.fixed.expected - d.savings.expected, "bg-brand"),
+    seg("variable", "משתנות", d.total.spent - d.fixed.spent - d.savings.spent - fees.spent, d.total.expected - d.fixed.expected - d.savings.expected - fees.expected, "bg-brand"),
     seg("savings", "חיסכון", d.savings.spent, d.savings.expected, "bg-info"),
+    ...(d.fees ? [seg("fees", "עמלות", fees.spent, fees.expected, "bg-danger")] : []),
   ];
 }
 

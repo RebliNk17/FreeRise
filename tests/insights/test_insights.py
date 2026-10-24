@@ -250,7 +250,7 @@ def test_fees(session):
     assert "fees" not in _kinds(session)
     _tx(session, a, date(2026, 10, 12), -15, "עמלות")
     i = _kinds(session)["fees"]
-    assert i.amount == Decimal(15) and i.link == "/home/2026/10"
+    assert i.amount == Decimal(15) and i.link == "/home/2026/10#fees"
 
 
 def test_installments_stopping(session):

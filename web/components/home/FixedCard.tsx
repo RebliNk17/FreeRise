@@ -58,7 +58,7 @@ export function FixedGroups({ groups, income = false }: { groups: FixedGroup[]; 
   );
 }
 
-function Item({ it, income }: { it: FixedItem; income: boolean }) {
+export function Item({ it, income = false }: { it: FixedItem; income?: boolean }) {
   const date = it.transactions[0]?.date ?? it.expected_date;
   const st = FIXED_STATUS[it.status];
   const inst = installmentLabel(it);

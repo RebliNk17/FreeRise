@@ -337,7 +337,7 @@ def fees(ctx: Ctx) -> list[Insight]:
             f"עד עכשיו שולמו {ils(f.total)} עמלות. "
             "לפעמים שיחה קצרה עם הבנק או חברת האשראי מספיקה כדי לבטל אותן.",
             "לפירוט",
-            ctx.cashflow_link,
+            f"{ctx.cashflow_link}#fees",
             f.total,
         )
     ]
