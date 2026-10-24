@@ -138,7 +138,22 @@ def _reconcile(session: Session, bill: Transaction) -> BillReconciliation:
     window = [t for t in near if lo <= t.processed_date <= hi and t.status == "completed"]
     per_acct = {a: _spend(t for t in window if t.account_id == a) for a in accounts}
     # ponytail: all subsets of the 12 busiest cards (2^12 combos); go DP/greedy past that.
-    ids = sorted((a for a in per_acct if per_acct[a]), key=lambda a: -abs(per_acct[a]))
+    # A card paid by its own exact debit the same day isn't part of this one.
+    others = [
+        -b.amount
+        for b in session.scalars(
+            _bills().where(Transaction.date == bill.date, Transaction.id != bill.id)
+        )
+        if issuer_of(b.description) == issuer
+    ]
+    paid = {
+        a
+        for a, v in per_acct.items()
+        if abs(v - amount) > TOL and any(abs(v - o) <= TOL for o in others)
+    }
+    ids = sorted(
+        (a for a in per_acct if per_acct[a] and a not in paid), key=lambda a: -abs(per_acct[a])
+    )
     ids = ids[:MAX_ACCOUNTS]
     best: tuple[int, ...] = ()
     best_gap = amount
@@ -164,7 +179,7 @@ def _reconcile(session: Session, bill: Transaction) -> BillReconciliation:
     counted = {t.id for t in window if t.account_id in best}
     for t in window:
         cur = (t.raw or {}).get("charged_currency")
-        if t.id in counted and cur not in (None, "ILS"):
+        if t.id in counted and cur not in (None, "ILS", "₪"):
             r.suggestions.append(_suggest(t, "חיוב במט״ח — ייתכן שהסכום אינו בש״ח"))
     pending_from = lo - timedelta(days=31)
     for t in sorted(near, key=lambda t: abs(t.processed_date - bill.date)):

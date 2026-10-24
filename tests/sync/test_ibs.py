@@ -259,7 +259,7 @@ def test_generic_mapping():
         assert (x.installments.number, x.installments.total) == (1, 3)
         assert (x.identifier, x.charged_amount, x.original_amount) == ("987654", -100.25, -300)
         assert (x.original_currency, x.charged_currency, x.category) == ("USD", "ILS", "מזון")
-        assert txn_key(x) == "987654"
+        assert txn_key(x) == "987654:1"
         assert y.identifier is None and str(y.charged_amount) == "-0.0"  # as both vendored mappers
 
 

@@ -323,3 +323,20 @@ async def test_zero_amount_rows_are_not_stored(sf, credential):
     assert run.added == 2
     with sf() as s:
         assert sorted(s.scalars(select(Transaction.description))) == ["AMAZON", "Shop"]
+
+
+async def test_installments_sharing_identifier_are_separate_rows(sf, credential):
+    # Cal's identifier is the deal number, shared by every installment of a purchase.
+    first = ok(account("1111", txn(-100, "TV", identifier="d1", installments=(3, 10))))
+    second = ok(
+        account(
+            "1111",
+            txn(-100, "TV", "2026-11-01T00:00:00.000Z", identifier="d1", installments=(4, 10)),
+        )
+    )
+    await run_credential(sf, credential.id, "manual", scraper_factory=fake_factory(first))
+    run = await run_credential(sf, credential.id, "manual", scraper_factory=fake_factory(second))
+    assert run.added == 1
+    with sf() as s:
+        rows = s.scalars(select(Transaction).order_by(Transaction.installment_number)).all()
+        assert [(r.txn_key, r.installment_number) for r in rows] == [("d1:3", 3), ("d1:4", 4)]
