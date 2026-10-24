@@ -309,7 +309,11 @@ async def run_credential(
             return run  # deleted, or a verify that was canceled / timed out meanwhile
         if status == "success":
             try:
-                if cred.provider == "mislaka":  # funds, not bank/card accounts
+                if cred.provider in (
+                    "mislaka",
+                    "hafenix",
+                    "migdal",
+                ):  # funds, not bank/card accounts
                     run.added = ingest_mislaka(s, credential_id, result).added
                 else:
                     run.added, run.updated = _store(s, cred, result.accounts, start)

@@ -122,6 +122,12 @@ PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
         service="insurances",
         requires_2fa=True,
     ),
+    "migdal": ProviderConfig(
+        name="Migdal",
+        required_fields=["id", "phoneNumber"],
+        service="insurances",
+        requires_2fa=True,
+    ),
     "mislaka": ProviderConfig(
         name="Pension Clearing House (Mislaka)",
         required_fields=["id", "phoneNumber"],

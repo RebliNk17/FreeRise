@@ -18,6 +18,8 @@ const PROVIDER_NAMES: Record<string, string> = {
   amex: "אמריקן אקספרס",
   "beyahad bishvilha": "ביחד בשבילך",
   behatsdaa: "בהצדעה",
+  hafenix: "הפניקס",
+  migdal: "מגדל",
   mislaka: "המסלקה הפנסיונית",
   demo: "בנק הדגמה", // fake provider, demo mode only
 };
