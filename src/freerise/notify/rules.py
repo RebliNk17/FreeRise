@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from freerise.accounts import PROVIDER_HE
 from freerise.cashflow.cycles import cycle_for, get_start_day, prev_cycle
 from freerise.cashflow.fees import fees_in_cycle
 from freerise.cashflow.plan import cycle_plan
@@ -28,6 +29,29 @@ from freerise.models import (
     Notification as _N,
 )
 from freerise.notify.store import notify
+
+BANK_NAMES = {
+    "hapoalim": "בנק הפועלים",
+    "leumi": "בנק לאומי",
+    "discount": "בנק דיסקונט",
+    "mercantile": "בנק מרכנתיל",
+    "mizrahi": "מזרחי טפחות",
+    "otsar hahayal": "בנק אוצר החייל",
+    "union": "בנק איגוד",
+    "beinleumi": "הבינלאומי",
+    "massad": "בנק מסד",
+    "yahav": "בנק יהב",
+    "pagi": 'בנק פאג"י',
+    "beyahad bishvilha": "ביחד בשבילך",
+    "behatsdaa": "בהצדעה",
+}
+
+
+def provider_name(provider: str) -> str:
+    """Hebrew provider name for alerts; a connection's label is often just the owner's name."""
+    return PROVIDER_HE.get(provider) or BANK_NAMES.get(provider, provider)
+
+
 from freerise.reconcile.card_bills import (
     HEALTH_LINK,
     ISSUER_NAMES,
@@ -241,32 +265,38 @@ def _pension_reminder(s: Session, today: date) -> None:
 
 
 def _sync_failed(s: Session, today: date) -> None:
+    """One alert per connection per failure streak (a success starts a new one), naming the
+    provider: a connection's label is usually just the owner's name."""
     tz = ZoneInfo(get_settings().tz)
     since = datetime.combine(today - timedelta(days=2), time.min, tz)
-    q = (
-        # No enabled filter: an auth failure auto-disables the credential before this runs.
-        select(SyncRun, Credential.label, Credential.enabled)
-        .join(Credential, Credential.id == SyncRun.credential_id)
-        .where(
-            SyncRun.status.in_(("failed", "otp_timeout")),
-            SyncRun.finished_at >= since,
+    # No enabled filter: an auth failure auto-disables the credential before this runs.
+    for c in s.scalars(select(Credential)):
+        runs = select(SyncRun).where(
+            SyncRun.credential_id == c.id,
+            SyncRun.finished_at.is_not(None),
             SyncRun.trigger != "verify",  # shown on the connecting screen instead
         )
-    )
-    for run, label, enabled in s.execute(q):
+        run = s.scalar(runs.order_by(SyncRun.id.desc()).limit(1))
+        if not run or run.status not in ("failed", "otp_timeout") or run.finished_at < since:
+            continue
+        streak = s.scalar(
+            select(func.max(SyncRun.id)).where(
+                SyncRun.credential_id == c.id, SyncRun.status == "success"
+            )
+        )
         kind = run.failure_kind or ("otp_timeout" if run.status == "otp_timeout" else "other")
         why = FAILURE_LABELS.get(kind, FAILURE_LABELS["other"])
         if (run.error or "").startswith("AUTOMATION_BLOCKED"):  # bucketed as provider_changed
             why = "הספק חוסם זמנית חיבור אוטומטי"
-        if not enabled:
+        if not c.enabled:
             why += " — הסנכרון הושבת — יש לעדכן סיסמה"
         notify(
             s,
             "sync_failed",
-            f"סנכרון נכשל: {label}",
+            f"סנכרון נכשל: {provider_name(c.provider)} · {c.label}",
             why,
             "/settings/credentials",
-            f"sync_failed:{run.id}",
+            f"sync_failed:{c.id}:{streak or 0}",
             "critical",
         )
 
@@ -282,7 +312,7 @@ def _sync_paused(s: Session, today: date) -> None:
         notify(
             s,
             "sync_paused",
-            f"הסנכרון האוטומטי הושהה: {c.label}",
+            f"הסנכרון האוטומטי הושהה: {provider_name(c.provider)} · {c.label}",
             f"ההתחברות נכשלה {PAUSE_AFTER} פעמים ברצף, ולכן הסנכרון האוטומטי הופסק כדי שהחשבון "
             "לא יינעל. היכנסו לאתר הספק וודאו שאפשר להתחבר (ושהחשבון לא נעול), ואז לחצו "
             "״סנכרון״ בעמוד החיבורים.",
