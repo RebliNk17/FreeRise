@@ -34,7 +34,7 @@ export function Expander({
         type="button"
         aria-expanded={open}
         aria-controls={id}
-        className={`w-full items-center gap-2 text-start ${buttonClassName}`}
+        className={`w-full items-center gap-2 rounded-xl text-start transition-colors hover:bg-sunken/60 active:bg-sunken ${buttonClassName}`}
         onClick={() => {
           setMounted(true);
           setOpen((o) => !o);

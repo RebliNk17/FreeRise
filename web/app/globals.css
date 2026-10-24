@@ -108,6 +108,10 @@ body {
 @layer base {
   h1, h2, h3 { font-family: var(--font-display); }
   :focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+  /* Tailwind 4 dropped the pointer cursor on buttons: everything clickable gets it back. */
+  button, [role="button"], [role="menuitem"], [role="tab"], [role="option"], summary, a[href], label[for], select,
+  input[type="checkbox"], input[type="radio"], input[type="file"], .clickable { cursor: pointer; }
+  button:disabled, [aria-disabled="true"], select:disabled, input:disabled { cursor: not-allowed; }
   ::selection { background: var(--brand-soft); }
   /* Thin themed scrollbars everywhere; the standard props win in Chrome/Firefox, ::-webkit-* covers Safari. */
   * { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }

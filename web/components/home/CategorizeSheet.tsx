@@ -2,24 +2,23 @@
 
 import { createElement, useEffect, useState } from "react";
 import { Check, ChevronLeft, SkipForward, Tags } from "lucide-react";
-import { Money } from "@/components/Amount";
 import { categoryIcon } from "@/components/CategoryIcon";
 import { CategorySelect, loadCategories } from "@/components/CategorySelect";
 import { Sheet, SheetTitle } from "@/components/Sheet";
 import { Switch } from "@/components/Switch";
 import { api, send, type Category, type Uncategorized } from "@/lib/api";
-import { quickGroups, quickPicks } from "@/lib/categorize";
-import { categoryLabel, formatDate, txnCount } from "@/lib/format";
+import { merchantPicks, merchantProgress, merchantSummary, pendingCount, pendingLabel, txnsLeft } from "@/lib/categorize";
+import { categoryLabel, formatDate } from "@/lib/format";
 
-/** Home chip "N עסקאות לסיווג": tap opens the sheet. */
-export function CategorizeChip({ count, onOpen }: { count: number; onOpen: () => void }) {
-  if (!count) return null;
+/** Home chip "N עסקאות לסיווג · M בתי עסק": tap opens the sheet. */
+export function CategorizeChip({ list, onOpen }: { list: Uncategorized[]; onOpen: () => void }) {
+  if (!pendingCount(list)) return null;
   return (
     <button type="button" onClick={onOpen} className="card flex min-h-12 items-center gap-3 px-4 py-2.5 text-start hover:bg-sunken/60">
       <span className="flex size-[34px] shrink-0 items-center justify-center rounded-[11px] bg-sun-soft text-sun-strong">
         <Tags size={18} aria-hidden />
       </span>
-      <span className="flex-1 font-bold">{count === 1 ? "עסקה אחת לסיווג" : `${count} עסקאות לסיווג`}</span>
+      <span className="flex-1 font-bold">{pendingLabel(list)}</span>
       <ChevronLeft size={18} className="text-faint" aria-hidden />
     </button>
   );
@@ -36,6 +35,7 @@ export function CategorizeSheet({ list, onClose }: { list: Uncategorized[]; onCl
   const [changed, setChanged] = useState(false);
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [left, setLeft] = useState(() => pendingCount(list)); // drops as merchants are categorized
 
   useEffect(() => {
     loadCategories().then(setCats, () => {});
@@ -56,6 +56,7 @@ export function CategorizeSheet({ list, onClose }: { list: Uncategorized[]; onCl
     try {
       await send("PUT", "/categories/merchant", { merchant_key: u.merchant_key, category_id, apply_to_past: true, remember: always });
       setChanged(true);
+      setLeft((n) => n - u.count);
       next();
     } catch {
       setFailed(true);
@@ -64,7 +65,8 @@ export function CategorizeSheet({ list, onClose }: { list: Uncategorized[]; onCl
     }
   }
 
-  const picks = u ? quickPicks(cats, usage, quickGroups(u.total)) : [];
+  const pattern = u ? merchantSummary(u) : { text: "", fixed: false };
+  const picks = u ? merchantPicks(cats, usage, u.total, pattern.fixed) : [];
   return (
     <Sheet
       labelledBy="categorize-title"
@@ -83,14 +85,17 @@ export function CategorizeSheet({ list, onClose }: { list: Uncategorized[]; onCl
         </div>
       ) : (
         <div className="flex flex-col gap-3.5">
-          <p className="text-center text-sm font-semibold text-muted" dir="ltr" aria-live="polite">
-            {i + 1}/{queue.length}
+          <p className="text-center text-sm text-muted" aria-live="polite">
+            <span className="font-semibold text-text">{merchantProgress(i, queue.length)}</span> · {txnsLeft(left)}
           </p>
           <div className="card flex flex-col gap-1 p-4">
-            <h3 className="truncate font-display text-xl font-bold">{u.sample_description}</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="min-w-0 flex-1 truncate font-display text-xl font-bold">{u.sample_description}</h3>
+              {pattern.fixed && <span className="chip bg-sun-soft text-sun-strong">קבוע</span>}
+            </div>
             <p className="text-sm text-muted">
-              {txnCount(u.count)} · <Money value={Math.abs(u.total)} className="font-bold text-text" />
-              {u.total > 0 && " זיכוי"}
+              {pattern.text}
+              {u.total > 0 && " · זיכוי"}
             </p>
             <p className="text-xs text-muted">
               לאחרונה <span dir="ltr">{formatDate(u.sample_date)}</span>

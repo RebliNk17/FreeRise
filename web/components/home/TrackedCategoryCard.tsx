@@ -59,25 +59,29 @@ export function TrackedCategoryCard({ c }: { c: TrackedCategory }) {
         />
   );
 
-  // Row: ring + name + what's left (or over) + spent; tap expands to weeks / transactions; ⋮ for the rest.
+  // Its own card: ring + name, "₪X יצא", then what's left of the expected (or by how much it
+  // went over); tap expands to weeks / transactions; ⋮ for the rest.
   return (
-    <div className="flex flex-col">
+    <section className="card flex flex-col px-3 py-1.5" aria-label={name}>
       <Expander
-        rowClassName="flex items-center gap-1"
+        rowClassName="flex items-start gap-1"
         className="min-w-0"
-        buttonClassName="flex min-h-15 min-w-0 flex-1 py-2.5"
-        labelClassName="flex min-w-0 flex-1 items-center gap-3"
-        aside={menu}
-        chevron={false}
+        buttonClassName="flex min-h-15 min-w-0 flex-1 px-1.5 py-2.5"
+        labelClassName="flex min-w-0 flex-1 items-start gap-3"
+        aside={<div className="pt-2.5">{menu}</div>}
         label={
           <>
             <CategoryRing name={c.name} percent={c.expected > 0 ? (c.spent / c.expected) * 100 : c.spent > 0 ? 100 : 0} over={over} />
             <span className="min-w-0 flex-1">
               <span className="block truncate font-bold">{name}</span>
+              <span className="mt-0.5 flex items-baseline gap-1.5">
+                <Money value={Math.round(c.spent)} className={`text-[22px] leading-tight font-extrabold ${over ? "text-danger" : ""}`} />
+                <span className="text-xs text-muted">יצא</span>
+              </span>
               <span className={`block text-xs ${over ? "font-semibold text-danger" : "text-muted"}`}>
                 {over ? (
                   <>
-                    חריגה של <Money value={Math.round(c.spent - c.expected)} />
+                    חריגה של <Money value={Math.round(c.spent - c.expected)} /> מעל <Money value={Math.round(c.expected)} /> הצפויים
                   </>
                 ) : (
                   <>
@@ -86,7 +90,6 @@ export function TrackedCategoryCard({ c }: { c: TrackedCategory }) {
                 )}
               </span>
             </span>
-            <Money value={Math.round(c.spent)} className="shrink-0 font-bold" />
           </>
         }
       >
@@ -119,7 +122,7 @@ export function TrackedCategoryCard({ c }: { c: TrackedCategory }) {
         />
       )}
       {panel === "move" && <MoveTxns c={c} txns={txns} onClose={() => setPanel(null)} />}
-    </div>
+    </section>
   );
 }
 

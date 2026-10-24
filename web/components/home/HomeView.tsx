@@ -7,7 +7,6 @@ import { formatCycleRange, monthName } from "@/lib/format";
 import Link from "next/link";
 import { ChevronLeft, MessageCircleQuestion } from "lucide-react";
 import type { Review, Uncategorized } from "@/lib/api";
-import { pendingCount } from "@/lib/categorize";
 import { findTxn, isIdle, type HomeData, type Txn } from "@/lib/home";
 import { useApi } from "@/lib/useApi";
 import { useHiddenAccounts, withHidden } from "@/lib/viewFilter";
@@ -16,7 +15,6 @@ import { AddTrackedCategory } from "./AddTrackedCategory";
 import { CategorizeChip, CategorizeSheet } from "./CategorizeSheet";
 import { HomeContext, type HomeCtx } from "./context";
 import { Expander } from "./Expander";
-import { HistoryButton } from "./HistorySheet";
 import { FixedCard } from "./FixedCard";
 import { IncomeCard } from "./IncomeCard";
 import { InsightCarousel } from "./InsightCarousel";
@@ -99,7 +97,7 @@ export function HomeView({ path, title }: { path: string; title: string }) {
         )}
         {!empty && data.summary && <WeeklySummary s={data.summary} />}
         {cycle.is_current && <InsightCarousel />}
-        <CategorizeChip count={pendingCount(unc.data ?? [])} onOpen={() => setSorting(true)} />
+        <CategorizeChip list={unc.data ?? []} onOpen={() => setSorting(true)} />
         {reviews.length > 0 && (
           <Link href="/review" className="card flex min-h-12 items-center gap-3 px-4 py-2.5 hover:bg-sunken/60">
             <span className="flex size-[34px] shrink-0 items-center justify-center rounded-[11px] bg-brand-soft text-brand">
@@ -112,10 +110,9 @@ export function HomeView({ path, title }: { path: string; title: string }) {
         <Status loading={false} error={false} empty={empty} />
         {!empty && (
           <>
-            <SectionHeader title="הוצאות משתנות" action={<HistoryButton kind="variable" title="הוצאות משתנות" />} />
-            <VariableCard v={data.variable} />
+            <SectionHeader title="הוצאות משתנות" />
             {active.length > 0 && (
-              <ul className="card flex flex-col divide-y divide-hairline px-3.5 py-1.5" aria-label="קטגוריות במעקב">
+              <ul className="flex flex-col gap-3" aria-label="קטגוריות במעקב">
                 {active.map((c) => (
                   <li key={c.category_id}>
                     <TrackedCategoryCard c={c} />
@@ -124,8 +121,8 @@ export function HomeView({ path, title }: { path: string; title: string }) {
               </ul>
             )}
             {idle.length > 0 && (
-              <Expander className="card px-4 py-2" buttonClassName="flex min-h-11" label={<span className="text-sm font-semibold text-muted">קטגוריות ללא פעילות ({idle.length})</span>}>
-                <ul className="flex flex-col divide-y divide-hairline border-t border-hairline">
+              <Expander buttonClassName="flex min-h-11 px-3" label={<span className="text-sm font-semibold text-muted">קטגוריות ללא פעילות ({idle.length})</span>}>
+                <ul className="flex flex-col gap-3 p-1">
                   {idle.map((c) => (
                     <li key={c.category_id}>
                       <TrackedCategoryCard c={c} />
@@ -135,6 +132,7 @@ export function HomeView({ path, title }: { path: string; title: string }) {
               </Expander>
             )}
             <AddTrackedCategory />
+            <VariableCard v={data.variable} />
             <SavingsCard s={data.savings} />
             <FixedCard f={data.fixed} />
             <TotalCard d={data} />

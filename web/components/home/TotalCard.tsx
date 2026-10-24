@@ -15,7 +15,10 @@ export function TotalCard({ d }: { d: HomeData }) {
   return (
     <Card title="סך ההוצאות החודש">
       <div className="flex items-end justify-between gap-3">
-        <Money value={Math.round(spent)} className={`font-display text-[34px] leading-none font-extrabold ${over ? "text-danger" : ""}`} />
+        <span className="flex flex-col">
+          <span className="text-xs text-muted">יצא</span>
+          <Money value={Math.round(spent)} className={`font-display text-[34px] leading-none font-extrabold ${over ? "text-danger" : ""}`} />
+        </span>
         <span className="text-sm text-muted">
           מתוך <Money value={Math.round(expected)} className="font-bold text-text" /> צפויים
         </span>
@@ -42,7 +45,7 @@ export function TotalCard({ d }: { d: HomeData }) {
           </>
         )}
       </p>
-      <Expander label={<span className="text-sm font-semibold text-brand">פירוט לפי סוג</span>} buttonClassName="flex min-h-11 border-t border-hairline pt-2">
+      <Expander label={<span className="text-sm font-semibold text-brand">פירוט לפי סוג</span>} className="border-t border-hairline pt-1.5" buttonClassName="flex min-h-11 px-1">
         <ul className="flex flex-col divide-y divide-hairline pt-1">
           {segs.map((s) => {
             const o = s.spent > s.expected + 0.5;
@@ -50,6 +53,7 @@ export function TotalCard({ d }: { d: HomeData }) {
               <li key={s.key} className="flex min-h-11 items-center gap-2 text-sm">
                 <span className={`size-2.5 shrink-0 rounded-full ${s.tone}`} aria-hidden />
                 <span className="flex-1 font-semibold">{s.label}</span>
+                <span className="text-xs text-muted">{s.key === "savings" ? "הופקד" : "יצא"}</span>
                 <Money value={Math.round(s.spent)} className={`font-bold ${o && s.key !== "savings" ? "text-danger" : ""}`} />
                 <span className="text-xs text-muted">
                   מתוך <Money value={Math.round(s.expected)} />

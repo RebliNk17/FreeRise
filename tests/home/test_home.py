@@ -90,6 +90,7 @@ def _home(s, cycle=OCT, today=TODAY):
 
 def _all_txn_ids(h):
     ids = {t["id"] for w in h["variable"]["weeks"] for t in w["transactions"]}
+    ids |= {t["id"] for c in h["tracked"] for t in c["transactions"]}
     ids |= {t["id"] for t in h["savings"]["transactions"]}
     ids |= {t["id"] for t in h["income"]["variable"]["transactions"]}
     for g in h["fixed"]["groups"] + h["income"]["fixed_groups"]:
@@ -99,7 +100,7 @@ def _all_txn_ids(h):
 
 def test_structure_matches_contract(session):
     a = _acct(session)
-    _tx(session, a, date(2026, 10, 12), -50, "כלכלה", note="חלב")
+    _tx(session, a, date(2026, 10, 12), -50, "קניות", note="חלב")
     h = _home(session)
     assert set(h) == {
         "cycle",
@@ -182,8 +183,8 @@ def test_structure_matches_contract(session):
 
 def test_moved_to_next_cycle_stays_listed_on_current(session):
     a = _acct(session)
-    moved = _tx(session, a, date(2026, 10, 20), -80, "כלכלה", cycle_date=date(2026, 11, 15))
-    _tx(session, a, date(2026, 10, 21), -30, "כלכלה")
+    moved = _tx(session, a, date(2026, 10, 20), -80, "קניות", cycle_date=date(2026, 11, 15))
+    _tx(session, a, date(2026, 10, 21), -30, "קניות")
     h = _home(session)
     assert [t["id"] for t in h["moved_next"]["transactions"]] == [moved.id]
     assert h["moved_next"]["transactions"][0]["cycle_shift"] == "next"
@@ -197,9 +198,9 @@ def test_moved_to_next_cycle_stays_listed_on_current(session):
 def test_exclusions(session):
     a = _acct(session)
     ex = _acct(session, "0001", excluded=True)
-    keep = _tx(session, a, date(2026, 10, 12), -50, "כלכלה")
+    keep = _tx(session, a, date(2026, 10, 12), -50, "קניות")
     gone = [
-        _tx(session, ex, date(2026, 10, 12), -70, "כלכלה"),
+        _tx(session, ex, date(2026, 10, 12), -70, "קניות"),
         _tx(session, a, date(2026, 10, 12), -80, "העברות"),
         _tx(session, a, date(2026, 10, 12), -90, "חיוב כרטיס אשראי"),
         _tx(session, a, date(2026, 10, 12), -95, "להתעלם"),
@@ -341,7 +342,9 @@ def test_income_groups_savings_totals(session):
     alloc = h["summary"]["variable_allowance"]
     assert h["summary"]["goal_plans"] == 1000
     assert alloc == 17300 - 5000 - h["summary"]["goal"]
-    assert h["variable"]["allowance"] == alloc
+    # כלכלה is tracked (₪200 spent, nothing expected): it reserves 200 of the allowance
+    assert h["variable"]["allowance"] == alloc - 200
+    assert h["variable"]["spent"] == 0
     assert h["total"] == {"spent": 5000 + 200 + 1000, "expected": 5000 + alloc + 1000}
 
 
@@ -355,7 +358,7 @@ def test_past_cycle(session):
     assert h["summary"] is None
     assert h["cycle"]["is_current"] is False
     assert h["cycle"]["next"] == {"year": 2026, "month": 10}
-    assert h["variable"]["allowance"] == h["variable"]["spent"] == 400
+    assert h["variable"]["allowance"] == h["variable"]["spent"] == 0  # all in tracked כלכלה
     assert all(w["is_past"] and w["left"] == 0 for w in h["variable"]["weeks"])
     (t,) = h["tracked"]
     assert t["expected"] == t["spent"] == 400 and t["left"] == 0

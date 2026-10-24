@@ -14,6 +14,7 @@ from freerise.accounts import PROVIDER_HE
 from freerise.cashflow.cycles import cycle_for, get_start_day, prev_cycle
 from freerise.cashflow.fees import fees_in_cycle
 from freerise.cashflow.plan import cycle_plan
+from freerise.categorize.pipeline import uncategorized_merchants
 from freerise.config import get_settings
 from freerise.forecast.next_cycle import installments_ending
 from freerise.insights import engine
@@ -216,12 +217,8 @@ def _large_transaction(s: Session, today: date) -> None:
 
 
 def _uncategorized_growing(s: Session, today: date) -> None:
-    n = s.scalar(
-        select(func.count())
-        .select_from(Transaction)
-        .join(Account, Account.id == Transaction.account_id)
-        .where(Account.excluded.is_(False), Transaction.category_id.is_(None))
-    )
+    # same list the home chip and categorize sheet count, so the numbers never drift
+    n = sum(m["count"] for m in uncategorized_merchants(s))
     if n > 20:
         y, w, _ = today.isocalendar()
         notify(

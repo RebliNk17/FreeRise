@@ -186,9 +186,9 @@ def test_detect_recurring_keeps_user_defined_day_and_amount(session):
 
 def test_shifted_txns_use_effective_date_and_edge_weeks(session):
     card = _acct(session, kind="card")
-    fwd = _tx(session, card, date(2026, 10, 9), -100, key="shop", cat="כלכלה")
+    fwd = _tx(session, card, date(2026, 10, 9), -100, key="shop", cat="קניות")
     fwd.cycle_date, fwd.cycle_date_source = date(2026, 10, 10), "manual"
-    back = _tx(session, card, date(2026, 10, 12), -40, key="shop", cat="כלכלה")
+    back = _tx(session, card, date(2026, 10, 12), -40, key="shop", cat="קניות")
     back.cycle_date, back.cycle_date_source = date(2026, 10, 9), "manual"
     fee = _tx(session, card, date(2026, 10, 9), -7, key="fee", cat="עמלות")
     fee.cycle_date, fee.cycle_date_source = date(2026, 10, 10), "manual"

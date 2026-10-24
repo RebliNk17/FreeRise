@@ -70,7 +70,12 @@ export type FixedItem = {
   status: "charged" | "expected" | "overdue";
   transactions: Txn[];
   recurring_id: number | null;
+  installment_number?: number | null; // an installment payment: n of N
+  installment_total?: number | null;
 };
+
+/** "תשלום 3/6" for an installment item, else null. */
+export const installmentLabel = (it: Pick<FixedItem, "installment_number" | "installment_total">) => (it.installment_total && it.installment_total > 1 ? `תשלום ${it.installment_number ?? "?"}/${it.installment_total}` : null);
 
 export type FixedGroup = { category_id: number | null; name: string; spent: number; expected: number; items: FixedItem[] };
 
@@ -125,13 +130,15 @@ export const leftLabel = (spent: number, expected: number) => (spent > expected 
 export type TotalSegment = { key: "fixed" | "variable" | "savings"; label: string; spent: number; expected: number; percent: number; tone: string };
 
 /** "סך ההוצאות החודש": per-group spent vs expected, and each group's share of the stacked bar
- * (of whichever is bigger, spent or expected, so the bar never overflows). */
-export function totalSegments(d: Pick<HomeData, "fixed" | "variable" | "savings" | "total">): TotalSegment[] {
+ * (of whichever is bigger, spent or expected, so the bar never overflows). "משתנות" is the
+ * tracked categories plus the rest of variable spending: whatever the total has beyond fixed
+ * and savings (the API's total counts each transaction once). */
+export function totalSegments(d: Pick<HomeData, "fixed" | "savings" | "total">): TotalSegment[] {
   const scale = Math.max(d.total.spent, d.total.expected, 1);
   const seg = (key: TotalSegment["key"], label: string, spent: number, expected: number, tone: string) => ({ key, label, spent, expected, percent: (Math.max(0, spent) / scale) * 100, tone });
   return [
     seg("fixed", "קבועות", d.fixed.spent, d.fixed.expected, "bg-sun"),
-    seg("variable", "משתנות", d.variable.spent, d.variable.allowance, "bg-brand"),
+    seg("variable", "משתנות", d.total.spent - d.fixed.spent - d.savings.spent, d.total.expected - d.fixed.expected - d.savings.expected, "bg-brand"),
     seg("savings", "חיסכון", d.savings.spent, d.savings.expected, "bg-info"),
   ];
 }
