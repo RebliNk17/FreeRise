@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 from freerise.models import Account, Balance, Transaction
 from freerise.reconcile.card_bills import ISSUER_NAMES
 
-PROVIDER_HE = {**ISSUER_NAMES, "onezero": "וואן זירו", "mislaka": "המסלקה"}
+PROVIDER_HE = {**ISSUER_NAMES, "onezero": "וואן זירו", "pepper": "פפר", "mislaka": "המסלקה"}
 
 
 def account_label(a: Account) -> str:

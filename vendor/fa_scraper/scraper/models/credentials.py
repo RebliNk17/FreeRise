@@ -78,6 +78,11 @@ PROVIDER_CONFIGS: dict[str, ProviderConfig] = {
         name="Pagi",
         required_fields=["username", "password"],
     ),
+    "pepper": ProviderConfig(
+        name="Pepper",
+        required_fields=["phoneNumber", "password"],
+        requires_2fa=True,
+    ),
     # Credit cards
     "max": ProviderConfig(
         name="Max",

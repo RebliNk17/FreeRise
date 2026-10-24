@@ -48,6 +48,7 @@ COMPANIES = {
     "yahav": ("yahav", ("username", "nationalID", "password")),
     "onezero": ("oneZero", ("email", "password", "phoneNumber", "otpLongTermToken")),
     "pagi": ("pagi", UP),
+    "pepper": ("pepper", ("phoneNumber", "password", "otpLongTermToken")),
     "max": ("max", UP),  # the stored optional `id` is not sent: upstream has no ID challenge
     "visa cal": ("visaCal", UP),
     "isracard": ("isracard", ("id", "card6Digits", "password")),

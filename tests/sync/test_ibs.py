@@ -206,6 +206,15 @@ def test_mapping_matches_package_definitions():
         check=True,
     )
     defs = json.loads(p.stdout)
+    # Pepper is implemented directly in bridge/pepper.mjs until upstream merges PR #1210.
+    defs["c"]["pepper"] = "pepper"
+    defs["s"].setdefault(
+        "pepper",
+        {
+            "name": "Pepper",
+            "loginFields": ["phoneNumber", "password", "otpCodeRetriever", "otpLongTermToken"],
+        },
+    )
     assert {c for c, _ in ibs.COMPANIES.values()} == set(defs["c"].values())
     for key, (company, fields) in ibs.COMPANIES.items():
         login = set(defs["s"][company]["loginFields"]) - {"otpCodeRetriever"}  # the bridge's
