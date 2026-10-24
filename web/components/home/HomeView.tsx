@@ -17,6 +17,7 @@ import { HomeContext, type HomeCtx } from "./context";
 import { Expander } from "./Expander";
 import { FeesCard } from "./FeesCard";
 import { FixedCard } from "./FixedCard";
+import { GoalBanner } from "./GoalBanner";
 import { IncomeCard } from "./IncomeCard";
 import { InsightCarousel } from "./InsightCarousel";
 import { BalancesCard, NextCycleCard } from "./OutlookCards";
@@ -90,6 +91,7 @@ export function HomeView({ path, title }: { path: string; title: string }) {
             </>
           }
         />
+        {!cycle.is_current && !empty && <GoalBanner d={data} />}
         <AccountFilter />
         {failed && (
           <p className="rounded-2xl bg-danger-soft px-4 py-3 text-sm font-semibold text-danger-strong" role="alert">

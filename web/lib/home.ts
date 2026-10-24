@@ -162,3 +162,12 @@ export function findTxn(data: HomeData, id: number): Txn | undefined {
   mapTxns(data, (t) => ((found ??= t.id === id ? t : undefined), t));
   return found;
 }
+
+/** A finished cycle's goal: income − expenses > 0. Savings deposits aren't expenses here —
+ * that money is still the household's — so they leave total.spent and are shown on their own. */
+export function cycleGoal(d: Pick<HomeData, "income" | "savings" | "total">) {
+  const income = d.income.received;
+  const expenses = d.total.spent - d.savings.spent;
+  const net = income - expenses;
+  return { met: net > 0.005, income, expenses, savings: d.savings.spent, net };
+}
