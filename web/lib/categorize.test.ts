@@ -1,12 +1,21 @@
 import { expect, test } from "bun:test";
 import type { Category } from "./api";
-import { pendingCount, quickGroups, quickPicks } from "./categorize";
+import { merchantProgress, pendingCount, pendingLabel, quickGroups, quickPicks, txnsLeft } from "./categorize";
 
 const cat = (id: number, group: Category["group"], sort_order = 0): Category => ({ id, name: `c${id}`, group, sort_order });
 
 test("pendingCount sums merchant counts", () => {
   expect(pendingCount([{ count: 2 }, { count: 3 }])).toBe(5);
   expect(pendingCount([])).toBe(0);
+});
+
+test("chip and sheet labels: transactions and merchants, explicitly", () => {
+  const list = [{ count: 100 }, { count: 11 }];
+  expect(pendingLabel(list)).toBe("111 עסקאות לסיווג · 2 בתי עסק");
+  expect(pendingLabel([{ count: 1 }])).toBe("עסקה אחת לסיווג · בית עסק אחד");
+  expect(merchantProgress(0, 64)).toBe("בית עסק 1 מתוך 64");
+  expect(txnsLeft(111)).toBe("נשארו 111 עסקאות");
+  expect(txnsLeft(1)).toBe("נשארה עסקה אחת");
 });
 
 test("quickPicks: most used first, then sort order, filtered by group", () => {

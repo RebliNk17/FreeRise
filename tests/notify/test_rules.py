@@ -190,6 +190,15 @@ def test_uncategorized_growing_fires_once(session):
     _fires_once(session, "uncategorized_growing")
 
 
+def test_uncategorized_growing_counts_like_the_categorize_sheet(session):
+    a = _acct(session)
+    for _ in range(20):
+        _tx(session, a, TODAY, -10)
+    _tx(session, a, TODAY, -10, desc="")  # no merchant: the sheet can't show it
+    generate_notifications(session, TODAY)
+    assert "uncategorized_growing" not in _kinds(session)
+
+
 def test_pension_reminder_fires_once(session):
     _acct(session, provider="mislaka")
     _fires_once(session, "pension_reminder")

@@ -7,7 +7,6 @@ import { formatCycleRange, monthName } from "@/lib/format";
 import Link from "next/link";
 import { ChevronLeft, MessageCircleQuestion } from "lucide-react";
 import type { Review, Uncategorized } from "@/lib/api";
-import { pendingCount } from "@/lib/categorize";
 import { findTxn, isIdle, type HomeData, type Txn } from "@/lib/home";
 import { useApi } from "@/lib/useApi";
 import { useHiddenAccounts, withHidden } from "@/lib/viewFilter";
@@ -98,7 +97,7 @@ export function HomeView({ path, title }: { path: string; title: string }) {
         )}
         {!empty && data.summary && <WeeklySummary s={data.summary} />}
         {cycle.is_current && <InsightCarousel />}
-        <CategorizeChip count={pendingCount(unc.data ?? [])} onOpen={() => setSorting(true)} />
+        <CategorizeChip list={unc.data ?? []} onOpen={() => setSorting(true)} />
         {reviews.length > 0 && (
           <Link href="/review" className="card flex min-h-12 items-center gap-3 px-4 py-2.5 hover:bg-sunken/60">
             <span className="flex size-[34px] shrink-0 items-center justify-center rounded-[11px] bg-brand-soft text-brand">
