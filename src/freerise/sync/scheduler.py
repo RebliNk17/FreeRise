@@ -12,7 +12,7 @@ from sqlalchemy.orm import sessionmaker
 
 from freerise.categorize.pipeline import categorize_pending
 from freerise.config import get_settings
-from freerise.db import SessionLocal
+from freerise.db import SessionLocal, engine
 from freerise.forecast.attribution import attribute_income
 from freerise.forecast.recurring import detect_recurring
 from freerise.models import Credential, Setting, SyncRun
@@ -23,6 +23,7 @@ from freerise.sync.demo_provider import make_scraper
 from freerise.sync.service import login_paused, run_credential
 
 log = logging.getLogger("freerise.worker")
+WORKER_LOCK = 0x46524545  # "FREE"
 STALE = timedelta(minutes=30)
 # A new connection nobody verified (check failed, tab closed) is dropped, secrets and all.
 ABANDONED = timedelta(hours=1)
@@ -185,6 +186,13 @@ async def main() -> None:
     for name in ("httpx", "httpcore"):  # INFO logs full request URLs
         logging.getLogger(name).setLevel(logging.WARNING)
     logging.getLogger("apscheduler").setLevel(logging.WARNING)  # a line per 5s poll otherwise
+    # One worker per database: two would log in to every provider twice (lockout risk) and
+    # send every alert twice. The session-level lock lives as long as this connection.
+    lock = engine.connect()
+    if not lock.scalar(text("SELECT pg_try_advisory_lock(:k)"), {"k": WORKER_LOCK}):
+        log.error("another freerise worker is already running on this database; exiting")
+        lock.close()
+        return
     try:  # attribution rule may have changed since the last sync
         with SessionLocal.begin() as s:
             attribute_income(s)

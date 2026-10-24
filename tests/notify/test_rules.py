@@ -12,7 +12,7 @@ from freerise.models import (
     SyncRun,
     Transaction,
 )
-from freerise.notify.rules import generate_notifications
+from freerise.notify.rules import generate_notifications, provider_name
 from freerise.notify.store import notify
 
 TODAY = date(2026, 10, 23)
@@ -64,36 +64,40 @@ def _fires_once(session, kind):
     assert _kinds(session).count(kind) == 1
 
 
-def test_sync_failed_fires_once(session):
-    a = _acct(session)
-    for st, fk in (("failed", "auth_failed"), ("otp_timeout", None), ("success", None)):
-        session.add(
-            SyncRun(
-                credential_id=a.credential_id,
-                trigger="manual",
-                status=st,
-                failure_kind=fk,
-                finished_at=datetime(2026, 10, 22, 8, tzinfo=UTC),
-            )
-        )
-    # too old
-    session.add(
-        SyncRun(
-            credential_id=a.credential_id,
-            trigger="manual",
-            status="failed",
-            finished_at=datetime(2026, 10, 1, tzinfo=UTC),
-        )
+def _run(a, status, kind=None, day=22):
+    return SyncRun(
+        credential_id=a.credential_id,
+        trigger="schedule",
+        status=status,
+        failure_kind=kind,
+        finished_at=datetime(2026, 10, day, 8, tzinfo=UTC),
     )
+
+
+def test_sync_failed_once_per_streak(session):
+    a = _acct(session)
+    session.add_all([_run(a, "failed", "auth_failed"), _run(a, "failed", "auth_failed")])
+    session.flush()
+    _fires_once(session, "sync_failed")  # two failed runs (e.g. two workers): one alert
+    title, body = session.execute(
+        select(Notification.title, Notification.body).where(Notification.kind == "sync_failed")
+    ).one()
+    assert title == f"סנכרון נכשל: {provider_name(a.credential.provider)} · {a.credential.label}"
+    assert body == "סיסמה שגויה"
+    session.add_all([_run(a, "success"), _run(a, "otp_timeout")])  # recovered, then failed again
     session.flush()
     generate_notifications(session, TODAY)
-    assert _kinds(session) == ["sync_failed", "sync_failed"]
-    bodies = set(
-        session.scalars(select(Notification.body).where(Notification.kind == "sync_failed"))
-    )
-    assert bodies == {"סיסמה שגויה", "לא הוזן קוד"}  # legacy otp_timeout run without a kind
+    assert _kinds(session).count("sync_failed") == 2
+
+
+def test_sync_failed_skips_recovered_and_old(session):
+    a = _acct(session)
+    session.add_all([_run(a, "failed", "auth_failed"), _run(a, "success")])
+    b = _acct(session)
+    session.add(_run(b, "failed", day=1))  # too old
+    session.flush()
     generate_notifications(session, TODAY)
-    assert len(_kinds(session)) == 2
+    assert "sync_failed" not in _kinds(session)
 
 
 def test_auth_failure_on_disabled_credential_notifies(session):
