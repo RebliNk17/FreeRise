@@ -6,6 +6,8 @@ Two engines run bank/card scrapes; `freerise.sync.demo_provider.make_scraper` pi
   pinned in `bridge/package.json`, driven by `bridge/run.mjs` over a JSON-lines stdio protocol
   (adapter: `src/freerise/sync/ibs.py`). Runs every provider the package has (`ibs.COMPANIES`):
   all banks (incl. OneZero), Max, Cal, Isracard, Amex, Beyahad Bishvilha, Behatsdaa.
+- **Pepper**: the package has no Pepper scraper, so the bridge runs its own (`bridge/pepper.mjs`)
+  over the same protocol; `run.mjs` picks it for `companyId: "pepper"`.
 - **vendored Python port** (`vendor/fa_scraper`) only for providers the package doesn't have:
   Mislaka (pension clearing house) and HaPhoenix (insurance, deprecated in favour of Mislaka).
 
