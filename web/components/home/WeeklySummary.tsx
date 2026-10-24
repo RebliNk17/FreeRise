@@ -2,20 +2,46 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Pencil } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import { Money } from "@/components/Amount";
-import { SunHorizon } from "@/components/Logo";
 import { send } from "@/lib/api";
 import type { HomeData } from "@/lib/home";
 import { useHome } from "./context";
+import { Expander } from "./Expander";
+import { Illustration } from "./illustrations";
 
-/** Current cycle only: this week's allowance, next week, and the month-end goal (editable). */
+const PILL = "flex w-fit items-center gap-1 rounded-xl border border-border px-3.5 py-2 text-sm font-bold hover:bg-sunken";
+
+/** Current cycle only: this week's allowance, then the month-end goal card (editable). */
 export function WeeklySummary({ s }: { s: NonNullable<HomeData["summary"]> }) {
+  const over = s.week_left < 0;
+  return (
+    <>
+      <section className="card overflow-hidden">
+        <div className="flex flex-col gap-3 p-5">
+          <h2 className="text-xl leading-snug font-bold">{over ? "בכמה חרגנו בהוצאות המשתנות השבוע?" : "כמה כסף נשאר להוציא על הוצאות משתנות השבוע?"}</h2>
+          <Money value={Math.abs(s.week_left)} className={`self-start text-[44px] leading-none font-light ${over ? "text-danger" : ""}`} />
+          <Link href="/balance" className={PILL}>
+            ומה מצב העו״ש? <ChevronLeft size={16} aria-hidden />
+          </Link>
+        </div>
+        {s.next_week_allowance ? (
+          <div className="border-t border-hairline px-5 py-3 text-sm">
+            <p className="font-bold">הוצאות משתנות של שבוע הבא</p>
+            <Money value={s.next_week_allowance} />
+          </div>
+        ) : null}
+      </section>
+      <GoalCard s={s} />
+    </>
+  );
+}
+
+function GoalCard({ s }: { s: NonNullable<HomeData["summary"]> }) {
   const { mutate } = useHome();
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState("");
   const [bad, setBad] = useState(false);
-  const over = s.week_left < 0;
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -24,71 +50,94 @@ export function WeeklySummary({ s }: { s: NonNullable<HomeData["summary"]> }) {
     setEditing(false);
     setBad(false);
     mutate(
-      (d) => (d.summary ? { ...d, summary: { ...d.summary, goal_personal: amount, goal: amount + d.summary.goal_plans } } : d),
+      (d) =>
+        d.summary
+          ? {
+              ...d,
+              summary: {
+                ...d.summary,
+                goal_personal: amount,
+                goal: amount + d.summary.goal_plans,
+              },
+            }
+          : d,
       () => send("PUT", "/plan/goal", { amount }),
     );
   }
 
   return (
-    <section id="goal" className="relative scroll-mt-20 overflow-hidden rounded-3xl bg-brand-fill p-5 text-brand-fg">
-      <SunHorizon width={190} ground="var(--brand-fill)" line="rgb(234 246 241 / 0.6)" className="pointer-events-none absolute -bottom-3.5 -left-5 opacity-90" />
-      <div className="relative">
-        <p className={`text-sm ${over ? "font-semibold text-on-fill-danger" : "text-on-fill-muted"}`}>{over ? "חריגה השבוע" : "נשאר להוציא השבוע"}</p>
-        <Money value={Math.abs(s.week_left)} className={`mt-1 block text-right text-[44px] leading-[1.1] font-extrabold ${over ? "text-on-fill-danger" : ""}`} />
-        {editing ? (
-          <form onSubmit={save} className="mt-3.5 flex flex-wrap gap-2">
-            <p className="w-full text-[13px] text-white">
-              {s.goal_plans > 0 ? (
-                <>
-                  כמה להשאיר בצד <b>בנוסף</b> ל-<Money value={s.goal_plans} /> של התוכניות?
-                </>
-              ) : (
-                "כמה להשאיר בצד בסוף החודש?"
-              )}
-            </p>
-            <input type="number" required min={0} step="any" inputMode="numeric" dir="ltr" className="input min-h-11 max-w-40 flex-1" value={value} onChange={(e) => setValue(e.target.value)} aria-label="יעד אישי לסוף החודש" autoFocus onFocus={(e) => e.target.select()} />
-            <button className="btn-accent min-h-11 rounded-[14px]">שמירה</button>
-            <button type="button" className="btn-ghost bg-white/12 text-brand-fg" onClick={() => setEditing(false)}>
-              ביטול
-            </button>
-            {s.goal_plans > 0 && (
-              <p className="w-full text-xs text-white/85">
-                סה״כ יעד לסוף החודש: <Money value={(Number(value) || 0) + s.goal_plans} className="font-bold" />
+    <section id="goal" className="card scroll-mt-20 overflow-hidden">
+      <div className="flex flex-col gap-3 p-5">
+        <p className="text-sm text-muted">היעד החודשי</p>
+        <h2 className="text-xl leading-snug font-bold">כמה אני רוצה להשאיר בצד בסוף החודש?</h2>
+        <div className="flex items-end gap-3">
+          <div className="flex min-w-0 flex-1 flex-col gap-3">
+            {editing ? (
+              <form onSubmit={save} className="flex flex-wrap gap-2">
+                {s.goal_plans > 0 && (
+                  <p className="w-full text-[13px] text-muted">
+                    בנוסף ל-
+                    <Money value={s.goal_plans} /> של התוכניות
+                  </p>
+                )}
+                <input
+                  type="number"
+                  required
+                  min={0}
+                  step="any"
+                  inputMode="numeric"
+                  dir="ltr"
+                  className="input min-h-11 max-w-36 flex-1"
+                  value={value}
+                  onChange={(e) => setValue(e.target.value)}
+                  aria-label="יעד אישי לסוף החודש"
+                  autoFocus
+                  onFocus={(e) => e.target.select()}
+                />
+                <button className="btn min-h-11">שמירה</button>
+                <button type="button" className="btn-ghost" onClick={() => setEditing(false)}>
+                  ביטול
+                </button>
+              </form>
+            ) : (
+              <>
+                <Money value={s.goal} className="self-start text-3xl font-bold text-sun-strong" />
+                {s.goal_plans > 0 && (
+                  <p className="-mt-2 text-xs text-muted">
+                    אישי <Money value={s.goal_personal} /> + תוכניות <Money value={s.goal_plans} />
+                  </p>
+                )}
+                <button
+                  type="button"
+                  className="btn flex w-fit min-h-10 items-center gap-1 px-4"
+                  onClick={() => {
+                    setValue(String(s.goal_personal));
+                    setEditing(true);
+                  }}
+                >
+                  בחירת יעד <ChevronLeft size={16} aria-hidden />
+                </button>
+              </>
+            )}
+            {bad && (
+              <p className="text-sm font-semibold text-danger" role="alert">
+                יש להזין סכום חיובי.
               </p>
             )}
-          </form>
-        ) : (
-          <div className="mt-3.5 flex flex-wrap items-center gap-2 text-[13px]">
-            {over && <span className="chip bg-danger text-white">חריגה</span>}
-            {s.next_week_allowance ? (
-              <span className="rounded-full bg-white/12 px-3 py-1.5">
-                בשבוע הבא <Money value={s.next_week_allowance} className="font-bold" />
-              </span>
-            ) : null}
-            <button
-              type="button"
-              className="flex items-center gap-1.5 rounded-full bg-sun/22 px-3 py-1.5 text-on-fill-sun hover:bg-sun/30"
-              aria-label="עריכת היעד"
-              onClick={() => {
-                setValue(String(s.goal_personal));
-                setEditing(true);
-              }}
-            >
-              יעד לסוף החודש <Money value={s.goal} className="font-bold" />
-              <Pencil size={13} aria-hidden />
-            </button>
           </div>
-        )}
-        {s.goal_plans > 0 && !editing && (
-          <p className="relative z-10 mt-2 w-fit rounded-full bg-white/12 px-3 py-1 text-xs font-medium text-white">
-            אישי <Money value={s.goal_personal} /> +{" "}
-            <Link href="/plans" className="underline">
-              תוכניות <Money value={s.goal_plans} />
-            </Link>
-          </p>
-        )}
-        {bad && <p className="mt-2 text-sm font-semibold text-on-fill-danger" role="alert">יש להזין סכום חיובי.</p>}
+          <div className="w-28 shrink-0">
+            <Illustration name="coin" active />
+          </div>
+        </div>
       </div>
+      <Expander className="border-t border-hairline px-3" buttonClassName="flex min-h-12 px-2" label={<span className="text-sm font-bold">לתכנן קדימה</span>}>
+        <div className="flex flex-col gap-2 px-2 pb-4 text-sm">
+          <p className="text-muted">התוכניות הגדולות עוזרות להבין כמה לשים בצד כל חודש כדי להגשים אותן, ולעקוב אחרי ההתקדמות בקלות.</p>
+          <Link href="/plans" className="link flex items-center gap-1 font-bold">
+            {s.goal_plans > 0 ? "לתוכניות הגדולות" : "להוספת תוכניות גדולות"} <ChevronLeft size={16} aria-hidden />
+          </Link>
+        </div>
+      </Expander>
     </section>
   );
 }

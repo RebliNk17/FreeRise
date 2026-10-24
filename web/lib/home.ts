@@ -130,19 +130,28 @@ export const leftLabel = (spent: number, expected: number) => (spent > expected 
 
 export type TotalSegment = { key: "fixed" | "variable" | "savings" | "fees"; label: string; spent: number; expected: number; percent: number; tone: string };
 
-/** "סך ההוצאות החודש": per-group spent vs expected, and each group's share of the stacked bar
- * (of whichever is bigger, spent or expected, so the bar never overflows). "משתנות" is the
+/** "סך ההוצאות החודש": per-group spent vs expected, and each group's share of the donut
+ * (of whichever is bigger, spent or expected, so the ring never overflows). "משתנות" is the
  * tracked categories plus the rest of variable spending: whatever the total has beyond fixed
- * and savings (the API's total counts each transaction once). */
+ * and savings (the API's total counts each transaction once). Ring order is fixed so the two
+ * colors that collide under deuteranopia (fees, fixed) never touch. tone: a CSS color. */
+// Validated with the dataviz validate_palette.js in that ring order, light (#fff) and dark (#221f1a) surfaces.
+const VIZ: Record<TotalSegment["key"], string> = {
+  fixed: "light-dark(#1baf7a, #199e70)",
+  variable: "light-dark(#eda100, #c98500)",
+  fees: "light-dark(#e87ba4, #d55181)",
+  savings: "light-dark(#2a78d6, #3987e5)",
+};
+
 export function totalSegments(d: Pick<HomeData, "fixed" | "savings" | "total"> & { fees?: HomeData["fees"] }): TotalSegment[] {
   const scale = Math.max(d.total.spent, d.total.expected, 1);
-  const seg = (key: TotalSegment["key"], label: string, spent: number, expected: number, tone: string) => ({ key, label, spent, expected, percent: (Math.max(0, spent) / scale) * 100, tone });
+  const seg = (key: TotalSegment["key"], label: string, spent: number, expected: number) => ({ key, label, spent, expected, percent: (Math.max(0, spent) / scale) * 100, tone: VIZ[key] });
   const fees = d.fees ?? { spent: 0, expected: 0 };
   return [
-    seg("fixed", "קבועות", d.fixed.spent, d.fixed.expected, "bg-sun"),
-    seg("variable", "משתנות", d.total.spent - d.fixed.spent - d.savings.spent - fees.spent, d.total.expected - d.fixed.expected - d.savings.expected - fees.expected, "bg-brand"),
-    seg("savings", "חיסכון", d.savings.spent, d.savings.expected, "bg-info"),
-    ...(d.fees ? [seg("fees", "עמלות", fees.spent, fees.expected, "bg-danger")] : []),
+    seg("fixed", "קבועות", d.fixed.spent, d.fixed.expected),
+    seg("variable", "משתנות", d.total.spent - d.fixed.spent - d.savings.spent - fees.spent, d.total.expected - d.fixed.expected - d.savings.expected - fees.expected),
+    ...(d.fees ? [seg("fees", "עמלות", fees.spent, fees.expected)] : []),
+    seg("savings", "חיסכון", d.savings.spent, d.savings.expected),
   ];
 }
 

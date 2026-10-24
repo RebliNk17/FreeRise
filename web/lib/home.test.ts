@@ -94,8 +94,8 @@ test("totalSegments: fees are their own segment, not variable", () => {
   expect(totalSegments(d).map((x) => [x.key, x.spent])).toEqual([
     ["fixed", 300],
     ["variable", 600],
-    ["savings", 0],
     ["fees", 100],
+    ["savings", 0],
   ]);
 });
 

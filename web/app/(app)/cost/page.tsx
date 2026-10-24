@@ -43,7 +43,7 @@ export default function CostPage() {
   const filtered = Boolean(debounced || categoryId != null);
 
   const chart = (data?.monthly ?? []).map((m) => ({ key: `${m.label_year}-${m.label_month}`, label: monthName(m.label_month).slice(0, 3), full: `${monthName(m.label_month)} ${m.label_year}`, value: m.total }));
-  const chartAlt = chart.map((m) => `${m.full}: ${formatILS(Math.round(m.value))}`).join(", ");
+  const chartAlt = chart.map((m) => `${m.full}: ${formatILS(m.value)}`).join(", ");
 
   return (
     <div className="flex flex-col gap-4">
@@ -82,7 +82,7 @@ export default function CostPage() {
             <p className="text-sm text-muted">{filtered ? "סך הכול יצא על זה" : "סך כל ההוצאות בתקופה"}</p>
             <Amount value={data.total} plain className="text-[40px] leading-tight font-extrabold" />
             <p className="text-sm text-muted">
-              בממוצע <Amount value={Math.round(data.avg_per_month)} plain className="font-semibold text-text" /> בחודש · {txnCount(data.count)}
+              בממוצע <Amount value={data.avg_per_month} plain className="font-semibold text-text" /> בחודש · {txnCount(data.count)}
             </p>
             {data.count > 0 && (
               <Link href={`/search?${params}`} className="text-sm text-brand underline">

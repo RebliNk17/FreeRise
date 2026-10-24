@@ -74,12 +74,7 @@ NON_SPENDING = ("transfer", "card_bill", "ignore")
 LARGE_MIN = Decimal(1500)  # default of the large_txn_min setting
 
 
-def ils(x) -> str:
-    return f"₪{Decimal(x):,.0f}"
-
-
-def ils2(x) -> str:
-    return f"₪{Decimal(x):,.2f}"
+ils = engine.ils  # exact amounts, never rounded
 
 
 def charges_he(n: int) -> str:
@@ -97,7 +92,7 @@ def _fees(s: Session, today: date) -> None:
             s,
             "fees_paid",
             "שולמו עמלות החודש",
-            f"עד כה החודש שילמתם {ils2(f.total)} עמלות {charges_he(f.count)} ({accounts})",
+            f"עד כה החודש שילמתם {ils(f.total)} עמלות {charges_he(f.count)} ({accounts})",
             link,
             f"fees_paid:{cycle.start}",
         )
@@ -116,7 +111,7 @@ def _fees(s: Session, today: date) -> None:
     )
     new = [x for x in firsts if x]
     if new:
-        lines = [f"{x.description} {ils2(x.amount)} ({x.account_name})" for x in new[:3]]
+        lines = [f"{x.description} {ils(x.amount)} ({x.account_name})" for x in new[:3]]
         more = f" ועוד {len(new) - 3}" if len(new) > 3 else ""
         notify(
             s,

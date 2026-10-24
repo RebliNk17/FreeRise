@@ -1,7 +1,9 @@
+import { EllipsisVertical } from "lucide-react";
 import { Money } from "@/components/Amount";
 import { Card } from "@/components/Card";
 import { categoryLabel, formatDate } from "@/lib/format";
 import { FIXED_STATUS, installmentLabel, type FixedGroup, type FixedItem, type HomeData } from "@/lib/home";
+import { useHome } from "./context";
 import { Expander } from "./Expander";
 import { HistoryButton } from "./HistorySheet";
 import { SpentHeader, TableHead } from "./parts";
@@ -58,7 +60,10 @@ export function FixedGroups({ groups, income = false }: { groups: FixedGroup[]; 
   );
 }
 
+/** One transaction: the row is that transaction (tap opens its sheet), no second line repeating it.
+ * Several: the row expands to them. */
 export function Item({ it, income = false }: { it: FixedItem; income?: boolean }) {
+  const { openTxn } = useHome();
   const date = it.transactions[0]?.date ?? it.expected_date;
   const st = FIXED_STATUS[it.status];
   const inst = installmentLabel(it);
@@ -85,6 +90,13 @@ export function Item({ it, income = false }: { it: FixedItem; income?: boolean }
   );
   const box = `rounded-xl px-2 py-2 ${it.status === "expected" ? "opacity-60" : ""} ${it.status === "overdue" ? "bg-sun-soft" : ""}`;
   if (!it.transactions.length) return <div className={box}>{body}</div>;
+  if (it.transactions.length === 1)
+    return (
+      <button type="button" className={`flex w-full items-center gap-2 text-start transition-colors hover:bg-sunken/60 active:bg-sunken ${box}`} onClick={() => openTxn(it.transactions[0])}>
+        <span className="min-w-0 flex-1">{body}</span>
+        <EllipsisVertical size={16} className="shrink-0 text-muted" aria-hidden />
+      </button>
+    );
   return (
     <Expander className={box} label={body}>
       <div className="pt-1">

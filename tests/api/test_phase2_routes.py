@@ -290,16 +290,22 @@ def test_plan_current(authed, ids, sf):
             "display_name": "עו״ש",
             "balance": 5000.5,
             "as_of": body["balances"]["accounts"][0]["as_of"],
+            "provider": "עו״ש",
+            "holder": body["balances"]["accounts"][0]["holder"],
+            "number": body["balances"]["accounts"][0]["number"],
         }
     ]
     assert body["balances"]["upcoming_card_charges"] == 120.0  # no card balance -> txns
+    assert [(c["id"], c["balance"]) for c in body["balances"]["cards"]] == [(ids["card"], 120.0)]
     assert sum(w["is_current"] for w in body["weeks"]) == 1
     assert set(body["next_cycle"]) == {"installments_stopping_total", "fixed_total", "income_total"}
     assert {"categories", "goal", "variable_left", "savings_spent"} <= set(body)
     with sf() as s:
         s.add(Balance(account_id=ids["card"], as_of=datetime.now(UTC), balance=Decimal(-900)))
         s.commit()
-    assert authed.get("/api/plan/current").json()["balances"]["upcoming_card_charges"] == 900.0
+    b = authed.get("/api/plan/current").json()["balances"]
+    assert b["upcoming_card_charges"] == 900.0
+    assert [c["balance"] for c in b["cards"]] == [900.0]
     assert authed.put("/api/plan/goal", json={"amount": 1500}).json() == {"goal": 1500.0}
     assert authed.get("/api/plan/current").json()["goal"] == 1500.0
     assert authed.put("/api/plan/goal", json={"amount": -1}).status_code == 422

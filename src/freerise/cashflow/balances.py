@@ -18,6 +18,8 @@ class Balances:
     bank_total: Decimal | None  # None when no bank balance is known
     banks: list[tuple[Account, Decimal | None, datetime | None]]  # non-excluded bank accounts
     upcoming_card_charges: Decimal  # positive
+    # Per card, on the same basis as the total: (account, upcoming charge (credit < 0), as_of).
+    cards: list[tuple[Account, Decimal, datetime | None]]
 
 
 def balances(session: Session, cycle: Cycle) -> Balances:
@@ -36,13 +38,13 @@ def balances(session: Session, cycle: Cycle) -> Balances:
     ).all()
     banks = [(a, b, t) for a, b, t in rows if a.kind == "bank"]
     known = [b for _, b, _ in banks if b is not None]
-    card_bals = [b for a, b, _ in rows if a.kind == "card" and b is not None]
-    if card_bals:
-        upcoming = abs(sum(card_bals, Decimal(0)))
+    cards = [(a, b, t) for a, b, t in rows if a.kind == "card"]
+    if any(b is not None for _, b, _ in cards):
+        per_card = [(a, -(b or Decimal(0)), t) for a, b, t in cards]
     else:  # no card balance from the provider: this cycle's card charges so far
-        upcoming = abs(
-            session.scalar(
-                select(func.coalesce(func.sum(Transaction.amount), 0))
+        spent = dict(
+            session.execute(
+                select(Transaction.account_id, func.sum(Transaction.amount))
                 .join(Account, Account.id == Transaction.account_id)
                 .where(
                     Account.kind == "card",
@@ -51,6 +53,9 @@ def balances(session: Session, cycle: Cycle) -> Balances:
                     Transaction.date >= cycle.start,
                     Transaction.date <= cycle.end,
                 )
-            )
+                .group_by(Transaction.account_id)
+            ).all()
         )
-    return Balances(sum(known, Decimal(0)) if known else None, banks, Decimal(upcoming))
+        per_card = [(a, -Decimal(spent.get(a.id, 0)), None) for a, _, _ in cards]
+    upcoming = abs(sum((c for _, c, _ in per_card), Decimal(0)))
+    return Balances(sum(known, Decimal(0)) if known else None, banks, upcoming, per_card)

@@ -14,7 +14,7 @@ export function BalanceChart({ data }: { data: Point[] }) {
   if (data.length < 2) return null;
   const last = data[data.length - 1];
   return (
-    <div dir="ltr" className="h-44" role="img" aria-label={`יתרה מ־${formatDate(data[0].date)} (${formatILS(Math.round(data[0].balance))}) עד ${formatDate(last.date)} (${formatILS(Math.round(last.balance))})`}>
+    <div dir="ltr" className="h-44" role="img" aria-label={`יתרה מ־${formatDate(data[0].date)} (${formatILS(data[0].balance)}) עד ${formatDate(last.date)} (${formatILS(last.balance)})`}>
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
           <defs>

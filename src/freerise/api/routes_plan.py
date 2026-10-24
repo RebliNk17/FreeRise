@@ -4,7 +4,7 @@ from decimal import Decimal
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
-from freerise.accounts import account_label
+from freerise.accounts import account_holder, account_label, account_provider
 from freerise.api.deps import DB, today
 from freerise.api.routes_cashflow import CycleOut
 from freerise.api.routes_forecast import LineOut, _lines
@@ -13,6 +13,7 @@ from freerise.cashflow.cycles import cycle_for, get_start_day
 from freerise.cashflow.fees import fees_in_cycle
 from freerise.cashflow.plan import cycle_plan, set_goal
 from freerise.forecast.next_cycle import next_cycle_forecast
+from freerise.models import Account
 from freerise.view import hiding
 
 router = APIRouter()
@@ -41,12 +42,16 @@ class BalanceAccount(BaseModel):
     display_name: str
     balance: float
     as_of: datetime | None
+    provider: str  # "וואן זירו", "ישראכרט" (or the user's own name for it)
+    holder: str
+    number: str  # bank: full account number; card: last 4
 
 
 class Balances(BaseModel):
     bank_total: float
     accounts: list[BalanceAccount]
     upcoming_card_charges: float  # positive
+    cards: list[BalanceAccount]  # balance = that card's upcoming charge (positive)
 
 
 class NextCycle(BaseModel):
@@ -91,15 +96,26 @@ class GoalOut(BaseModel):
     goal: float
 
 
+def _account(a: Account, bal: Decimal | None, as_of: datetime | None) -> BalanceAccount:
+    n = a.provider_account_id
+    return BalanceAccount(
+        id=a.id,
+        display_name=account_label(a),
+        balance=bal or 0,
+        as_of=as_of,
+        provider=account_provider(a),
+        holder=account_holder(a),
+        number=n if a.kind == "bank" else n[-4:],
+    )
+
+
 def _balances(db: DB, cycle) -> Balances:
     b = balances(db, cycle)
     return Balances(
         bank_total=b.bank_total or 0,
-        accounts=[
-            BalanceAccount(id=a.id, display_name=account_label(a), balance=bal or 0, as_of=as_of)
-            for a, bal, as_of in b.banks
-        ],
+        accounts=[_account(a, bal, as_of) for a, bal, as_of in b.banks],
         upcoming_card_charges=b.upcoming_card_charges,
+        cards=[_account(a, c, as_of) for a, c, as_of in b.cards],
     )
 
 
