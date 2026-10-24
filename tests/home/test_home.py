@@ -381,3 +381,28 @@ def test_fees_get_their_own_section(session):
 def test_no_fees_no_section(session):
     _tx(session, _acct(session), date(2026, 10, 12), -60, "תקשורת", "סלקום")
     assert build_home(session, OCT, TODAY).fees is None
+
+
+def test_confirmed_recurring_expense_in_variable_category_is_fixed(session):
+    a = _acct(session)
+    _rec(session, "ליסינג רכב", "רכב", 1500, date(2026, 11, 1), account=a)
+    t = _tx(session, a, date(2026, 10, 11), -1500, "רכב", "ליסינג רכב")
+    other = _tx(session, a, date(2026, 10, 12), -80, "רכב", "דלק")  # not recurring: stays variable
+    h = _home(session)
+    fixed_ids = {
+        x["id"] for g in h["fixed"]["groups"] for i in g["items"] for x in i["transactions"]
+    }
+    var_ids = {x["id"] for w in h["variable"]["weeks"] for x in w["transactions"]}
+    var_ids |= {x["id"] for c in h["tracked"] for x in c["transactions"]}
+    assert t.id in fixed_ids and t.id not in var_ids
+    assert other.id in var_ids and other.id not in fixed_ids
+
+
+def test_pending_recurring_expense_stays_variable(session):
+    a = _acct(session)
+    _rec(session, "ליסינג רכב", "רכב", 1500, date(2026, 11, 1), account=a).status = "pending"
+    t = _tx(session, a, date(2026, 10, 11), -1500, "רכב", "ליסינג רכב")
+    h = _home(session)
+    assert t.id not in {
+        x["id"] for g in h["fixed"]["groups"] for i in g["items"] for x in i["transactions"]
+    }

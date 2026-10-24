@@ -127,3 +127,25 @@ def test_income_split_fixed_and_variable(session):
     assert s.income == Decimal(11000)
     assert s.income_fixed == Decimal(10000)
     assert s.income_variable == Decimal(1000)
+
+
+def test_confirmed_recurring_expense_counts_as_fixed(session):
+    a = acct(session)
+    session.add(
+        RecurringItem(
+            merchant_key="ליסינג רכב",
+            direction="expense",
+            label="ליסינג רכב",
+            cadence="monthly",
+            amount_kind="fixed",
+            expected_amount=Decimal(1500),
+            last_date=date(2026, 9, 1),
+            next_expected_date=date(2026, 11, 1),
+            status="confirmed",
+            basis="b",
+        )
+    )
+    tx(session, a, -1500, "רכב", key="ליסינג רכב")
+    tx(session, a, -80, "רכב", key="דלק")
+    by = {g.group: g.total for g in cycle_summary(session, C).groups}
+    assert (by["fixed"], by["variable"]) == (Decimal(1500), Decimal(80))

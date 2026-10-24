@@ -16,21 +16,35 @@ BASIS = (
     "הכנסה = סכומים חיוביים בקטגוריות הכנסה ובתנועות לא מסווגות (כולל זיכויים); "
     "זיכויים בקטגוריות הוצאה מקטינים את ההוצאה; העברות, חיוב כרטיס אשראי והתעלמות "
     "אינם נספרים; חשבונות מוחרגים אינם נספרים; תנועות ממתינות נספרות; "
-    "תשלומים של עסקאות בתשלומים נספרים כהוצאה קבועה (ידועים מראש)."
+    "תשלומים של עסקאות בתשלומים וחיובים חוזרים מאושרים נספרים כהוצאה קבועה (ידועים מראש)."
 )
 
 
-def bucket(group: str | None, amount, installment_total: int | None) -> str | None:
+def bucket(
+    group: str | None, amount, installment_total: int | None, recurring: bool = False
+) -> str | None:
     """The cash-flow group a transaction (part) counts in, or None if it isn't counted.
 
     group: its category's group (None = uncategorized: income if positive, else variable).
-    Installment payments are known in advance, so they count as fixed (like RiseUp), whatever
-    variable category they carry (e.g. a hotel paid in 6 under תיירות)."""
+    Installment payments and confirmed recurring charges (recurring=True, see
+    recurring_expense_keys) are known in advance, so they count as fixed (like RiseUp), whatever
+    variable category they carry (a hotel paid in 6 under תיירות, a monthly car lease under רכב)."""
     if group is None:
         group = "income" if amount > 0 else "variable"
-    if group == "variable" and (installment_total or 0) > 1:
+    if group == "variable" and ((installment_total or 0) > 1 or recurring):
         return "fixed"
     return group if group in GROUPS else None
+
+
+def recurring_expense_keys(session: Session) -> set[str]:
+    """Merchants of confirmed recurring expenses: their charges count as fixed (bucket)."""
+    return set(
+        session.scalars(
+            select(RecurringItem.merchant_key).where(
+                RecurringItem.direction == "expense", RecurringItem.status == "confirmed"
+            )
+        )
+    )
 
 
 @dataclass
@@ -85,6 +99,8 @@ def cycle_summary(session: Session, cycle: Cycle) -> CycleSummary:
         )
     )
 
+    rec = recurring_expense_keys(session)
+
     # (group, category_id, name) -> [signed sum, count]
     acc: dict[tuple[str, int | None, str], list] = {}
     unc_total, unc_count, income_fixed = Decimal(0), 0, Decimal(0)
@@ -92,7 +108,7 @@ def cycle_summary(session: Session, cycle: Cycle) -> CycleSummary:
     for t, cat, amount in rows:
         if t.status == "pending":
             pending.add(t.id)
-        g = bucket(cat.group if cat else None, amount, t.installment_total)
+        g = bucket(cat.group if cat else None, amount, t.installment_total, t.merchant_key in rec)
         if g is None:  # transfer / card_bill / ignore
             continue
         if cat is None:
