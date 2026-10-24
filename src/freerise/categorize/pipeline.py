@@ -1,12 +1,12 @@
 from collections import defaultdict
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from statistics import median
 
 from sqlalchemy import func, or_, select, update
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
-from freerise.accounts import account_labels
+from freerise.accounts import account_holder, account_labels
 from freerise.categorize.default_rules import provider_category
 from freerise.categorize.normalize import best_match
 from freerise.forecast.recurring import AUTO_AMOUNT, AUTO_N
@@ -17,6 +17,8 @@ _SOURCE = {"user": "rule", "seed": "map", "ai": "ai", "provider": "provider", "d
 # Assigned automatically from default rules or the card company's category: re-evaluated by
 # recategorize_auto; everything else (manual, user rules, seed, ai) is left alone.
 AUTO_SOURCES = ("default", "provider")
+OTHER_INCOME = "הכנסות אחרות"
+OWN_TRANSFER_DAYS = 4  # an own-account transfer's outgoing twin lands within this many days
 
 
 def _exact(rules: list[MerchantRule], key: str) -> MerchantRule | None:
@@ -27,7 +29,72 @@ def _contains(rules: list[MerchantRule], key: str, desc: str) -> MerchantRule | 
     return best_match(((r.pattern, r) for r in rules if r.match == "contains"), key, desc)
 
 
+def _own_names(session: Session) -> set[str]:
+    # ponytail: names under 4 chars (initials, test owners) would match almost anything
+    accounts = session.scalars(select(Account).options(joinedload(Account.credential)))
+    return {n for a in accounts if len(n := account_holder(a).strip()) >= 4}
+
+
+def _own_transfer(session: Session, txn: Transaction) -> bool:
+    """Incoming money that is really ours moving: the sender part of the description names an
+    account holder ("ביט/שי כהן") or says it's ours ("מפייבוקס שלי"), or another of our bank accounts sent the same amount then."""
+    sender = (txn.description or "").split(" ל-")[0]  # "העברה מ- X ל- <us>": only X is the sender
+    if "שלי" in sender.split() or any(n in sender for n in _own_names(session)):
+        return True
+    return (
+        session.scalar(
+            select(Transaction.id)
+            .join(Account, Account.id == Transaction.account_id)
+            .where(
+                Account.kind == "bank",
+                Transaction.account_id != txn.account_id,
+                Transaction.amount.between(-txn.amount - 1, -txn.amount + 1),
+                Transaction.date.between(
+                    txn.date - timedelta(days=OWN_TRANSFER_DAYS),
+                    txn.date + timedelta(days=OWN_TRANSFER_DAYS),
+                ),
+            )
+            .limit(1)
+        )
+        is not None
+    )
+
+
 def categorize_transaction(
+    session: Session,
+    txn: Transaction,
+    providers: list[str] | None = None,
+    rules: list[MerchantRule] | None = None,
+    *,
+    account_kind: str | None = None,
+    card_bill_ids: set[int] | None = None,
+    cat_ids: dict[str, int] | None = None,
+) -> tuple[int | None, str | None]:
+    """_match, except that incoming money into a bank account that a non-user rule calls a
+    transfer counts as other income unless it's our own (_own_transfer): "העברה" alone says
+    nothing about who sent it, and hiding a payment from someone else hides real income."""
+    if account_kind is None:
+        account_kind = session.scalar(select(Account.kind).where(Account.id == txn.account_id))
+    cid, src = _match(
+        session,
+        txn,
+        providers,
+        rules,
+        account_kind=account_kind,
+        card_bill_ids=card_bill_ids,
+        cat_ids=cat_ids,
+    )
+    if cid is None or src == "rule" or account_kind != "bank" or txn.amount <= 0:
+        return cid, src
+    if session.scalar(select(Category.group).where(Category.id == cid)) != "transfer":
+        return cid, src
+    if _own_transfer(session, txn):
+        return cid, src
+    other = session.scalar(select(Category.id).where(Category.name == OTHER_INCOME))
+    return (other, src) if other else (cid, src)
+
+
+def _match(
     session: Session,
     txn: Transaction,
     providers: list[str] | None = None,
@@ -103,6 +170,19 @@ def _recategorize(session: Session, cond) -> int:
 def categorize_pending(session: Session) -> int:
     """Categorize uncategorized transactions; returns how many got a category."""
     return _recategorize(session, Transaction.category_id.is_(None))
+
+
+def reclassify_incoming_transfers(session: Session) -> int:
+    """Re-run the pipeline on incoming bank rows that a non-user rule filed as transfers, so
+    payments from other people become income (see categorize_transaction)."""
+    transfer = select(Category.id).where(Category.group == "transfer")
+    return _recategorize(
+        session,
+        (Account.kind == "bank")
+        & (Transaction.amount > 0)
+        & Transaction.category_id.in_(transfer)
+        & Transaction.category_source.in_(("default", "map", "provider")),
+    )
 
 
 def recategorize_auto(session: Session) -> int:
