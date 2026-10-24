@@ -26,7 +26,7 @@ from freerise.cashflow.fees import FEES
 from freerise.cashflow.parts import txn_parts
 from freerise.cashflow.plan import CENT, HISTORY, clamp, cycle_plan, split_by_days, week_spans
 from freerise.cashflow.savings import monthly_total, plan_statuses
-from freerise.cashflow.summary import GROUPS, UNCATEGORIZED, bucket
+from freerise.cashflow.summary import GROUPS, UNCATEGORIZED, bucket, recurring_expense_keys
 from freerise.forecast.next_cycle import ExpectedLine, expected_in_cycle
 from freerise.models import (
     Account,
@@ -382,12 +382,14 @@ def _history(
     var: list[dict[int, Decimal]] = [defaultdict(Decimal) for _ in cycles]
     has = [False] * len(cycles)
     p = txn_parts()
+    rec = recurring_expense_keys(session)
     rows = session.execute(
         select(
             Transaction.effective_date,
             p.c.category_id,
             Category.group,
             Transaction.installment_total,
+            Transaction.merchant_key,
             func.sum(p.c.amount),
         )
         .join(p, p.c.txn_id == Transaction.id)
@@ -404,12 +406,13 @@ def _history(
             p.c.category_id,
             Category.group,
             Transaction.installment_total,
+            Transaction.merchant_key,
         )
     )
-    for d, cid, group, inst, total in rows:
+    for d, cid, group, inst, key, total in rows:
         i = idx[cycle_for(d, start_day).start]
         has[i] = True
-        if group == "variable" and bucket(group, total, inst) == "variable":
+        if group == "variable" and bucket(group, total, inst, key in rec) == "variable":
             var[i][cid] -= total
     return var, has
 
@@ -492,6 +495,8 @@ def build_home(session: Session, cycle: Cycle, today: date) -> Home:
     }
     parts = txn_parts()
 
+    rec = recurring_expense_keys(session)
+
     def rows(*where) -> list[tuple[str, Txn]]:
         out = []
         for t, cid, amount in session.execute(
@@ -502,7 +507,9 @@ def build_home(session: Session, cycle: Cycle, today: date) -> Home:
             .order_by(Transaction.date.desc(), Transaction.id.desc(), parts.c.category_id)
         ):
             cat = cats.get(cid)
-            group = bucket(cat.group if cat else None, amount, t.installment_total)
+            group = bucket(
+                cat.group if cat else None, amount, t.installment_total, t.merchant_key in rec
+            )
             if group is None:  # transfer / card_bill / ignore
                 continue
             out.append(
