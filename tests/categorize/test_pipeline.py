@@ -146,7 +146,7 @@ def test_fee_rules_do_not_hijack_bank_card_bills(session, cat):
     assert t.category_id == cat("עמלות").id
 
 
-def _incoming(session, description, owner="שי כהן", amount="3700"):
+def _incoming(session, description, owner="ישראל ישראלי", amount="2500"):
     from datetime import date
     from decimal import Decimal
 
@@ -176,15 +176,15 @@ def _incoming(session, description, owner="שי כהן", amount="3700"):
 
 
 def test_incoming_transfer_from_someone_else_is_income(session, cat):
-    t = _incoming(session, "העברה מהפועלים/אזולאי יעקב עומ")
+    t = _incoming(session, "העברה מהפועלים/לוי דוד")
     categorize_pending(session)
     assert t.category_id == cat("הכנסות אחרות").id
 
 
 def test_incoming_transfer_from_ourselves_stays_a_transfer(session, cat):
-    own = _incoming(session, "העברה מב הפועלים ביט/שי כהן")
+    own = _incoming(session, "העברה מב הפועלים ביט/ישראל ישראלי")
     mine = _incoming(session, "העברה ממפייבוקס שלי", amount="318.30")
-    to_us = _incoming(session, "העברה מ- ישראל מאיר ל- שי כהן ואורטל", amount="31000")
+    to_us = _incoming(session, "העברה מ- דני כהן ל- ישראל ישראלי", amount="12000")
     categorize_pending(session)
     assert own.category_id == mine.category_id == cat("העברות").id
     assert to_us.category_id == cat("הכנסות אחרות").id  # our name only as the recipient
@@ -198,7 +198,7 @@ def test_incoming_transfer_with_outgoing_twin_stays_a_transfer(session, cat):
 
 
 def test_outgoing_transfer_and_user_rule_untouched(session, cat):
-    out = _incoming(session, "העברה לבעל הדירה", amount="-3700")
+    out = _incoming(session, "העברה לבעל הדירה", amount="-2500")
     mine = _incoming(session, "העברה ממישהו", amount="100")
     rule(session, mine.merchant_key, cat("העברות").id, "user")
     categorize_pending(session)
@@ -208,7 +208,7 @@ def test_outgoing_transfer_and_user_rule_untouched(session, cat):
 def test_reclassify_existing_seed_transfer(session, cat):
     from freerise.categorize.pipeline import reclassify_incoming_transfers
 
-    t = _incoming(session, "העברה מהפועלים/שרותי בורסה והש", amount="7231.40")
+    t = _incoming(session, "העברה מבנק/שירותי השקעות", amount="5000")
     t.category_id, t.category_source = cat("העברות").id, "map"
     session.flush()
     assert reclassify_incoming_transfers(session) == 1

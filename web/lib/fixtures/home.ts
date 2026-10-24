@@ -11,7 +11,7 @@ const txn = (id: number, amount: number, description: string, extra: Partial<Txn
   category_name: "כלכלה",
   group: "variable",
   account_id: 1,
-  account_label: "כרטיס ••7282",
+  account_label: "כרטיס ••1234",
   note: null,
   installment_number: null,
   installment_total: null,
@@ -79,6 +79,6 @@ export const homeFixture: HomeData = {
     name: "עמלות",
     spent: 17.9,
     expected: 17.9,
-    items: [{ label: "דמי כרטיס", account_label: "מקס ••7282", expected_date: null, expected_amount: 17.9, actual_amount: 17.9, status: "charged", transactions: [txn(9, -17.9, "דמי כרטיס", { group: "fixed" })], recurring_id: null }],
+    items: [{ label: "דמי כרטיס", account_label: "מקס ••1234", expected_date: null, expected_amount: 17.9, actual_amount: 17.9, status: "charged", transactions: [txn(9, -17.9, "דמי כרטיס", { group: "fixed" })], recurring_id: null }],
   },
 };

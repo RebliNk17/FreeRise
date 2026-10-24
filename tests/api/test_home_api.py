@@ -15,7 +15,7 @@ _seq = itertools.count()
 
 def _acct(s):
     cred = Credential(provider="max", label="מקס", owner="o", secret_enc=b"s")
-    a = Account(credential=cred, provider_account_id="x7282", kind="card", display_name="מקס 7282")
+    a = Account(credential=cred, provider_account_id="x1234", kind="card", display_name="מקס 1234")
     s.add(a)
     s.flush()
     return a

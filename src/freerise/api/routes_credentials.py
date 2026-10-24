@@ -51,7 +51,7 @@ class Provider(BaseModel):
 
 
 class AccountBrief(BaseModel):
-    label: str  # account_label(): "מקס ••4720"
+    label: str  # account_label(): "מקס ••1234"
     holder: str
     kind: str
     active: bool  # cards: used in the last 6 months or carrying a balance

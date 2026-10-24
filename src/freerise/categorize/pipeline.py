@@ -37,7 +37,7 @@ def _own_names(session: Session) -> set[str]:
 
 def _own_transfer(session: Session, txn: Transaction) -> bool:
     """Incoming money that is really ours moving: the sender part of the description names an
-    account holder ("ביט/שי כהן") or says it's ours ("מפייבוקס שלי"), or another of our bank accounts sent the same amount then."""
+    account holder ("ביט/ישראל ישראלי") or says it's ours ("מפייבוקס שלי"), or another of our bank accounts sent the same amount then."""
     sender = (txn.description or "").split(" ל-")[0]  # "העברה מ- X ל- <us>": only X is the sender
     if "שלי" in sender.split() or any(n in sender for n in _own_names(session)):
         return True

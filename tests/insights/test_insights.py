@@ -448,7 +448,7 @@ def test_card_mismatch(session, monkeypatch):
         Decimal(1340),
         "isracard",
         "mismatch",
-        [{"id": 1, "name": "ישראכרט 7134", "excluded": False}],
+        [{"id": 1, "name": "ישראכרט 1234", "excluded": False}],
         Decimal(1000),
         Decimal(340),
     )
@@ -456,6 +456,6 @@ def test_card_mismatch(session, monkeypatch):
     monkeypatch.setattr(engine, "cards_synced_after", lambda *a: True)
     i = _kinds(session)["card_mismatch"]
     assert i.key == "card_mismatch:7" and i.link == "/accounts#health"
-    assert "חיוב ישראכרט 7134 מהבנק" in i.body and "גבוה ב־₪340" in i.body
+    assert "חיוב ישראכרט 1234 מהבנק" in i.body and "גבוה ב־₪340" in i.body
     monkeypatch.setattr(engine, "cards_synced_after", lambda *a: False)  # card not synced yet
     assert "card_mismatch" not in _kinds(session)

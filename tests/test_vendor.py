@@ -44,11 +44,11 @@ def test_max_reports_cards_without_transactions():
     from scraper.providers.credit_cards.max import _idle_card_accounts
 
     cards = {
-        "4720": {"Last4Digits": "4720", "CreditLimit": 10000, "OpenToBuy": 5576},
-        "5894": {"Last4Digits": "5894", "CreditLimit": 12000, "OpenToBuy": 12000},
+        "1234": {"Last4Digits": "1234", "CreditLimit": 10000, "OpenToBuy": 5576},
+        "5678": {"Last4Digits": "5678", "CreditLimit": 12000, "OpenToBuy": 12000},
     }
-    idle = _idle_card_accounts(cards, {"4720": ["txn"]})
-    assert [a.account_number for a in idle] == ["5894"]
+    idle = _idle_card_accounts(cards, {"1234": ["txn"]})
+    assert [a.account_number for a in idle] == ["5678"]
     assert idle[0].transactions == [] and idle[0].card_frame == 12000
 
 
