@@ -21,6 +21,10 @@ export function formatDate(iso: string): string {
 const HEB_MONTHS = ["ינואר", "פברואר", "מרץ", "אפריל", "מאי", "יוני", "יולי", "אוגוסט", "ספטמבר", "אוקטובר", "נובמבר", "דצמבר"];
 
 /** 1-based month → Hebrew name. */
+/** "07:03" in Israel time. */
+export const formatTime = (iso: string) =>
+  new Date(iso).toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jerusalem" });
+
 export const monthName = (m: number) => HEB_MONTHS[m - 1] ?? String(m);
 
 const dm = (iso: string) => {
