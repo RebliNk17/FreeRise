@@ -53,7 +53,7 @@ def ids(sf):
 _seq = itertools.count()
 
 
-def _txn(sf, account_id, d, amount, desc, key=None, cat=None, src=None):
+def _txn(sf, account_id, d, amount, desc, key=None, cat=None, src=None, **kw):
     with sf() as s:
         t = Transaction(
             account_id=account_id,
@@ -67,6 +67,7 @@ def _txn(sf, account_id, d, amount, desc, key=None, cat=None, src=None):
             category_source=src,
             status="completed",
             raw={},
+            **kw,
         )
         s.add(t)
         s.commit()
@@ -123,6 +124,33 @@ def test_set_category_endpoint_remembers(authed, ids, sf):
     assert authed.delete(f"/api/rules/{rule['id']}").status_code == 404
 
 
+def test_uncategorized_patterns(authed, ids, sf):
+    """The categorize sheet shows a merchant's pattern: monthly charge, or installments."""
+    card = ids["card"]
+    for m, amt in ((9, -89), (10, -89), (11, -92)):  # 3 months, within ±10%
+        _txn(sf, card, date(2025, m, 5), amt, "Netflix", key="netflix")
+    for m, amt in ((9, -30), (10, -90), (11, -35)):  # 3 months, amounts all over
+        _txn(sf, card, date(2025, m, 7), amt, "Cafe", key="cafe")
+    for n in (3, 4):
+        _txn(
+            sf,
+            card,
+            date(2025, 6 + n, 9),
+            -233,
+            "Sofa",
+            key="sofa",
+            installment_number=n,
+            installment_total=6,
+        )
+    unc = {u["merchant_key"]: u for u in authed.get("/api/categories/uncategorized").json()}
+    assert unc["netflix"]["monthly"] == {"amount": 89.0, "months": 3, "since": "2025-09-05"}
+    assert unc["netflix"]["installment"] is None
+    assert unc["cafe"]["monthly"] is None
+    assert (unc["cafe"]["first_date"], unc["cafe"]["sample_date"]) == ("2025-09-07", "2025-11-07")
+    assert unc["sofa"]["installment"] == {"number": 4, "total": 6, "amount": 233.0}
+    assert unc["sofa"]["monthly"] is None  # installments are their own pattern
+
+
 def test_uncategorized_and_merchant_bulk(authed, ids, sf):
     cid = ids["cats"]["אוכל בחוץ"]
     other = ids["cats"]["כלכלה"]
@@ -142,6 +170,9 @@ def test_uncategorized_and_merchant_bulk(authed, ids, sf):
         "kind": "card",
         "sample_date": "2026-09-02",
         "account_label": unc[0]["account_label"],
+        "first_date": "2026-09-01",
+        "installment": None,
+        "monthly": None,  # one month only
     }
     assert unc[0]["account_label"]
     assert (

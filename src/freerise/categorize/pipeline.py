@@ -1,9 +1,15 @@
+from collections import defaultdict
+from datetime import date
+from decimal import Decimal
+from statistics import median
+
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
 from freerise.accounts import account_labels
 from freerise.categorize.default_rules import provider_category
 from freerise.categorize.normalize import best_match
+from freerise.forecast.recurring import AUTO_AMOUNT, AUTO_N
 from freerise.models import Account, Category, MerchantRule, RecurringItem, Transaction
 
 # rule source -> Transaction.category_source
@@ -167,9 +173,36 @@ def _follow_recurring(session: Session, merchant_key: str, category_id: int) -> 
         item.status = "confirmed"
 
 
+def monthly_pattern(txns: list[tuple[date, Decimal]]) -> dict | None:
+    """A charge in >= AUTO_N different months, each month's total within ±AUTO_AMOUNT of their
+    median (the recurring detector's auto-confirm thresholds): likely a fixed expense."""
+    by_month: dict[tuple[int, int], Decimal] = defaultdict(Decimal)
+    for d, amount in txns:
+        by_month[(d.year, d.month)] += abs(amount)
+    if len(by_month) < AUTO_N:
+        return None
+    med = median(by_month.values())
+    if not all(abs(a - med) <= med * AUTO_AMOUNT for a in by_month.values()):
+        return None
+    return {"amount": float(med), "months": len(by_month), "since": min(d for d, _ in txns)}
+
+
 def uncategorized_merchants(session: Session) -> list[dict]:
     """Uncategorized transactions grouped by merchant, most frequent first; with the latest
-    one's date and account as a sample."""
+    one's date and account as a sample, the date range, and the pattern: a monthly charge
+    (monthly_pattern) or the latest installment payment (n/N)."""
+    detail: dict[str, list[Transaction]] = defaultdict(list)
+    for t in session.scalars(
+        select(Transaction)
+        .join(Account, Account.id == Transaction.account_id)
+        .where(
+            Transaction.category_id.is_(None),
+            Transaction.merchant_key != "",
+            Account.excluded.is_(False),
+        )
+        .order_by(Transaction.date, Transaction.id)
+    ):
+        detail[t.merchant_key].append(t)
     rows = session.execute(
         select(
             Transaction.merchant_key,
@@ -190,18 +223,31 @@ def uncategorized_merchants(session: Session) -> list[dict]:
         .order_by(func.count().desc(), Transaction.merchant_key)
     ).all()
     labels = account_labels(session) if rows else {}
-    return [
-        {
-            "merchant_key": key,
-            "sample_description": desc,
-            "count": n,
-            "total": float(total),
-            "kind": "card" if kind == "card" else "bank",
-            "sample_date": last,
-            "account_label": labels.get(acct, ""),
-        }
-        for key, desc, n, total, kind, last, acct in rows
-    ]
+    out = []
+    for key, desc, n, total, kind, last, acct in rows:
+        ts = detail[key]
+        inst = [t for t in ts if (t.installment_total or 0) > 1]
+        latest = inst[-1] if inst else None
+        out.append(
+            {
+                "merchant_key": key,
+                "sample_description": desc,
+                "count": n,
+                "total": float(total),
+                "kind": "card" if kind == "card" else "bank",
+                "sample_date": last,
+                "account_label": labels.get(acct, ""),
+                "first_date": ts[0].date,
+                "installment": latest
+                and {
+                    "number": latest.installment_number,
+                    "total": latest.installment_total,
+                    "amount": float(abs(latest.amount)),
+                },
+                "monthly": None if inst else monthly_pattern([(t.date, t.amount) for t in ts]),
+            }
+        )
+    return out
 
 
 def category_usage(session: Session) -> list[int]:

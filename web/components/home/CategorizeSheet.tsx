@@ -2,14 +2,13 @@
 
 import { createElement, useEffect, useState } from "react";
 import { Check, ChevronLeft, SkipForward, Tags } from "lucide-react";
-import { Money } from "@/components/Amount";
 import { categoryIcon } from "@/components/CategoryIcon";
 import { CategorySelect, loadCategories } from "@/components/CategorySelect";
 import { Sheet, SheetTitle } from "@/components/Sheet";
 import { Switch } from "@/components/Switch";
 import { api, send, type Category, type Uncategorized } from "@/lib/api";
-import { merchantProgress, pendingCount, pendingLabel, quickGroups, quickPicks, txnsLeft } from "@/lib/categorize";
-import { categoryLabel, formatDate, txnCount } from "@/lib/format";
+import { merchantPicks, merchantProgress, merchantSummary, pendingCount, pendingLabel, txnsLeft } from "@/lib/categorize";
+import { categoryLabel, formatDate } from "@/lib/format";
 
 /** Home chip "N עסקאות לסיווג · M בתי עסק": tap opens the sheet. */
 export function CategorizeChip({ list, onOpen }: { list: Uncategorized[]; onOpen: () => void }) {
@@ -66,7 +65,8 @@ export function CategorizeSheet({ list, onClose }: { list: Uncategorized[]; onCl
     }
   }
 
-  const picks = u ? quickPicks(cats, usage, quickGroups(u.total)) : [];
+  const pattern = u ? merchantSummary(u) : { text: "", fixed: false };
+  const picks = u ? merchantPicks(cats, usage, u.total, pattern.fixed) : [];
   return (
     <Sheet
       labelledBy="categorize-title"
@@ -89,10 +89,13 @@ export function CategorizeSheet({ list, onClose }: { list: Uncategorized[]; onCl
             <span className="font-semibold text-text">{merchantProgress(i, queue.length)}</span> · {txnsLeft(left)}
           </p>
           <div className="card flex flex-col gap-1 p-4">
-            <h3 className="truncate font-display text-xl font-bold">{u.sample_description}</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="min-w-0 flex-1 truncate font-display text-xl font-bold">{u.sample_description}</h3>
+              {pattern.fixed && <span className="chip bg-sun-soft text-sun-strong">קבוע</span>}
+            </div>
             <p className="text-sm text-muted">
-              {txnCount(u.count)} · <Money value={Math.abs(u.total)} className="font-bold text-text" />
-              {u.total > 0 && " זיכוי"}
+              {pattern.text}
+              {u.total > 0 && " · זיכוי"}
             </p>
             <p className="text-xs text-muted">
               לאחרונה <span dir="ltr">{formatDate(u.sample_date)}</span>
