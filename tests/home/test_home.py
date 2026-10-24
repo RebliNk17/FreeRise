@@ -8,7 +8,7 @@ from sqlalchemy import select
 
 from freerise.accounts import account_label
 from freerise.cashflow.cycles import cycle_by_label
-from freerise.home.builder import build_home
+from freerise.home.builder import DEFAULT_TRACKED, build_home
 from freerise.models import (
     Account,
     Category,
@@ -252,7 +252,9 @@ def test_tracked_defaults_and_median(session):
         _tx(session, a, d, amt, "כלכלה")
     _tx(session, a, date(2026, 9, 13), -70, "אוכל בחוץ")  # only one cycle -> not tracked
     h = _home(session)
-    (t,) = h["tracked"]
+    tracked = {t["name"]: t for t in h["tracked"]}
+    assert set(DEFAULT_TRACKED) <= tracked.keys()  # the starter set, history or not
+    t = tracked["כלכלה"]
     assert (t["name"], t["mode"], t["expected"], t["expected_overridden"]) == (
         "כלכלה",
         "weekly",
@@ -262,19 +264,21 @@ def test_tracked_defaults_and_median(session):
     assert [p["spent"] for p in t["history"]] == [0, 0, 0, 0, 600, 400]
     assert t["history"][-1] == {"label_year": 2026, "label_month": 9, "spent": 400}
     names = {c["name"] for c in h["untracked_available"]}
-    assert "אוכל בחוץ" in names and "כלכלה" not in names
-    assert session.scalar(select(TrackedCategory.mode)) == "weekly"
+    assert not names & set(DEFAULT_TRACKED)
+    food = session.scalar(select(Category.id).where(Category.name == "כלכלה"))
+    mode = select(TrackedCategory.mode).where(TrackedCategory.category_id == food)
+    assert session.scalar(mode) == "weekly"
 
 
 def test_tracked_default_skips_zero_median(session):
     a = _acct(session)
     for m in (5, 6, 7, 8, 9):  # 5 cycles with data
         _tx(session, a, date(2026, m, 12), -100, "כלכלה")
-    for m in (8, 9):  # spent in 2 of 5 -> median 0 -> not seeded
-        _tx(session, a, date(2026, m, 13), -70, "אוכל בחוץ")
+    for m in (8, 9):  # spent in 2 of 5 -> median 0 -> not seeded (not a default)
+        _tx(session, a, date(2026, m, 13), -70, "קניות")
     h = _home(session)
-    assert [t["name"] for t in h["tracked"]] == ["כלכלה"]
-    assert "אוכל בחוץ" in {c["name"] for c in h["untracked_available"]}
+    assert [t["name"] for t in h["tracked"]] == list(DEFAULT_TRACKED)
+    assert "קניות" in {c["name"] for c in h["untracked_available"]}
 
 
 def test_fixed_items_status_and_accounts(session):
