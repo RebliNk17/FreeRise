@@ -22,6 +22,7 @@ from freerise.cashflow.cycles import (
     next_cycle,
     prev_cycle,
 )
+from freerise.cashflow.fees import FEES
 from freerise.cashflow.parts import txn_parts
 from freerise.cashflow.plan import CENT, HISTORY, clamp, cycle_plan, split_by_days, week_spans
 from freerise.cashflow.savings import monthly_total, plan_statuses
@@ -242,6 +243,7 @@ class Home:
     income: Income
     multi_holder: bool = False  # accounts belong to more than one person
     moved_next: MovedNext | None = None  # current cycle only
+    fees: FixedGroup | None = None  # the עמלות category, its own card; not part of fixed
 
 
 def _ym(c: Cycle) -> YM:
@@ -672,9 +674,12 @@ def build_home(session: Session, cycle: Cycle, today: date) -> Home:
 
     # Fixed
     fgroups = _groups(ec.fixed_items, buckets["fixed"], cats, today, current, -1)
+    fees = next((g for g in fgroups if g.name == FEES), None)
+    fgroups = [g for g in fgroups if g is not fees]
     fixed = Fixed(
         sum((g.spent for g in fgroups), ZERO), sum((g.expected for g in fgroups), ZERO), fgroups
     )
+    fee_spent, fee_expected = (fees.spent, fees.expected) if fees else (ZERO, ZERO)
 
     # Income: recurring (non-dismissed) streams are fixed, the rest variable — as cycle_summary
     inc = buckets["income"]
@@ -699,10 +704,14 @@ def build_home(session: Session, cycle: Cycle, today: date) -> Home:
         Savings(sav_spent, sav_expected, sav_txns),
         fixed,
         Total(
-            fixed.spent + var_spent + sav_spent,
-            fixed.expected + (plan.variable_allowance if plan else var_spent) + sav_expected,
+            fixed.spent + fee_spent + var_spent + sav_spent,
+            fixed.expected
+            + fee_expected
+            + (plan.variable_allowance if plan else var_spent)
+            + sav_expected,
         ),
         income,
         len(set(holders.values())) > 1,
         MovedNext(moved),
+        fees,
     )

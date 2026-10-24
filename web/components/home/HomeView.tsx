@@ -15,6 +15,7 @@ import { AddTrackedCategory } from "./AddTrackedCategory";
 import { CategorizeChip, CategorizeSheet } from "./CategorizeSheet";
 import { HomeContext, type HomeCtx } from "./context";
 import { Expander } from "./Expander";
+import { FeesCard } from "./FeesCard";
 import { FixedCard } from "./FixedCard";
 import { IncomeCard } from "./IncomeCard";
 import { InsightCarousel } from "./InsightCarousel";
@@ -135,6 +136,7 @@ export function HomeView({ path, title }: { path: string; title: string }) {
             <VariableCard v={data.variable} />
             <SavingsCard s={data.savings} />
             <FixedCard f={data.fixed} />
+            <FeesCard f={data.fees} />
             <TotalCard d={data} />
             <IncomeCard inc={data.income} />
             {cycle.is_current && (

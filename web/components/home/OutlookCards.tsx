@@ -13,7 +13,7 @@ import { Expander } from "./Expander";
 // ponytail: current-state data comes from the existing /plan/current and /forecast/next
 // endpoints (current cycle only), so /api/home stays per-cycle.
 
-/** "מצב העו״ש והאשראי": bank balance per account, total, upcoming card charges, fees. */
+/** "מצב העו״ש והאשראי": bank balance per account, total, upcoming card charges (fees have their own card). */
 export function BalancesCard() {
   const { data } = useApi<Plan>(withHidden("/plan/current", useHiddenAccounts()), useHome().version);
   if (!data) return null;
@@ -43,12 +43,6 @@ export function BalancesCard() {
           <span className="flex-1">חיובי אשראי קרובים</span>
           <Money value={b.upcoming_card_charges} className="font-semibold" />
         </li>
-        {data.fees.total > 0 && (
-          <li className="flex items-baseline text-muted">
-            <span className="flex-1">עמלות החודש</span>
-            <Money value={data.fees.total} />
-          </li>
-        )}
       </ul>
     </Card>
   );

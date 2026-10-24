@@ -74,4 +74,11 @@ export const homeFixture: HomeData = {
   income: { received: 0, expected: 14000, fixed_groups: [], variable: { received: 0, transactions: [] } },
   multi_holder: false,
   moved_next: { transactions: [] },
+  fees: {
+    category_id: 9,
+    name: "עמלות",
+    spent: 17.9,
+    expected: 17.9,
+    items: [{ label: "דמי כרטיס", account_label: "מקס ••7282", expected_date: null, expected_amount: 17.9, actual_amount: 17.9, status: "charged", transactions: [txn(9, -17.9, "דמי כרטיס", { group: "fixed" })], recurring_id: null }],
+  },
 };
