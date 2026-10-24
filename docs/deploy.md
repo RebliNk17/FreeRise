@@ -42,10 +42,10 @@ For the api, also set `PORT=8000` so the private URL above is stable.
 The user is created once, inside the running API container:
 
 ```bash
-railway ssh --service api freerise create-user shai
+railway ssh --service api freerise create-user <your-username>
 ```
 
-(`railway run freerise create-user shai` also works, but it runs on your machine with the service's
+(`railway run freerise create-user <your-username>` also works, but it runs on your machine with the service's
 variables, so `DATABASE_URL` must point at the Postgres **public** proxy URL for that one command.)
 Scan the printed `otpauth://` URI into an authenticator app; it is shown only once.
 
@@ -86,5 +86,5 @@ month.
 
 ## Demo data
 
-Never on production. `demo-seed` refuses unless `FREERISE_ALLOW_DEMO=1` and refuses on any database
-that already holds a real credential.
+Never on production. `demo-seed` refuses unless `FREERISE_ALLOW_DEMO=1`, and refuses on any database
+that already has a real user or credential.

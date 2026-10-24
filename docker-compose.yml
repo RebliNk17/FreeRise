@@ -5,7 +5,7 @@ services:
     environment:
       POSTGRES_DB: freerise
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432" # this machine only (for local development)
     volumes:
       - pgdata:/var/lib/postgresql
 
@@ -17,7 +17,7 @@ services:
     depends_on: [postgres]
     restart: unless-stopped # retries until postgres accepts connections
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000" # this machine only; the web app reaches it internally
 
   worker:
     build: { context: ., dockerfile: Dockerfile.worker }
@@ -36,7 +36,7 @@ services:
       API_URL: http://api:8000
     depends_on: [api]
     ports:
-      - "3000:3000"
+      - "${FREERISE_PORT:-3000}:3000" # the address you open: http://localhost:3000
 
 volumes:
   pgdata:

@@ -38,7 +38,7 @@ services:
     image: ghcr.io/reblink17/freerise-web:${FREERISE_VERSION:-latest}
     depends_on: [api]
     ports:
-      - "3000:3000"
+      - "${FREERISE_PORT:-3000}:3000" # the address you open: http://localhost:3000
     restart: unless-stopped
 
 volumes:
