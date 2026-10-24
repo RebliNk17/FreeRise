@@ -385,8 +385,8 @@ def test_no_fees_no_section(session):
 
 def test_confirmed_recurring_expense_in_variable_category_is_fixed(session):
     a = _acct(session)
-    _rec(session, "כלמוביל", "רכב", 2264.5, date(2026, 11, 1), account=a)
-    t = _tx(session, a, date(2026, 10, 11), -2264.5, "רכב", "כלמוביל")
+    _rec(session, "ליסינג רכב", "רכב", 1500, date(2026, 11, 1), account=a)
+    t = _tx(session, a, date(2026, 10, 11), -1500, "רכב", "ליסינג רכב")
     other = _tx(session, a, date(2026, 10, 12), -80, "רכב", "דלק")  # not recurring: stays variable
     h = _home(session)
     fixed_ids = {
@@ -400,8 +400,8 @@ def test_confirmed_recurring_expense_in_variable_category_is_fixed(session):
 
 def test_pending_recurring_expense_stays_variable(session):
     a = _acct(session)
-    _rec(session, "כלמוביל", "רכב", 2264.5, date(2026, 11, 1), account=a).status = "pending"
-    t = _tx(session, a, date(2026, 10, 11), -2264.5, "רכב", "כלמוביל")
+    _rec(session, "ליסינג רכב", "רכב", 1500, date(2026, 11, 1), account=a).status = "pending"
+    t = _tx(session, a, date(2026, 10, 11), -1500, "רכב", "ליסינג רכב")
     h = _home(session)
     assert t.id not in {
         x["id"] for g in h["fixed"]["groups"] for i in g["items"] for x in i["transactions"]

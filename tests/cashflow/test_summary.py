@@ -133,19 +133,19 @@ def test_confirmed_recurring_expense_counts_as_fixed(session):
     a = acct(session)
     session.add(
         RecurringItem(
-            merchant_key="כלמוביל",
+            merchant_key="ליסינג רכב",
             direction="expense",
-            label="כלמוביל",
+            label="ליסינג רכב",
             cadence="monthly",
             amount_kind="fixed",
-            expected_amount=Decimal("2264.5"),
+            expected_amount=Decimal("1500"),
             last_date=date(2026, 9, 1),
             next_expected_date=date(2026, 11, 1),
             status="confirmed",
             basis="b",
         )
     )
-    tx(session, a, -2264.5, "רכב", key="כלמוביל")
+    tx(session, a, -1500, "רכב", key="ליסינג רכב")
     tx(session, a, -80, "רכב", key="דלק")
     by = {g.group: g.total for g in cycle_summary(session, C).groups}
-    assert (by["fixed"], by["variable"]) == (Decimal("2264.5"), Decimal(80))
+    assert (by["fixed"], by["variable"]) == (Decimal("1500"), Decimal(80))
