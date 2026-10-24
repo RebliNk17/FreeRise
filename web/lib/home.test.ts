@@ -89,6 +89,16 @@ test("totalSegments: shares of the bigger of spent/expected", () => {
   expect([over[1].spent, over[1].expected, over[1].percent]).toEqual([1500, 500, 75]);
 });
 
+test("totalSegments: fees are their own segment, not variable", () => {
+  const d = { fixed: { spent: 300, expected: 300, groups: [] }, savings: { spent: 0, expected: 0, transactions: [] }, total: { spent: 1000, expected: 1000 }, fees: { category_id: 1, name: "עמלות", spent: 100, expected: 100, items: [] } };
+  expect(totalSegments(d).map((x) => [x.key, x.spent])).toEqual([
+    ["fixed", 300],
+    ["variable", 600],
+    ["savings", 0],
+    ["fees", 100],
+  ]);
+});
+
 test("installmentLabel: n/N for installments only", () => {
   expect(installmentLabel({ installment_number: 3, installment_total: 6 })).toBe("תשלום 3/6");
   expect(installmentLabel({ installment_number: 1, installment_total: 1 })).toBeNull();

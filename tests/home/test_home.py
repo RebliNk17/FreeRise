@@ -93,7 +93,7 @@ def _all_txn_ids(h):
     ids |= {t["id"] for c in h["tracked"] for t in c["transactions"]}
     ids |= {t["id"] for t in h["savings"]["transactions"]}
     ids |= {t["id"] for t in h["income"]["variable"]["transactions"]}
-    for g in h["fixed"]["groups"] + h["income"]["fixed_groups"]:
+    for g in h["fixed"]["groups"] + h["income"]["fixed_groups"] + [h["fees"] or {"items": []}]:
         ids |= {t["id"] for i in g["items"] for t in i["transactions"]}
     return ids
 
@@ -114,6 +114,7 @@ def test_structure_matches_contract(session):
         "income",
         "multi_holder",
         "moved_next",
+        "fees",
     }
     assert h["cycle"] == {
         "start": "2026-10-10",
@@ -364,3 +365,19 @@ def test_past_cycle(session):
     assert t["expected"] == t["spent"] == 400 and t["left"] == 0
     assert h["fixed"]["expected"] == h["fixed"]["spent"] == 3000
     assert h["total"]["expected"] == h["total"]["spent"]
+
+
+def test_fees_get_their_own_section(session):
+    a = _acct(session)
+    _tx(session, a, date(2026, 10, 12), -17.9, "עמלות", "דמי כרטיס")
+    _tx(session, a, date(2026, 10, 12), -60, "תקשורת", "סלקום")
+    h = jsonable_encoder(build_home(session, OCT, TODAY))
+    assert h["fees"]["spent"] == 17.9
+    assert [i["label"] for i in h["fees"]["items"]] == ["דמי כרטיס"]
+    assert "עמלות" not in {g["name"] for g in h["fixed"]["groups"]}
+    assert h["total"]["spent"] == h["fixed"]["spent"] + 17.9 + h["variable"]["spent"]
+
+
+def test_no_fees_no_section(session):
+    _tx(session, _acct(session), date(2026, 10, 12), -60, "תקשורת", "סלקום")
+    assert build_home(session, OCT, TODAY).fees is None
