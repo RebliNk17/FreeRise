@@ -209,6 +209,35 @@ function FloatCoin() {
   );
 }
 
+/** Finished cycle: income bar (green) above the expenses bar and a check, or expenses (red) over income and a "!". */
+function Goal({ met }: { met: boolean }) {
+  const [inc, exp] = met ? [70, 44] : [40, 70];
+  return (
+    <>
+      <path d="M44 100h116" stroke={INK} strokeOpacity=".3" strokeWidth="2" strokeLinecap="round" />
+      <rect className="o-b a-grow" x="70" y={100 - inc} width="24" height={inc} rx="4" fill={met ? "var(--positive)" : INK} fillOpacity={met ? 1 : 0.28} />
+      <rect className={`o-b ${met ? "a-grow" : "a-spike"}`} style={d(150)} x="110" y={100 - exp} width="24" height={exp} rx="4" fill={met ? INK : HOT} fillOpacity={met ? 0.28 : 1} />
+      <g className="a-pop" style={d(800)}>
+        <circle cx={met ? 82 : 122} cy={100 - Math.max(inc, exp) - 14} r="12" fill={met ? "var(--positive)" : HOT} stroke={PAPER} strokeWidth="2.5" />
+        {met ? (
+          <path d={`m76 ${86 - inc} 4 4 7-7.5`} stroke={PAPER} strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        ) : (
+          <path d={`M122 ${80 - exp}v7m0 4.5v.5`} stroke={PAPER} strokeWidth="3" fill="none" strokeLinecap="round" />
+        )}
+      </g>
+      {met && <path className="a-twinkle" d="M150 30q1.5 6 7 7.5-5.5 1.5-7 7.5-1.5-6-7-7.5 5.5-1.5 7-7.5z" fill={SUN} />}
+    </>
+  );
+}
+
+export function GoalIllustration({ met }: { met: boolean }) {
+  return (
+    <svg viewBox="36 0 132 108" className="ill ill-play size-full" aria-hidden="true" focusable="false">
+      <Goal met={met} />
+    </svg>
+  );
+}
+
 const ART: Record<IllustrationName, () => React.ReactNode> = {
   spike: Spike,
   shrink: Shrink,

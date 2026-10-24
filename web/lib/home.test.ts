@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { homeFixture } from "./fixtures/home";
-import { accountWithHolder, daysLabel, findTxn, fixedStatusLabel, installmentLabel, isIdle, leftLabel, mapTxns, splitMoney, weekDays, weekOver, shiftChip, weekStatus, wrapIndex, totalSegments } from "./home";
+import { accountWithHolder, daysLabel, findTxn, fixedStatusLabel, installmentLabel, isIdle, leftLabel, mapTxns, splitMoney, weekDays, weekOver, shiftChip, weekStatus, wrapIndex, totalSegments, cycleGoal } from "./home";
 
 test("splitMoney splits integer and decimal parts", () => {
   expect(splitMoney(1819.2)).toEqual({ sign: "", int: "1,819", dec: ".2" });
@@ -103,4 +103,13 @@ test("installmentLabel: n/N for installments only", () => {
   expect(installmentLabel({ installment_number: 3, installment_total: 6 })).toBe("תשלום 3/6");
   expect(installmentLabel({ installment_number: 1, installment_total: 1 })).toBeNull();
   expect(installmentLabel({})).toBeNull();
+});
+
+test("cycleGoal: income − expenses (without savings deposits) must be above 0", () => {
+  const d = (received: number, spent: number, saved = 0) => ({ income: { ...homeFixture.income, received }, savings: { ...homeFixture.savings, spent: saved }, total: { spent, expected: spent } });
+  expect(cycleGoal(d(10_000, 8_000))).toEqual({ met: true, income: 10_000, expenses: 8_000, savings: 0, net: 2_000 });
+  expect(cycleGoal(d(10_000, 12_000)).met).toBe(false);
+  expect(cycleGoal(d(10_000, 10_000)).met).toBe(false); // breaking even isn't meeting it
+  expect(cycleGoal(d(10_000, 11_000, 2_000))).toMatchObject({ met: true, expenses: 9_000, savings: 2_000, net: 1_000 });
+  expect(cycleGoal(d(0.1 + 0.2, 0.3)).met).toBe(false); // float noise
 });
