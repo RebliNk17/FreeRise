@@ -50,6 +50,14 @@ export function Menu({ label, items, icon = <EllipsisVertical size={18} /> }: { 
   );
 }
 
+/** RiseUp-like hue per section: [spent amount, bar fill, bar track]. */
+const TONES = {
+  plain: ["text-text", "bg-brand", "bg-sunken"],
+  variable: ["text-sun-strong", "bg-sun", "bg-sun-soft"],
+  category: ["text-info", "bg-info", "bg-info-soft"],
+  income: ["text-positive", "bg-positive-fill", "bg-brand-soft"],
+} as const;
+
 /** "יצא" (bold, colored) vs "צפוי לצאת", progress bar, and what's left / over. */
 export function SpentHeader({
   spent,
@@ -57,13 +65,16 @@ export function SpentHeader({
   labels = ["יצא", "צפוי לצאת"],
   remaining = ["נשאר להוציא", "חריגה של"],
   overIsBad = true,
+  tone = "plain",
 }: {
   spent: number;
   expected: number;
   labels?: [string, string];
   remaining?: [string, string];
   overIsBad?: boolean;
+  tone?: keyof typeof TONES;
 }) {
+  const [text, fill, track] = TONES[tone];
   const over = spent > expected;
   const bad = over && overIsBad;
   return (
@@ -71,14 +82,14 @@ export function SpentHeader({
       <div className="flex items-end justify-between gap-4">
         <div className="flex flex-col">
           <span className="text-xs text-muted">{labels[0]}</span>
-          <Money value={spent} className={`text-[28px] leading-tight font-extrabold ${bad ? "text-danger" : "text-text"}`} />
+          <Money value={spent} className={`text-[28px] leading-tight font-extrabold ${bad ? "text-danger" : text}`} />
         </div>
         <div className="flex flex-col items-end">
           <span className="text-xs text-muted">{labels[1]}</span>
           <Money value={expected} className="text-lg font-bold text-muted" />
         </div>
       </div>
-      <ProgressBar percent={weekBarPercent(spent, expected)} danger={bad} label={`${labels[0]} מתוך ${labels[1]}`} />
+      <ProgressBar percent={weekBarPercent(spent, expected)} danger={bad} label={`${labels[0]} מתוך ${labels[1]}`} fill={fill} track={track} />
       <p className={`text-sm ${bad ? "font-semibold text-danger" : "text-muted"}`}>
         {over ? remaining[1] : remaining[0]} <Money value={Math.abs(expected - spent)} className="font-bold" />
       </p>

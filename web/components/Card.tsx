@@ -15,10 +15,11 @@ export function Card({ title, action, className = "", children }: { title?: Reac
   );
 }
 
-export function ProgressBar({ percent, danger = false, label }: { percent: number; danger?: boolean; label?: string }) {
+/** fill / track: color classes for a section's own hue (home cards); danger wins over fill. */
+export function ProgressBar({ percent, danger = false, label, fill = "bg-brand", track = "bg-sunken" }: { percent: number; danger?: boolean; label?: string; fill?: string; track?: string }) {
   return (
-    <div className="h-2 w-full overflow-hidden rounded-full bg-sunken" role="progressbar" aria-valuenow={Math.round(percent)} aria-valuemin={0} aria-valuemax={100} aria-label={label}>
-      <div className={`h-full rounded-full ${danger ? "bg-danger" : "bg-brand"}`} style={{ width: `${percent}%` }} />
+    <div className={`h-2 w-full overflow-hidden rounded-full ${track}`} role="progressbar" aria-valuenow={Math.round(percent)} aria-valuemin={0} aria-valuemax={100} aria-label={label}>
+      <div className={`h-full rounded-full ${danger ? "bg-danger" : fill}`} style={{ width: `${percent}%` }} />
     </div>
   );
 }

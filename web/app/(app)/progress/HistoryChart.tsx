@@ -23,7 +23,7 @@ export function HistoryChart() {
   const [cat, setCat] = useState<number | null>(null);
   const { data, error } = useApi<ProgressHistory>(progressHistoryPath(tab, months, cat));
   const bars = (data?.cycles ?? []).map((c) => ({ key: `${c.label_year}-${c.label_month}`, label: monthName(c.label_month).slice(0, 3), full: `${monthName(c.label_month)} ${c.label_year}`, value: c.total }));
-  const alt = bars.map((b) => `${b.full}: ${formatILS(Math.round(b.value))}`).join(", ");
+  const alt = bars.map((b) => `${b.full}: ${formatILS(b.value)}`).join(", ");
 
   return (
     <Card title="היסטוריה חודשית">

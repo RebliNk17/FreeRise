@@ -3,8 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { searchHref } from "@/lib/search";
-import { Money } from "@/components/Amount";
-import { CategoryRing } from "@/components/CategoryIcon";
+import { Card } from "@/components/Card";
 import { CategorySelect, loadCategories } from "@/components/CategorySelect";
 import { send } from "@/lib/api";
 import { categoryLabel } from "@/lib/format";
@@ -12,7 +11,7 @@ import { mapTxns, txnKey, type HomeData, type TrackedCategory } from "@/lib/home
 import { useHome } from "./context";
 import { Expander } from "./Expander";
 import { HistorySheet } from "./HistorySheet";
-import { Menu } from "./parts";
+import { Menu, SpentHeader } from "./parts";
 import { TxnList, TxnRow } from "./TxnRow";
 import { WeekTable } from "./WeekTable";
 
@@ -29,7 +28,6 @@ export function TrackedCategoryCard({ c }: { c: TrackedCategory }) {
   const txns = c.transactions.filter((t) => t.category_id === id);
   const weekly = c.mode === "weekly" && c.weeks;
   const name = categoryLabel(c.name);
-  const over = c.spent > c.expected + 0.005;
 
   const menu = (
         <Menu
@@ -59,41 +57,14 @@ export function TrackedCategoryCard({ c }: { c: TrackedCategory }) {
         />
   );
 
-  // Its own card: ring + name, "₪X יצא", then what's left of the expected (or by how much it
-  // went over); tap expands to weeks / transactions; ⋮ for the rest.
+  // RiseUp-style card: name + ⋮, "יצא" vs "צפוי לצאת" with a bar, what's left; weeks / transactions collapsed below.
   return (
-    <section className="card flex flex-col px-3 py-1.5" aria-label={name}>
-      <Expander
-        rowClassName="flex items-start gap-1"
-        className="min-w-0"
-        buttonClassName="flex min-h-15 min-w-0 flex-1 px-1.5 py-2.5"
-        labelClassName="flex min-w-0 flex-1 items-start gap-3"
-        aside={<div className="pt-2.5">{menu}</div>}
-        label={
-          <>
-            <CategoryRing name={c.name} percent={c.expected > 0 ? (c.spent / c.expected) * 100 : c.spent > 0 ? 100 : 0} over={over} />
-            <span className="min-w-0 flex-1">
-              <span className="block truncate font-bold">{name}</span>
-              <span className="mt-0.5 flex items-baseline gap-1.5">
-                <Money value={Math.round(c.spent)} className={`text-[22px] leading-tight font-extrabold ${over ? "text-danger" : ""}`} />
-                <span className="text-xs text-muted">יצא</span>
-              </span>
-              <span className={`block text-xs ${over ? "font-semibold text-danger" : "text-muted"}`}>
-                {over ? (
-                  <>
-                    חריגה של <Money value={Math.round(c.spent - c.expected)} /> מעל <Money value={Math.round(c.expected)} /> הצפויים
-                  </>
-                ) : (
-                  <>
-                    נשאר <Money value={Math.round(c.expected - c.spent)} /> מתוך <Money value={Math.round(c.expected)} />
-                  </>
-                )}
-              </span>
-            </span>
-          </>
-        }
-      >
-        <div className="pb-2">
+    <Card title={name} action={menu} className="gap-0! pb-0!">
+      <div className="pt-3 pb-4">
+        <SpentHeader spent={c.spent} expected={c.expected} tone="category" />
+      </div>
+      <Expander className="-mx-4 border-t border-hairline px-3" buttonClassName="flex min-h-12 px-2" label={<span className="text-sm font-bold">{weekly ? "פירוט שבועי" : "פירוט חודשי"}</span>}>
+        <div className="px-1 pb-2">
           {weekly ? (
             <WeekTable
               weeks={c.weeks!.map((w) => ({ ...w, transactions: w.transactions.filter((t) => t.category_id === id) }))}
@@ -122,7 +93,7 @@ export function TrackedCategoryCard({ c }: { c: TrackedCategory }) {
         />
       )}
       {panel === "move" && <MoveTxns c={c} txns={txns} onClose={() => setPanel(null)} />}
-    </section>
+    </Card>
   );
 }
 
@@ -141,7 +112,7 @@ function PanelBox({ title, onClose, children }: { title: string; onClose: () => 
 }
 
 function AmountEdit({ c, onClose, onSave }: { c: TrackedCategory; onClose: () => void; onSave: (amount: number | null) => void }) {
-  const [value, setValue] = useState(String(Math.round(c.expected)));
+  const [value, setValue] = useState(String(c.expected));
   const [bad, setBad] = useState(false);
   return (
     <PanelBox title="כמה צפוי לצאת במחזור הזה?" onClose={onClose}>

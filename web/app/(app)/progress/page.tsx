@@ -23,7 +23,7 @@ export default function ProgressPage() {
 function ProgressView({ p }: { p: Progress }) {
   const n = p.cycles.length;
   const bars = p.cycles.map((c) => ({ key: c.cycle.start, label: monthName(c.cycle.label_month).slice(0, 3), full: `${monthName(c.cycle.label_month)} ${c.cycle.label_year}`, value: c.net }));
-  const alt = `נשאר בסוף החודש: ${bars.map((b) => `${b.full} ${formatILS(Math.round(b.value))}`).join(", ")}`;
+  const alt = `נשאר בסוף החודש: ${bars.map((b) => `${b.full} ${formatILS(b.value)}`).join(", ")}`;
 
   return (
     <>

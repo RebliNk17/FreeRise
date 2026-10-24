@@ -51,6 +51,11 @@
   :root:not([data-theme="light"]) { color-scheme: dark; }
 }
 
+/* Any open modal <dialog> (every drawer, sheet and menu) freezes the page behind it. */
+html:has(dialog:modal) {
+  overflow: hidden;
+}
+
 .theme-sun { display: none !important; }
 :root[data-theme="dark"] .theme-sun { display: block !important; }
 :root[data-theme="dark"] .theme-moon { display: none !important; }
@@ -94,6 +99,7 @@
   --color-band-positive: var(--band-positive);
   --color-band-info: var(--band-info);
   --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
   --shadow-card: var(--shadow);
   --shadow-nav: var(--shadow-nav);
   --font-sans: var(--font-assistant);

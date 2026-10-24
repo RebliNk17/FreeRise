@@ -13,6 +13,7 @@ import { useHiddenAccounts, withHidden } from "@/lib/viewFilter";
 import { AccountFilter } from "./AccountFilter";
 import { AddTrackedCategory } from "./AddTrackedCategory";
 import { CategorizeChip, CategorizeSheet } from "./CategorizeSheet";
+import { CyclePicker } from "./CyclePicker";
 import { HomeContext, type HomeCtx } from "./context";
 import { Expander } from "./Expander";
 import { FeesCard } from "./FeesCard";
@@ -20,8 +21,7 @@ import { FixedCard } from "./FixedCard";
 import { GoalBanner } from "./GoalBanner";
 import { IncomeCard } from "./IncomeCard";
 import { InsightCarousel } from "./InsightCarousel";
-import { BalancesCard, NextCycleCard } from "./OutlookCards";
-import { SectionHeader } from "./parts";
+import { NextCycleCard } from "./OutlookCards";
 import { TotalCard } from "./TotalCard";
 import { SavingsCard } from "./SavingsCard";
 import { TrackedCategoryCard } from "./TrackedCategoryCard";
@@ -35,6 +35,7 @@ export function HomeView({ path, title }: { path: string; title: string }) {
   const hidden = useHiddenAccounts();
   const { data, setData, error, reload } = useApi<HomeData>(withHidden(path, hidden));
   const [sheet, setSheet] = useState<Txn | null>(null);
+  const [picking, setPicking] = useState(false);
   const [failed, setFailed] = useState(false);
   const [version, setVersion] = useState(0);
   const unc = useApi<Uncategorized[]>("/categories/uncategorized", version);
@@ -83,6 +84,7 @@ export function HomeView({ path, title }: { path: string; title: string }) {
           next={cycle.next && !cycle.is_current ? `/home/${cycle.next.year}/${cycle.next.month}` : null}
           prevLabel="המחזור הקודם"
           nextLabel="המחזור הבא"
+          onPick={() => setPicking(true)}
           title={`${monthName(cycle.label_month)} ${cycle.label_year}`}
           sub={
             <>
@@ -98,8 +100,8 @@ export function HomeView({ path, title }: { path: string; title: string }) {
             השמירה נכשלה — השינוי בוטל.
           </p>
         )}
-        {!empty && data.summary && <WeeklySummary s={data.summary} />}
         {cycle.is_current && <InsightCarousel />}
+        {!empty && data.summary && <WeeklySummary s={data.summary} />}
         <CategorizeChip list={unc.data ?? []} onOpen={() => setSorting(true)} />
         {reviews.length > 0 && (
           <Link href="/review" className="card flex min-h-12 items-center gap-3 px-4 py-2.5 hover:bg-sunken/60">
@@ -113,7 +115,7 @@ export function HomeView({ path, title }: { path: string; title: string }) {
         <Status loading={false} error={false} empty={empty} />
         {!empty && (
           <>
-            <SectionHeader title="הוצאות משתנות" />
+            <VariableCard v={data.variable} />
             {active.length > 0 && (
               <ul className="flex flex-col gap-3" aria-label="קטגוריות במעקב">
                 {active.map((c) => (
@@ -135,18 +137,12 @@ export function HomeView({ path, title }: { path: string; title: string }) {
               </Expander>
             )}
             <AddTrackedCategory />
-            <VariableCard v={data.variable} />
             <SavingsCard s={data.savings} />
             <FixedCard f={data.fixed} />
             <FeesCard f={data.fees} />
             <TotalCard d={data} />
             <IncomeCard inc={data.income} />
-            {cycle.is_current && (
-              <>
-                <BalancesCard />
-                <NextCycleCard />
-              </>
-            )}
+            {cycle.is_current && <NextCycleCard />}
           </>
         )}
         {data.moved_next.transactions.length > 0 && (
@@ -157,6 +153,7 @@ export function HomeView({ path, title }: { path: string; title: string }) {
           </Expander>
         )}
       </div>
+      {picking && <CyclePicker start={cycle.start} year={cycle.label_year} month={cycle.label_month} onClose={() => setPicking(false)} />}
       {open && <TxnSheet key={open.id} t={open} onClose={() => setSheet(null)} />}
       {sorting && unc.data && (
         <CategorizeSheet

@@ -149,6 +149,9 @@ export type Cycle = { start: string; end: string; label_year: number; label_mont
 export type FeeItem = { txn_id: number; date: string; description: string; account_id: number; account_name: string; merchant_key: string; fee_key: string; amount: number };
 export type Fees = { total: number; count: number; previous_total: number; items: FeeItem[]; new_fee_merchants: string[] };
 
+/** A bank account (balance) or a card (balance = its upcoming charge, positive). number: bank account number, or a card's last 4. */
+export type BalanceAccount = { id: number; display_name: string; balance: number; as_of: string | null; provider: string; holder: string; number: string };
+
 export type Plan = {
   cycle: Cycle;
   today: string;
@@ -163,7 +166,7 @@ export type Plan = {
   savings_spent: number;
   weeks: { start: string; end: string; spent: number; allowance: number; left: number; is_current: boolean; is_past: boolean }[];
   categories: { category_id: number | null; name: string; spent: number; expected: number; left: number }[];
-  balances: { bank_total: number; accounts: { id: number; display_name: string; balance: number; as_of: string | null }[]; upcoming_card_charges: number };
+  balances: { bank_total: number; accounts: BalanceAccount[]; upcoming_card_charges: number; cards: BalanceAccount[] };
   next_cycle: { installments_stopping_total: number; fixed_total: number; income_total: number };
   fees: { total: number; count: number };
   still_expected: ForecastItem[];
