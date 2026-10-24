@@ -94,6 +94,101 @@ def test_every_txn_counted_once_and_totals_balance(session):
     assert (tracked["אוכל בחוץ"]["spent"], tracked["אוכל בחוץ"]["expected"]) == (900, 500)
     assert reserved == 2000 + 900
     assert h["variable"]["spent"] == 190
-    # 20120 income − 5000 − 3000 − 2900 reserved; this week's spending is the uncategorized ₪40 only
+    # 20120 income − 5000 − 3000 − 2900 reserved; this week: the uncategorized ₪40 only
     assert h["variable"]["allowance"] == 9220
     assert cur["spent"] == 40
+
+
+def test_installments_are_fixed(session):
+    """Installment payments are fixed (known in advance), whatever their category; listed
+    under one "תשלומים" group with n/N; expected = the payments due this cycle."""
+    _, ids = _setup(session)
+    card = _acct(session, "5678")
+    inst = {"installment_total": 6}
+    # תשלומים: 2/6 last cycle, 3/6 this cycle (charged)
+    _tx(
+        session,
+        card,
+        date(2026, 9, 12),
+        -1900,
+        "תשלומים",
+        key="sochachei",
+        installment_number=2,
+        **inst,
+    )
+    sochachei = _tx(
+        session,
+        card,
+        date(2026, 10, 12),
+        -1900,
+        "תשלומים",
+        key="sochachei",
+        installment_number=3,
+        **inst,
+    )
+    # a hotel paid in 3, categorized תיירות: 2/3 charged this week
+    _tx(
+        session,
+        card,
+        date(2026, 9, 20),
+        -800,
+        "תיירות",
+        key="hotel",
+        installment_number=1,
+        installment_total=3,
+    )
+    hotel = _tx(
+        session,
+        card,
+        date(2026, 10, 20),
+        -800,
+        "תיירות",
+        key="hotel",
+        installment_number=2,
+        installment_total=3,
+    )
+    # a sofa paid in 10, uncategorized: 4/10 last cycle -> 5/10 due on 25.10 (not charged yet)
+    _tx(
+        session,
+        card,
+        date(2026, 9, 25),
+        -500,
+        key="sofa",
+        installment_number=4,
+        installment_total=10,
+    )
+    ids += [sochachei.id, hotel.id]
+    h = _home(session)
+    b, _, cur = _check(h, ids)
+
+    g = next(g for g in h["fixed"]["groups"] if g["name"] == "תשלומים")
+    assert sorted(t["id"] for t in b["fixed:תשלומים"]) == sorted([sochachei.id, hotel.id])
+    assert {t["category_name"] for t in b["fixed:תשלומים"]} == {"תשלומים", "תיירות"}
+    items = {i["label"]: i for i in g["items"]}
+    assert (items["sochachei"]["installment_number"], items["sochachei"]["installment_total"]) == (
+        3,
+        6,
+    )
+    assert (items["hotel"]["installment_number"], items["hotel"]["installment_total"]) == (2, 3)
+    sofa = items["sofa"]
+    assert (sofa["status"], sofa["installment_number"], sofa["installment_total"]) == (
+        "expected",
+        5,
+        10,
+    )
+    assert (g["spent"], g["expected"]) == (2700, 3200)  # charged + the sofa's 5th payment
+    assert g["category_id"] == _cat(session, "תשלומים")
+    # nothing of it in variable spending, tracked cards or the weekly allowance
+    assert h["variable"]["spent"] == 190
+    assert "תשלומים" not in {c["name"] for c in h["tracked"]}
+    assert "תשלומים" not in {c["name"] for c in h["untracked_available"]}
+    assert h["variable"]["allowance"] == 9220 - 3200  # fixed is 3200 bigger
+    assert cur["spent"] == 40
+
+
+def test_installments_category_is_fixed(session):
+    from sqlalchemy import select
+
+    from freerise.models import Category
+
+    assert session.scalar(select(Category.group).where(Category.name == "תשלומים")) == "fixed"

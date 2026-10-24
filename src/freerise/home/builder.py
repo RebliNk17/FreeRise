@@ -25,7 +25,7 @@ from freerise.cashflow.cycles import (
 from freerise.cashflow.parts import txn_parts
 from freerise.cashflow.plan import CENT, HISTORY, clamp, cycle_plan, split_by_days, week_spans
 from freerise.cashflow.savings import monthly_total, plan_statuses
-from freerise.cashflow.summary import GROUPS, UNCATEGORIZED
+from freerise.cashflow.summary import GROUPS, UNCATEGORIZED, bucket
 from freerise.forecast.next_cycle import ExpectedLine, expected_in_cycle
 from freerise.models import (
     Account,
@@ -184,6 +184,8 @@ class FixedItem:
     status: str  # charged | expected | overdue
     transactions: list[Txn]
     recurring_id: int | None
+    installment_number: int | None = None  # an installment payment: n of N
+    installment_total: int | None = None
 
 
 @dataclass
@@ -275,6 +277,13 @@ def _status(line: ExpectedLine, today: date) -> str:
     return "overdue" if line.date < today - timedelta(days=OVERDUE_DAYS) else "expected"
 
 
+INSTALLMENTS = "תשלומים"  # fixed group of every installment payment, whatever its category
+
+
+def _is_installment(t: Txn) -> bool:
+    return (t.installment_total or 0) > 1
+
+
 def _groups(
     lines: list[ExpectedLine],
     pool: list[Txn],
@@ -284,14 +293,17 @@ def _groups(
     sign: int,
 ) -> list[FixedGroup]:
     """Items = expected lines (with the pool txns they matched) + unmatched pool txns per
-    merchant; grouped by category. Group expected = spent + not-yet-charged expectations."""
+    merchant; grouped by category, except that installment payments all sit in one
+    "תשלומים" group (each txn keeps its own category). Group expected = spent +
+    not-yet-charged expectations (for installments: the payments due this cycle by n/N)."""
     by_id = {t.id: t for t in pool}
+    inst_cid = next((c.id for c in cats.values() if c.name == INSTALLMENTS), None)
     claimed: set[int] = set()
-    items: dict[int | None, list[tuple[FixedItem, Decimal]]] = defaultdict(list)
+    items: dict[int | str | None, list[tuple[FixedItem, Decimal]]] = defaultdict(list)
     for ln in lines:
         ts = [by_id[i] for i in ln.txn_ids if i in by_id and i not in claimed]
-        # ponytail: a charged line whose txns sit in another group (e.g. installments at a
-        # variable-category store) is counted there, not here.
+        # ponytail: a charged line whose txns sit in another group (e.g. a confirmed fixed item
+        # whose charges are categorized variable) is counted there, not here.
         if (ln.charged and not ts) or (not ln.charged and not current):
             continue
         claimed.update(t.id for t in ts)
@@ -306,13 +318,20 @@ def _groups(
             _status(ln, today),
             ts,
             ln.recurring_id,
+            ln.installment_number,
+            ln.installment_total,
         )
-        cid = ts[0].category_id if ts else ln.category_id
+        if ln.source == "installment":
+            cid: int | str | None = INSTALLMENTS
+        else:
+            cid = ts[0].category_id if ts else ln.category_id
         items[cid].append((item, ZERO if ln.charged else exp))
     rest: dict[tuple, list[Txn]] = defaultdict(list)
     for t in pool:
         if t.id not in claimed:
-            rest[(t.category_id, t.merchant_key or t.description)].append(t)
+            inst = _is_installment(t) or (inst_cid is not None and t.category_id == inst_cid)
+            key = INSTALLMENTS if inst else t.category_id
+            rest[(key, t.merchant_key or t.description)].append(t)
     for (cid, _), ts in rest.items():
         actual = _sum(ts, sign)
         items[cid].append(
@@ -326,6 +345,8 @@ def _groups(
                     "charged",
                     ts,
                     None,
+                    ts[0].installment_number,
+                    ts[0].installment_total if _is_installment(ts[0]) else None,
                 ),
                 ZERO,
             )
@@ -334,10 +355,14 @@ def _groups(
     for cid, its in items.items():
         spent = sum((i.actual_amount for i, _ in its), ZERO)
         its.sort(key=lambda x: x[0].expected_date or x[0].transactions[-1].date)
+        if cid == INSTALLMENTS:
+            gid, name = inst_cid, INSTALLMENTS
+        else:
+            gid, name = cid, cats[cid].name if cid in cats else UNCATEGORIZED
         out.append(
             FixedGroup(
-                cid,
-                cats[cid].name if cid in cats else UNCATEGORIZED,
+                gid,
+                name,
                 spent,
                 spent + sum((p for _, p in its), ZERO),
                 [i for i, _ in its],
@@ -360,6 +385,7 @@ def _history(
             Transaction.effective_date,
             p.c.category_id,
             Category.group,
+            Transaction.installment_total,
             func.sum(p.c.amount),
         )
         .join(p, p.c.txn_id == Transaction.id)
@@ -371,12 +397,17 @@ def _history(
             Transaction.effective_date <= cycles[-1].end,
             or_(Category.id.is_(None), Category.group.in_(GROUPS)),
         )
-        .group_by(Transaction.effective_date, p.c.category_id, Category.group)
+        .group_by(
+            Transaction.effective_date,
+            p.c.category_id,
+            Category.group,
+            Transaction.installment_total,
+        )
     )
-    for d, cid, group, total in rows:
+    for d, cid, group, inst, total in rows:
         i = idx[cycle_for(d, start_day).start]
         has[i] = True
-        if group == "variable":
+        if group == "variable" and bucket(group, total, inst) == "variable":
             var[i][cid] -= total
     return var, has
 
@@ -469,11 +500,8 @@ def build_home(session: Session, cycle: Cycle, today: date) -> Home:
             .order_by(Transaction.date.desc(), Transaction.id.desc(), parts.c.category_id)
         ):
             cat = cats.get(cid)
-            if cat is None:
-                group = "income" if amount > 0 else "variable"
-            elif cat.group in GROUPS:
-                group = cat.group
-            else:  # transfer / card_bill / ignore
+            group = bucket(cat.group if cat else None, amount, t.installment_total)
+            if group is None:  # transfer / card_bill / ignore
                 continue
             out.append(
                 (

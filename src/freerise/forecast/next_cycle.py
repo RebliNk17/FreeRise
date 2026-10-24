@@ -38,6 +38,8 @@ class ExpectedLine:
     category_id: int | None = None
     expected_amount: Decimal | None = None  # the item's own expectation, even once charged
     txn_ids: list[int] = field(default_factory=list)
+    installment_number: int | None = None  # installment lines: payment n of N
+    installment_total: int | None = None
 
 
 def _acct(labels: dict[int, str], account_id: int | None, previous: int | None = None) -> dict:
@@ -234,6 +236,8 @@ def _installment_lines(session: Session, cycle: Cycle) -> list[ExpectedLine]:
                     category_id=latest.category_id,
                     expected_amount=amt,
                     txn_ids=[t.id for t in here],
+                    installment_number=here[-1].installment_number,
+                    installment_total=total,
                 )
             )
             continue
@@ -251,6 +255,8 @@ def _installment_lines(session: Session, cycle: Cycle) -> list[ExpectedLine]:
                         **_acct(labels, latest.account_id),
                         category_id=latest.category_id,
                         expected_amount=abs(latest.amount),
+                        installment_number=n + k,
+                        installment_total=total,
                     )
                 )
     return out

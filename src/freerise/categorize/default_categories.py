@@ -26,7 +26,7 @@ DEFAULT_CATEGORIES: list[tuple[str, str]] = [
     ("קניות", "variable"),
     ("פארמה", "variable"),
     ("תיירות", "variable"),
-    ("תשלומים", "variable"),
+    ("תשלומים", "fixed"),  # installments: known in advance (migration 0024)
     ("כללי", "variable"),
     ("השקעה וחיסכון", "savings"),
     ("העברות", "transfer"),

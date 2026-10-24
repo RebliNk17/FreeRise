@@ -70,7 +70,12 @@ export type FixedItem = {
   status: "charged" | "expected" | "overdue";
   transactions: Txn[];
   recurring_id: number | null;
+  installment_number?: number | null; // an installment payment: n of N
+  installment_total?: number | null;
 };
+
+/** "תשלום 3/6" for an installment item, else null. */
+export const installmentLabel = (it: Pick<FixedItem, "installment_number" | "installment_total">) => (it.installment_total && it.installment_total > 1 ? `תשלום ${it.installment_number ?? "?"}/${it.installment_total}` : null);
 
 export type FixedGroup = { category_id: number | null; name: string; spent: number; expected: number; items: FixedItem[] };
 

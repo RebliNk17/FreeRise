@@ -1,7 +1,7 @@
 import { Money } from "@/components/Amount";
 import { Card } from "@/components/Card";
 import { categoryLabel, formatDate } from "@/lib/format";
-import { FIXED_STATUS, type FixedGroup, type FixedItem, type HomeData } from "@/lib/home";
+import { FIXED_STATUS, installmentLabel, type FixedGroup, type FixedItem, type HomeData } from "@/lib/home";
 import { Expander } from "./Expander";
 import { HistoryButton } from "./HistorySheet";
 import { SpentHeader, TableHead } from "./parts";
@@ -61,6 +61,7 @@ export function FixedGroups({ groups, income = false }: { groups: FixedGroup[]; 
 function Item({ it, income }: { it: FixedItem; income: boolean }) {
   const date = it.transactions[0]?.date ?? it.expected_date;
   const st = FIXED_STATUS[it.status];
+  const inst = installmentLabel(it);
   const body = (
     <span className="flex items-start gap-3">
       <span className="block min-w-0 flex-1">
@@ -69,6 +70,7 @@ function Item({ it, income }: { it: FixedItem; income: boolean }) {
           <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${st.tone}`}>{income ? INCOME_STATUS[it.status] : st.label}</span>
         </span>
         <span className="block text-xs text-muted">
+          {inst && <span className="font-semibold text-text">{inst} · </span>}
           {date && <span dir="ltr">{formatDate(date)}</span>}
           {it.account_label && ` · ${it.account_label}`}
         </span>

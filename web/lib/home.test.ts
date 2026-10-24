@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { homeFixture } from "./fixtures/home";
-import { accountWithHolder, daysLabel, findTxn, fixedStatusLabel, isIdle, leftLabel, mapTxns, splitMoney, weekDays, weekOver, shiftChip, weekStatus, wrapIndex, totalSegments } from "./home";
+import { accountWithHolder, daysLabel, findTxn, fixedStatusLabel, installmentLabel, isIdle, leftLabel, mapTxns, splitMoney, weekDays, weekOver, shiftChip, weekStatus, wrapIndex, totalSegments } from "./home";
 
 test("splitMoney splits integer and decimal parts", () => {
   expect(splitMoney(1819.2)).toEqual({ sign: "", int: "1,819", dec: ".2" });
@@ -87,4 +87,10 @@ test("totalSegments: shares of the bigger of spent/expected", () => {
   // variable = total − fixed − savings (tracked categories + the rest)
   const over = totalSegments({ ...d, total: { spent: 2000, expected: 1000 } });
   expect([over[1].spent, over[1].expected, over[1].percent]).toEqual([1500, 500, 75]);
+});
+
+test("installmentLabel: n/N for installments only", () => {
+  expect(installmentLabel({ installment_number: 3, installment_total: 6 })).toBe("תשלום 3/6");
+  expect(installmentLabel({ installment_number: 1, installment_total: 1 })).toBeNull();
+  expect(installmentLabel({})).toBeNull();
 });

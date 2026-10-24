@@ -132,6 +132,8 @@ def _variable_by_week(session: Session, cycle: Cycle, exclude: set[int]) -> dict
             counted(),
             Transaction.effective_date >= cycle.start,
             Transaction.effective_date <= cycle.end,
+            # installments are fixed (summary.bucket)
+            or_(Transaction.installment_total.is_(None), Transaction.installment_total <= 1),
             or_(
                 (Category.group == "variable") & Category.id.not_in(exclude),
                 Category.id.is_(None) & (p.c.amount < 0),
