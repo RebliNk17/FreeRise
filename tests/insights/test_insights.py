@@ -253,6 +253,19 @@ def test_fees(session):
     assert i.amount == Decimal(15) and i.link == "/home/2026/10"
 
 
+def test_installments_stopping(session):
+    a = _acct(session)
+    assert "installments_stopping" not in _kinds(session)
+    _tx(session, a, date(2026, 10, 15), -1900, key="sofa")
+    session.execute(
+        Transaction.__table__.update()
+        .where(Transaction.description == "sofa")
+        .values(installment_number=4, installment_total=4)
+    )
+    i = _kinds(session)["installments_stopping"]
+    assert i.amount == Decimal(1900) and "sofa" in i.body
+
+
 def test_unknown_card(session):
     a = _acct(session)
     _tx(session, a, date(2026, 9, 1), -700, "חיוב כרטיס אשראי", "old card")  # > 45 days

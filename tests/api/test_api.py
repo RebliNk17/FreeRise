@@ -109,7 +109,7 @@ def test_login_rate_limited(client, user):
 def test_providers(authed):
     items = authed.get("/api/providers").json()
     keys = [p["key"] for p in items]
-    assert len(keys) == 19 and "hafenix" not in keys
+    assert len(keys) == 20 and "hafenix" not in keys
     assert {"hapoalim", "pagi", "max", "visa cal", "behatsdaa", "mislaka"} <= set(keys)
     services = [p["service"] for p in items]
     assert services == sorted(services, key=["banks", "credit_cards", "insurances"].index)

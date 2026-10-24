@@ -11,6 +11,7 @@ const PROVIDER_NAMES: Record<string, string> = {
   yahav: "בנק יהב",
   onezero: "וואן זירו",
   pagi: "בנק פאג״י",
+  pepper: "פפר",
   max: "מקס",
   "visa cal": "כאל",
   isracard: "ישראכרט",
@@ -24,7 +25,7 @@ const PROVIDER_NAMES: Record<string, string> = {
 // Files in public/providers/ (see README there). Missing → ProviderLogo draws a monogram.
 const LOGO_FILES = new Set([
   "hapoalim.svg", "leumi.svg", "discount.svg", "mercantile.svg", "mizrahi.svg", "otsar-hahayal.svg", "union.svg",
-  "beinleumi.svg", "massad.svg", "yahav.svg", "onezero.svg", "max.svg", "visa-cal.svg", "isracard.svg", "amex.svg",
+  "beinleumi.svg", "massad.svg", "yahav.svg", "onezero.svg", "pepper.svg", "max.svg", "visa-cal.svg", "isracard.svg", "amex.svg",
   "beyahad-bishvilha.png", "behatsdaa.svg", "mislaka.svg",
 ]);
 

@@ -17,6 +17,7 @@ export function illustrationFor(kind: string, severity: Insight["severity"]): Il
     case "category_up":
       return "spike";
     case "category_down":
+    case "installments_stopping":
       return "shrink";
     case "category_trend":
       return severity === "positive" ? "shrink" : "spike";
