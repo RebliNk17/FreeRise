@@ -222,3 +222,24 @@ def test_week_split_sums_exactly(session):
         assert sum(w.allowance for w in rest) == p.variable_allowance  # nothing spent yet
     # 16 days left: 7/7/2 -> 437.5 / 437.5 / 125
     assert [w.allowance for w in rest] == [Decimal("437.5"), Decimal("437.5"), Decimal(125)]
+
+
+def test_tracked_categories_stay_out_of_the_weekly_allowance(session):
+    from freerise.models import CategoryBudget, TrackedCategory
+
+    a = _acct(session)
+    _tx(session, a, date(2026, 10, 10), 10000, "משכורת")
+    _tx(session, a, date(2026, 10, 19), -300, "כלכלה")  # tracked, budget 1000
+    _tx(session, a, date(2026, 10, 20), -100, "קניות")  # the rest
+    food = _cat(session, "כלכלה")
+    session.add(TrackedCategory(category_id=food, mode="weekly"))
+    session.add(CategoryBudget(cycle_start=OCT.start, category_id=food, amount=1000))
+    session.flush()
+    p = cycle_plan(session, date(2026, 10, 23))
+    assert p.variable_allowance == 10000 and p.variable_spent == 400
+    ((t),) = p.tracked
+    assert (t.category_id, t.spent, t.expected) == (food, 300, 1000)
+    assert (p.rest_allowance, p.rest_spent) == (9000, 100)
+    cur = next(w for w in p.weeks if w.start <= date(2026, 10, 23) <= w.end)
+    assert cur.spent == 100  # the supermarket isn't in the week
+    assert sum(w.spent for w in p.weeks) == p.rest_spent

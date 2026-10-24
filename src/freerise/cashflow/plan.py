@@ -14,7 +14,15 @@ from freerise.cashflow.parts import txn_parts
 from freerise.cashflow.savings import monthly_total, plan_statuses
 from freerise.cashflow.summary import UNCATEGORIZED, CycleSummary, cycle_summary
 from freerise.forecast.next_cycle import ExpectedLine, expected_in_cycle
-from freerise.models import Account, Category, CycleGoal, Setting, Transaction
+from freerise.models import (
+    Account,
+    Category,
+    CategoryBudget,
+    CycleGoal,
+    Setting,
+    TrackedCategory,
+    Transaction,
+)
 from freerise.view import counted
 
 CENT = Decimal("0.01")
@@ -24,7 +32,9 @@ BASIS = (
     "תקציב משתנה = הכנסה צפויה (בפועל + הכנסות קבועות שטרם התקבלו) − הוצאות קבועות צפויות "
     "(בפועל + חיובים קבועים ותשלומים שטרם חויבו) − יעד סוף חודש (יעד אישי + יעדי חיסכון); "
     "שבועות א׳–ש׳, יתרת התקציב (אחרי ההוצאות בשבועות שעברו) מתחלקת לפי מספר הימים בשבוע הנוכחי ובבאים; "
-    "צפי לקטגוריה = חציון 6 המחזורים הקודמים."
+    "צפי לקטגוריה = חציון 6 המחזורים הקודמים (או הסכום שקבעתם); "
+    "קטגוריות במעקב שומרות לעצמן את הצפי שלהן (או מה שכבר יצא, אם יותר), "
+    "והתקציב השבועי הוא מה שנשאר לשאר ההוצאות המשתנות."
 )
 
 
@@ -64,6 +74,12 @@ class CyclePlan:
     basis: str = BASIS
     goal_personal: Decimal = Decimal(0)  # goal = goal_personal + goal_plans
     goal_plans: Decimal = Decimal(0)  # active savings plans' monthly amounts
+    # Tracked categories keep their own expected (budget, else median); `weeks` and the rest_*
+    # numbers cover only the other variable spending, so nothing is counted twice:
+    # variable_allowance = Σ max(tracked expected, spent) + rest_allowance.
+    tracked: list[CategoryPlan] = field(default_factory=list)
+    rest_allowance: Decimal = Decimal(0)
+    rest_spent: Decimal = Decimal(0)
 
 
 def get_goal(session: Session, cycle: Cycle) -> Decimal:
@@ -92,8 +108,20 @@ def _group(s: CycleSummary, g: str):
     return next(x for x in s.groups if x.group == g)
 
 
-def _variable_by_week(session: Session, cycle: Cycle) -> dict[date, Decimal]:
-    """Variable spending (positive, net of refunds) keyed by week start (Sunday)."""
+def tracked_ids(session: Session) -> set[int]:
+    """Active tracked categories (variable group only)."""
+    return set(
+        session.scalars(
+            select(TrackedCategory.category_id)
+            .join(Category, Category.id == TrackedCategory.category_id)
+            .where(TrackedCategory.active, Category.group == "variable")
+        )
+    )
+
+
+def _variable_by_week(session: Session, cycle: Cycle, exclude: set[int]) -> dict[date, Decimal]:
+    """Variable spending outside `exclude` categories (positive, net of refunds) keyed by week
+    start (Sunday)."""
     p = txn_parts()
     rows = session.execute(
         select(Transaction.date, p.c.amount)
@@ -105,7 +133,7 @@ def _variable_by_week(session: Session, cycle: Cycle) -> dict[date, Decimal]:
             Transaction.effective_date >= cycle.start,
             Transaction.effective_date <= cycle.end,
             or_(
-                Category.group == "variable",
+                (Category.group == "variable") & Category.id.not_in(exclude),
                 Category.id.is_(None) & (p.c.amount < 0),
             ),
         )
@@ -245,6 +273,25 @@ def cycle_plan(session: Session, today: date) -> CyclePlan:
         cats.append(CategoryPlan(cid, name or UNCATEGORIZED, sp, exp, exp - sp))
     cats.sort(key=lambda x: (x.spent, x.expected), reverse=True)
 
+    ids = tracked_ids(session)
+    budgets = dict(
+        session.execute(
+            select(CategoryBudget.category_id, CategoryBudget.amount).where(
+                CategoryBudget.cycle_start == cycle.start, CategoryBudget.category_id.in_(ids)
+            )
+        ).all()
+    )
+    by_id = {c.category_id: c for c in cats}
+    tracked = []
+    for cid in sorted(ids):
+        c = by_id.get(cid)
+        sp = c.spent if c else Decimal(0)
+        exp = budgets.get(cid, Decimal(c.expected).quantize(CENT) if c else Decimal(0))
+        tracked.append(CategoryPlan(cid, c.name if c else "", sp, exp, exp - sp))
+    reserved = sum((max(c.expected, c.spent) for c in tracked), Decimal(0))
+    rest_allowance = allowance - reserved
+    rest_spent = spent - sum((c.spent for c in tracked), Decimal(0))
+
     return CyclePlan(
         cycle,
         expected_income,
@@ -254,11 +301,14 @@ def cycle_plan(session: Session, today: date) -> CyclePlan:
         spent,
         allowance - spent,
         _group(cur, "savings").total,
-        _weeks(cycle, today, _variable_by_week(session, cycle), allowance),
+        _weeks(cycle, today, _variable_by_week(session, cycle, ids), rest_allowance),
         cats,
         pending_fixed,
         ec.savings_items,
         pending_income,
         goal_personal=personal,
         goal_plans=plans,
+        tracked=tracked,
+        rest_allowance=rest_allowance,
+        rest_spent=rest_spent,
     )

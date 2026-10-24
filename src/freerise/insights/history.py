@@ -44,29 +44,45 @@ def cycles_before(session: Session, cycle: Cycle, n: int) -> list[Cycle]:
     return out[::-1]
 
 
-def value_of(s: CycleSummary, group: str, category_id: int | None = None) -> Decimal:
+def value_of(
+    s: CycleSummary, group: str, category_id: int | None = None, exclude: frozenset = frozenset()
+) -> Decimal:
+    """A group's total (without `exclude` categories), or one category's."""
     g = next(x for x in s.groups if x.group == group)
     if category_id is None:
-        return g.total
+        return g.total - sum(
+            (c.total for c in g.categories if c.category_id in exclude), Decimal(0)
+        )
     return sum((c.total for c in g.categories if c.category_id == category_id), Decimal(0))
 
 
 def points(
-    session: Session, cycles: list[Cycle], group: str, category_id: int | None = None
+    session: Session,
+    cycles: list[Cycle],
+    group: str,
+    category_id: int | None = None,
+    exclude: frozenset = frozenset(),
 ) -> list[Point]:
     out = []
     for c in cycles:
         s = cycle_summary(session, c)
-        out.append(Point(c, value_of(s, group, category_id), bool(s.income or s.spending)))
+        v = value_of(s, group, category_id, exclude)
+        out.append(Point(c, v, bool(s.income or s.spending)))
     return out
 
 
 def spent_vs_expected(
-    session: Session, cycle: Cycle, group: str, category_id: int | None = None, n: int = 6
+    session: Session,
+    cycle: Cycle,
+    group: str,
+    category_id: int | None = None,
+    n: int = 6,
+    exclude: frozenset = frozenset(),
 ) -> list[HistoryRow]:
     """The n cycles before `cycle`: spent, and what was expected then (median of the 6 before
-    each, or the user's own amount for a tracked category)."""
-    pts = points(session, cycles_before(session, cycle, n + 6), group, category_id)
+    each, or the user's own amount for a tracked category). exclude: categories left out of a
+    group total (the home variable card leaves out tracked categories)."""
+    pts = points(session, cycles_before(session, cycle, n + 6), group, category_id, exclude)
     budgets = {}
     if category_id is not None:
         budgets = dict(

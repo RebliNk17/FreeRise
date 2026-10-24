@@ -558,14 +558,20 @@ def build_home(session: Session, cycle: Cycle, today: date) -> Home:
     ):
         week_budgets[cid][i] = amt
 
+    # Every variable txn counts once: in its tracked category's card, or else in the
+    # "other variable spending" card, whose weeks are the weekly allowance.
     var_txns = buckets["variable"]
+    tracked_set = {r.category_id for r in tracked_rows}
+    rest_txns = [t for t in var_txns if t.category_id not in tracked_set]
     plan = cycle_plan(session, today) if current else None
+    plan_tracked = {c.category_id: c for c in plan.tracked} if plan else {}
     ec = expected_in_cycle(session, cycle, today)
 
-    # Variable card
+    # Variable card (not in a tracked category)
     var_spent = _sum(var_txns)
-    allowance = plan.variable_allowance if plan else var_spent
-    vweeks = _weeks(cycle, today, var_txns, allowance, {})
+    rest_spent = _sum(rest_txns)
+    allowance = plan.rest_allowance if plan else rest_spent
+    vweeks = _weeks(cycle, today, rest_txns, allowance, {})
     summary = None
     if plan:
         for w, pw in zip(vweeks, plan.weeks, strict=True):  # same rule; plan's numbers win
@@ -587,10 +593,12 @@ def build_home(session: Session, cycle: Cycle, today: date) -> Home:
         ts = [t for t in var_txns if t.category_id == r.category_id]
         spent = _sum(ts)
         overridden = r.category_id in budgets
-        if overridden:
+        if r.category_id in plan_tracked:  # same number the weekly allowance reserved
+            expected = plan_tracked[r.category_id].expected
+        elif overridden:
             expected = budgets[r.category_id]
         else:
-            expected = medians.get(r.category_id, ZERO) if current else spent
+            expected = spent
         tracked.append(
             TrackedOut(
                 r.category_id,
@@ -657,12 +665,15 @@ def build_home(session: Session, cycle: Cycle, today: date) -> Home:
     return Home(
         info,
         summary,
-        Variable(var_spent, allowance, vweeks),
+        Variable(rest_spent, allowance, vweeks),
         tracked,
         untracked,
         Savings(sav_spent, sav_expected, sav_txns),
         fixed,
-        Total(fixed.spent + var_spent + sav_spent, fixed.expected + allowance + sav_expected),
+        Total(
+            fixed.spent + var_spent + sav_spent,
+            fixed.expected + (plan.variable_allowance if plan else var_spent) + sav_expected,
+        ),
         income,
         len(set(holders.values())) > 1,
         MovedNext(moved),

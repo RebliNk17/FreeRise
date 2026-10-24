@@ -54,7 +54,9 @@ def test_home_lists_each_part(session):
     tx(session, a, -300, "קניות", d=date(2026, 10, 15))
     t = _split(session, [("כלכלה", Decimal(-200)), ("ספורט", Decimal(-100))])
     h = build_home(session, C, date(2026, 10, 20))
+    # כלכלה is tracked: that part is on its card; ספורט is in the rest of variable
     parts = [x for w in h.variable.weeks for x in w.transactions if x.id == t.id]
+    parts += [x for c in h.tracked for x in c.transactions if x.id == t.id]
     assert sorted(x.amount for x in parts) == [-200, -100]
     assert all(x.split_total == -300 and len(x.split) == 2 for x in parts)
-    assert h.variable.spent == 300
+    assert h.variable.spent == 100

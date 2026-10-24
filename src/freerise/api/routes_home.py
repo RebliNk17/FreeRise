@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from freerise.api.deps import DB, get_or_404, today
 from freerise.cashflow.cycles import Cycle, cycle_by_label, cycle_for, get_start_day
+from freerise.cashflow.plan import tracked_ids
 from freerise.cashflow.summary import GROUPS
 from freerise.home.builder import build_home
 from freerise.insights.history import EXPECTED_BASIS, spent_vs_expected
@@ -73,8 +74,12 @@ def home_history(
         group = get_or_404(db, Category, category_id).group
         if group not in GROUPS:
             raise HTTPException(422, "not a cash-flow category")
+    # the variable card is spending outside tracked categories (they have their own cards)
+    exclude = frozenset(tracked_ids(db)) if kind == "variable" else frozenset()
     with hiding(hide_accounts):
-        rows = spent_vs_expected(db, c, group, category_id if kind == "category" else None)
+        rows = spent_vs_expected(
+            db, c, group, category_id if kind == "category" else None, exclude=exclude
+        )
     n = len(rows) or 1
     return HomeHistoryOut(
         cycles=[HistoryRowOut(**vars(r)) for r in rows],

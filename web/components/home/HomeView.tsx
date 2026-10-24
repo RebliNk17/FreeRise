@@ -16,7 +16,6 @@ import { AddTrackedCategory } from "./AddTrackedCategory";
 import { CategorizeChip, CategorizeSheet } from "./CategorizeSheet";
 import { HomeContext, type HomeCtx } from "./context";
 import { Expander } from "./Expander";
-import { HistoryButton } from "./HistorySheet";
 import { FixedCard } from "./FixedCard";
 import { IncomeCard } from "./IncomeCard";
 import { InsightCarousel } from "./InsightCarousel";
@@ -112,8 +111,7 @@ export function HomeView({ path, title }: { path: string; title: string }) {
         <Status loading={false} error={false} empty={empty} />
         {!empty && (
           <>
-            <SectionHeader title="הוצאות משתנות" action={<HistoryButton kind="variable" title="הוצאות משתנות" />} />
-            <VariableCard v={data.variable} />
+            <SectionHeader title="הוצאות משתנות" />
             {active.length > 0 && (
               <ul className="card flex flex-col divide-y divide-hairline px-3.5 py-1.5" aria-label="קטגוריות במעקב">
                 {active.map((c) => (
@@ -135,6 +133,7 @@ export function HomeView({ path, title }: { path: string; title: string }) {
               </Expander>
             )}
             <AddTrackedCategory />
+            <VariableCard v={data.variable} />
             <SavingsCard s={data.savings} />
             <FixedCard f={data.fixed} />
             <TotalCard d={data} />

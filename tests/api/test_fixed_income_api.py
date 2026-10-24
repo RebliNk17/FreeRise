@@ -43,7 +43,7 @@ def data(authed, sf, monkeypatch):
         s.flush()
         ids = {
             "inc": _tx(s, a, date(2026, 10, 11), 9000, "salary", "משכורת"),
-            "exp": _tx(s, a, date(2026, 10, 12), -50, "shop", "כלכלה"),
+            "exp": _tx(s, a, date(2026, 10, 12), -50, "shop", "קניות"),
         }
         s.commit()
         return authed, ids, a.id

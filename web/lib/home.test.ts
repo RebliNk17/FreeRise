@@ -84,6 +84,7 @@ test("totalSegments: shares of the bigger of spent/expected", () => {
     ["variable", 50, 500],
     ["savings", 20, 100],
   ]);
+  // variable = total − fixed − savings (tracked categories + the rest)
   const over = totalSegments({ ...d, total: { spent: 2000, expected: 1000 } });
-  expect(over[1].percent).toBe(25);
+  expect([over[1].spent, over[1].expected, over[1].percent]).toEqual([1500, 500, 75]);
 });
