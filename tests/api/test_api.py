@@ -392,3 +392,39 @@ def test_totp_always_required_in_production(monkeypatch):
     s = Settings(FREERISE_ENV="production", FREERISE_LOGIN_TOTP=False)
     monkeypatch.setattr(routes_auth, "get_settings", lambda: s)
     assert routes_auth.totp_required() is True
+
+
+def test_same_login_cannot_be_added_twice(authed, sf):
+    card = {"id": "012345678", "card6Digits": "123456", "password": "pw-1"}
+    body = {"provider": "amex", "label": "שי", "owner": "שי", "fields": card}
+    first = authed.post("/api/credentials", json=body).json()["id"]
+    # an abandoned, never-verified attempt for the same login is replaced, not duplicated
+    second = authed.post("/api/credentials", json=body).json()["id"]
+    with sf() as s:
+        assert s.get(Credential, first) is None
+        s.get(Credential, second).verified = True
+        s.commit()
+    # verified: refused, pointing at the existing one; whitespace/case don't matter
+    again = {**body, "fields": {**card, "id": " 012345678 ", "password": "other"}}
+    r = authed.post("/api/credentials", json=again)
+    assert r.status_code == 409 and r.json()["detail"]["credential_id"] == second
+    # another person's card on the same provider is fine
+    other = {**body, "fields": {**card, "id": "999999999"}}
+    third = authed.post("/api/credentials", json=other).json()["id"]
+    with sf() as s:
+        s.get(Credential, third).verified = True
+        s.commit()
+    # editing the other one into the same login is refused too
+    r = authed.patch(f"/api/credentials/{third}", json={"fields": {"id": "012345678"}})
+    assert r.status_code == 409
+
+
+def test_details_show_ids_never_passwords(authed):
+    fields = {"id": "012345678", "card6Digits": "123456", "password": "pw-secret"}
+    cid = authed.post(
+        "/api/credentials",
+        json={"provider": "amex", "label": "שי", "owner": "שי", "fields": fields},
+    ).json()["id"]
+    r = authed.get(f"/api/credentials/{cid}/details")
+    assert r.json() == {"id": "012345678", "card6Digits": "123456"}
+    assert "pw-secret" not in r.text

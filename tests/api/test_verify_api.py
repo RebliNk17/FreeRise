@@ -175,7 +175,8 @@ def test_stalled_verify_times_out(authed, sf):
 
 async def test_abandoned_new_connection_dropped(authed, sf):
     old = authed.post("/api/credentials", json=BODY).json()["id"]
-    fresh = authed.post("/api/credentials", json=BODY).json()["id"]
+    other_login = {**BODY, "fields": {**BODY["fields"], "username": "someone-else"}}
+    fresh = authed.post("/api/credentials", json=other_login).json()["id"]
     with sf() as s:
         run = s.scalar(select(SyncRun).where(SyncRun.credential_id == old))
         run.created_at = datetime.now(UTC) - timedelta(hours=2)
