@@ -37,11 +37,11 @@ export function Planner() {
       <div className="grid grid-cols-2 gap-2" aria-live="polite">
         <div className="rounded-2xl bg-sunken p-3">
           <span className="block text-xs text-muted">סוף החודש</span>
-          <Amount value={Math.round(t.month_end)} plain className={`text-2xl font-extrabold ${t.month_end < 0 ? "text-danger" : ""}`} />
+          <Amount value={t.month_end} plain className={`text-2xl font-extrabold ${t.month_end < 0 ? "text-danger" : ""}`} />
         </div>
         <div className="rounded-2xl bg-sunken p-3">
           <span className="block text-xs text-muted">תקציב שבועי</span>
-          <Amount value={Math.round(t.weekly_allowance)} plain className={`text-2xl font-extrabold ${t.weekly_allowance < 0 ? "text-danger" : ""}`} />
+          <Amount value={t.weekly_allowance} plain className={`text-2xl font-extrabold ${t.weekly_allowance < 0 ? "text-danger" : ""}`} />
         </div>
       </div>
       <p className="text-xs text-muted">
@@ -53,7 +53,7 @@ export function Planner() {
           <section key={g} className="flex flex-col gap-2 border-t border-hairline pt-3">
             <div className="flex items-center gap-2">
               <h3 className="flex-1 font-bold">{TITLE[g]}</h3>
-              <Amount value={Math.round(t[g])} plain className="font-bold" />
+              <Amount value={t[g]} plain className="font-bold" />
             </div>
             <ul className="flex flex-col gap-2">
               {rows.map((l) => (

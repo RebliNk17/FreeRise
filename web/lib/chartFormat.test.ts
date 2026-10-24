@@ -1,14 +1,12 @@
 import { expect, test } from "bun:test";
-import { captionIndex, compactMoney } from "./chartFormat";
+import { captionIndex, chartMoney } from "./chartFormat";
 
-test("compactMoney", () => {
-  expect(compactMoney(8645.9)).toBe("8.6K");
-  expect(compactMoney(950)).toBe("950");
-  expect(compactMoney(-1200)).toBe("-1.2K");
-  expect(compactMoney(12000)).toBe("12K");
-  expect(compactMoney(150000)).toBe("150K");
-  expect(compactMoney(1250000)).toBe("1.3M");
-  expect(compactMoney(0)).toBe("0");
+test("chartMoney: exact, never rounded", () => {
+  expect(chartMoney(8645.9)).toBe("8,645.9");
+  expect(chartMoney(950)).toBe("950");
+  expect(chartMoney(-1200)).toBe("-1,200");
+  expect(chartMoney(1250000.55)).toBe("1,250,000.55");
+  expect(chartMoney(0)).toBe("0");
 });
 
 test("captionIndex", () => {

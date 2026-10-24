@@ -74,7 +74,7 @@ function WeekEdit({ w, onSave }: { w: Week; onSave: (amount: number | null) => v
         className="z-[1] col-start-3 row-start-1 flex size-8 items-center justify-center justify-self-start self-center rounded-lg text-muted hover:bg-sunken hover:text-text"
         aria-label={`עריכת הסכום הצפוי לשבוע ${w.index + 1}`}
         onClick={() => {
-          setValue(w.expected == null ? "" : String(Math.round(w.expected)));
+          setValue(w.expected == null ? "" : String(w.expected));
           setEditing(true);
         }}
       >

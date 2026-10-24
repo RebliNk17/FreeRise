@@ -287,11 +287,11 @@ def test_fees_paid_and_new_fee_fire_once(session):
     _fires_once(session, "fees_paid")
     assert _kinds(session).count("new_fee") == 1
     n = session.scalar(select(Notification).where(Notification.kind == "fees_paid"))
-    assert n.body == "עד כה החודש שילמתם ₪10.90 עמלות ב-5 חיובים (a)"
+    assert n.body == "עד כה החודש שילמתם ₪10.9 עמלות ב-5 חיובים (a)"
     assert n.link == "/home/2026/10" and n.severity == "info"
     new = session.scalar(select(Notification).where(Notification.kind == "new_fee"))
     assert new.title == "עמלות חדשות" and new.body.endswith(" ועוד 1")
-    assert new.body.startswith("עמלת המרה 00 10 ₪1.00 (a), דמי כרטיס 10 10 ₪1.00 (a)")
+    assert new.body.startswith("עמלת המרה 00 10 ₪1 (a), דמי כרטיס 10 10 ₪1 (a)")
 
 
 def test_new_fee_burst_guard(session):
@@ -299,5 +299,5 @@ def test_new_fee_burst_guard(session):
     _tx(session, a, date(2026, 10, 12), "-6.90", _cat(session, "עמלות"), desc="עמלת פעולה")
     generate_notifications(session, TODAY)
     n = session.scalar(select(Notification).where(Notification.kind == "fees_paid"))
-    assert n.body == "עד כה החודש שילמתם ₪6.90 עמלות בחיוב אחד (a)"
+    assert n.body == "עד כה החודש שילמתם ₪6.9 עמלות בחיוב אחד (a)"
     assert "new_fee" not in _kinds(session)

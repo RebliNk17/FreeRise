@@ -47,17 +47,17 @@ def llm_config() -> LlmConfig | None:
 def _cycle(s: CycleSummary) -> dict:
     out = {
         "month": f"{s.cycle.label_month:%Y-%m}",
-        "income": round(float(s.income)),
-        "spending": round(float(s.spending)),
-        "net": round(float(s.net)),
+        "income": round(float(s.income), 2),
+        "spending": round(float(s.spending), 2),
+        "net": round(float(s.net), 2),
     }
     for g in s.groups:
         if g.group == "income":
             continue
-        out[g.group] = round(float(g.total))
+        out[g.group] = round(float(g.total), 2)
         top = sorted(g.categories, key=lambda c: -c.total)[:TOP_CATEGORIES]
         out[f"{g.group}_by_category"] = {
-            (c.name or UNCATEGORIZED): round(float(c.total)) for c in top if c.total
+            (c.name or UNCATEGORIZED): round(float(c.total), 2) for c in top if c.total
         }
     return out
 
@@ -73,10 +73,10 @@ def build_context(session: Session, today: date) -> dict:
             **_cycle(cycle_summary(session, cur)),
             "start": cur.start.isoformat(),
             "end": cur.end.isoformat(),
-            "variable_budget": round(float(plan.variable_allowance)),
-            "variable_left": round(float(plan.variable_left)),
-            "month_end_goal": round(float(plan.goal)),
-            "projected_month_end": round(float(projected_month_end(plan, today, hist))),
+            "variable_budget": round(float(plan.variable_allowance), 2),
+            "variable_left": round(float(plan.variable_left), 2),
+            "month_end_goal": round(float(plan.goal), 2),
+            "projected_month_end": round(float(projected_month_end(plan, today, hist)), 2),
         },
         "previous_cycles": [_cycle(s) for s in reversed(hist)],  # oldest first
         "recurring": [
@@ -84,7 +84,7 @@ def build_context(session: Session, today: date) -> dict:
                 "label": r.label,
                 "direction": r.direction,
                 "cadence": r.cadence,
-                "amount": round(float(r.expected_amount)),
+                "amount": round(float(r.expected_amount), 2),
                 "next": r.next_expected_date.isoformat(),
             }
             for r in session.scalars(
@@ -94,8 +94,8 @@ def build_context(session: Session, today: date) -> dict:
         "savings_goals": [
             {
                 "name": p.name,
-                "target": round(float(p.target_amount)),
-                "saved": round(float(p.saved_amount)),
+                "target": round(float(p.target_amount), 2),
+                "saved": round(float(p.saved_amount), 2),
                 "target_date": p.target_date.isoformat(),
             }
             for p in session.scalars(select(SavingsPlan).where(SavingsPlan.active.is_(True)))

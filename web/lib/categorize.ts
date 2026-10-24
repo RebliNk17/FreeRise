@@ -33,7 +33,7 @@ export function merchantPicks(cats: Category[], usage: number[], total: number, 
 
 // LTR isolates keep "₪89" and date ranges in order inside Hebrew text
 export const ltr = (s: string) => `\u2066${s}\u2069`;
-const ils = (n: number) => ltr(`₪${Math.round(Math.abs(n)).toLocaleString("en-US")}`);
+const ils = (n: number) => ltr(`₪${Math.abs(n).toLocaleString("en-US", { maximumFractionDigits: 2 })}`); // exact: money is never rounded
 const mmyy = (iso: string) => `${iso.slice(5, 7)}.${iso.slice(2, 4)}`;
 
 /** The merchant's pattern on the categorize card, and whether it looks like a fixed expense:

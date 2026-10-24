@@ -3,7 +3,7 @@
 import { useState, useSyncExternalStore } from "react";
 import { Bar, BarChart, Cell, LabelList, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Money } from "@/components/Amount";
-import { captionIndex, compactMoney } from "@/lib/chartFormat";
+import { captionIndex, chartMoney } from "@/lib/chartFormat";
 import { TooltipCard, type TooltipRow } from "./ChartTooltip";
 
 /** One bar per month. `full` is the caption/tooltip title ("אפריל 2026"), `label` the axis tick ("אפר"). */
@@ -72,10 +72,10 @@ export function MonthBars({
           <p className="flex flex-col">
             <span className="text-xs text-muted">{cur.full}</span>
             <span className="flex items-baseline gap-2">
-              <Money value={Math.round(cur.value)} className={`text-xl font-extrabold ${rows(cur)[0].tone === "danger" ? "text-danger" : ""}`} />
+              <Money value={cur.value} className={`text-xl font-extrabold ${rows(cur)[0].tone === "danger" ? "text-danger" : ""}`} />
               {cur.expected != null && (
                 <span className="text-xs text-muted">
-                  {expectedLabel} <Money value={Math.round(cur.expected)} />
+                  {expectedLabel} <Money value={cur.expected} />
                 </span>
               )}
             </span>
@@ -83,13 +83,13 @@ export function MonthBars({
         )}
         {average != null && (
           <p className="text-xs text-muted">
-            ממוצע <Money value={Math.round(average)} className="font-bold text-text" />
+            ממוצע <Money value={average} className="font-bold text-text" />
           </p>
         )}
       </div>
       <div dir="ltr" style={{ height }} role="img" aria-label={ariaLabel}>
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: data.length <= 6 ? 18 : 6, right: average != null ? 66 : 4, left: 4, bottom: 0 }} barCategoryGap="22%" barGap={hasExpected ? "-100%" : 4}>
+          <BarChart data={data} margin={{ top: data.length <= 6 ? 18 : 6, right: average != null ? 88 : 4, left: 4, bottom: 0 }} barCategoryGap="22%" barGap={hasExpected ? "-100%" : 4}>
             <XAxis dataKey="label" tickLine={false} axisLine={false} reversed interval={0} tick={{ fontSize: data.length > 6 ? 10 : 12, fill: "var(--muted)" }} />
             <YAxis hide domain={kind === "net" ? [(min: number) => Math.min(0, min), (max: number) => Math.max(0, max)] : [0, "auto"]} />
             {kind === "net" && <ReferenceLine y={0} stroke="var(--border)" />}
@@ -98,7 +98,7 @@ export function MonthBars({
                 y={average}
                 stroke="var(--sun-strong)"
                 strokeDasharray="4 4"
-                label={{ value: `\u2067ממוצע ${compactMoney(average)}\u2069`, position: "right", fill: "var(--muted)", fontSize: 10 }}
+                label={{ value: `\u2067ממוצע ${chartMoney(average)}\u2069`, position: "right", fill: "var(--muted)", fontSize: 10 }}
               />
             )}
             <Tooltip cursor={{ fill: "var(--sunken)", fillOpacity: 0.5, radius: 8 }} content={({ active, payload }) => {
@@ -131,7 +131,7 @@ export function MonthBars({
                     const below = v < 0;
                     return (
                       <text x={Number(x) + Number(width) / 2} y={below ? Number(y) + Number(h) + 12 : Number(y) - 5} textAnchor="middle" fontSize={10} fontWeight={700} fill="var(--muted)">
-                        {compactMoney(v)}
+                        {chartMoney(v)}
                       </text>
                     );
                   }}

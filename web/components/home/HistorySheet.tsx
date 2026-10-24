@@ -29,7 +29,7 @@ export function HistorySheet({ kind, categoryId, title, labels, onClose }: { kin
   const { cycle } = useHome().data;
   const { data, error } = useApi<HomeHistory>(historyPath(kind, cycle, useHiddenAccounts(), categoryId));
   const bars = (data?.cycles ?? []).map((c) => ({ key: `${c.label_year}-${c.label_month}`, label: monthName(c.label_month).slice(0, 3), full: `${monthName(c.label_month)} ${c.label_year}`, value: c.spent, expected: c.expected }));
-  const alt = bars.map((b) => `${b.full}: ${labels[0]} ${formatILS(Math.round(b.value))}, ${labels[1]} ${formatILS(Math.round(b.expected))}`).join("; ");
+  const alt = bars.map((b) => `${b.full}: ${labels[0]} ${formatILS(b.value)}, ${labels[1]} ${formatILS(b.expected)}`).join("; ");
   return (
     <Sheet labelledBy="history-title" onClose={onClose} header={<SheetTitle id="history-title" title={`${title}: חודשים קודמים`} onClose={onClose} />}>
       <div className="flex flex-col gap-3">
@@ -39,11 +39,11 @@ export function HistorySheet({ kind, categoryId, title, labels, onClose }: { kin
             <div className="grid grid-cols-2 gap-2">
               <div className="card flex flex-col p-3">
                 <span className="text-xs text-muted">ממוצע {labels[0]}</span>
-                <Money value={Math.round(data.avg_spent)} className="text-xl font-extrabold" />
+                <Money value={data.avg_spent} className="text-xl font-extrabold" />
               </div>
               <div className="card flex flex-col p-3">
                 <span className="text-xs text-muted">ממוצע {labels[1]}</span>
-                <Money value={Math.round(data.avg_expected)} className="text-xl font-bold text-muted" />
+                <Money value={data.avg_expected} className="text-xl font-bold text-muted" />
               </div>
             </div>
             <div className="card p-3">
@@ -53,9 +53,9 @@ export function HistorySheet({ kind, categoryId, title, labels, onClose }: { kin
               {[...bars].reverse().map((b) => (
                 <li key={b.key} className="flex min-h-11 items-center gap-2">
                   <span className="flex-1 font-semibold">{b.full}</span>
-                  <Money value={Math.round(b.value)} className={`font-bold ${b.value > b.expected + 0.5 && kind !== "income" && kind !== "savings" ? "text-danger" : ""}`} />
+                  <Money value={b.value} className={`font-bold ${b.value > b.expected + 0.5 && kind !== "income" && kind !== "savings" ? "text-danger" : ""}`} />
                   <span className="text-xs text-muted">
-                    מתוך <Money value={Math.round(b.expected)} />
+                    מתוך <Money value={b.expected} />
                   </span>
                 </li>
               ))}

@@ -65,7 +65,8 @@ class Insight:
 
 
 def ils(x) -> str:
-    return f"₪{Decimal(x):,.0f}"
+    """Exact, never rounded (money): ₪17.9, ₪1,000, ₪1,234.56."""
+    return "₪" + f"{Decimal(x):,.2f}".rstrip("0").rstrip(".")
 
 
 def group_total(s: CycleSummary, g: str) -> Decimal:

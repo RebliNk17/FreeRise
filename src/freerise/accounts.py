@@ -23,6 +23,13 @@ def account_label(a: Account) -> str:
     return f"{'עו״ש ' if a.kind == 'bank' else ''}{name} \u2066••{last4}\u2069"
 
 
+def account_provider(a: Account) -> str:
+    """The user's own name for it if renamed, else the provider ("וואן זירו", "ישראכרט")."""
+    if not a.display_name.endswith(f" {a.provider_account_id[-4:]}"):
+        return a.display_name
+    return PROVIDER_HE.get(a.credential.provider, a.credential.label)
+
+
 def account_holder(a: Account) -> str:
     """Whose card/account it is: the user's (or provider's) holder, else the login owner."""
     return a.holder or a.credential.owner
