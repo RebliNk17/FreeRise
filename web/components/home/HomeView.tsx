@@ -113,7 +113,7 @@ export function HomeView({ path, title }: { path: string; title: string }) {
           <>
             <SectionHeader title="הוצאות משתנות" />
             {active.length > 0 && (
-              <ul className="card flex flex-col divide-y divide-hairline px-3.5 py-1.5" aria-label="קטגוריות במעקב">
+              <ul className="flex flex-col gap-3" aria-label="קטגוריות במעקב">
                 {active.map((c) => (
                   <li key={c.category_id}>
                     <TrackedCategoryCard c={c} />
@@ -122,8 +122,8 @@ export function HomeView({ path, title }: { path: string; title: string }) {
               </ul>
             )}
             {idle.length > 0 && (
-              <Expander className="card px-4 py-2" buttonClassName="flex min-h-11" label={<span className="text-sm font-semibold text-muted">קטגוריות ללא פעילות ({idle.length})</span>}>
-                <ul className="flex flex-col divide-y divide-hairline border-t border-hairline">
+              <Expander buttonClassName="flex min-h-11 px-3" label={<span className="text-sm font-semibold text-muted">קטגוריות ללא פעילות ({idle.length})</span>}>
+                <ul className="flex flex-col gap-3 p-1">
                   {idle.map((c) => (
                     <li key={c.category_id}>
                       <TrackedCategoryCard c={c} />
