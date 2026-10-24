@@ -27,7 +27,7 @@ SEP = cycle_by_label(2026, 9, 10)
 _seq = itertools.count()
 
 
-def _acct(s, last4="7282", kind="card", excluded=False):
+def _acct(s, last4="1234", kind="card", excluded=False):
     cred = Credential(provider="max", label="מקס", owner="o", secret_enc=b"s")
     a = Account(
         credential=cred,

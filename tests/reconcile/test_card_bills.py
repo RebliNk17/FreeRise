@@ -197,14 +197,14 @@ def test_shekel_sign_is_not_foreign(session):
 
 
 def test_card_with_own_debit_not_reused(session):
-    # 7611 has its own exact debit; 4984 is short ₪1,658 of installments. The other bill
-    # must not borrow 7611 to fake a small gap.
+    # Card 1 has its own exact debit; card 2 is short of installments. The other bill
+    # must not borrow card 1 to fake a small gap.
     bank = _acct(session, "x", "bank")
-    c7611, c4984, c3757 = (_acct(session, "visa cal", name=n) for n in ("7611", "4984", "3757"))
-    _tx(session, c7611, -1500, BILL)
-    _tx(session, c4984, -700, BILL)
-    _tx(session, c3757, -35, BILL)
+    c1, c2, c3 = (_acct(session, "visa cal", name=n) for n in ("1111", "2222", "3333"))
+    _tx(session, c1, -1500, BILL)
+    _tx(session, c2, -700, BILL)
+    _tx(session, c3, -35, BILL)
     _bill(session, bank, 1500, "חיוב מ-כאל")
-    r = reconcile_bill(session, _bill(session, bank, 2393, "חיוב מ-כאל").id)
-    assert c7611.id not in r.matched_account_ids
-    assert r.status == "mismatch" and r.gap == 1658
+    r = reconcile_bill(session, _bill(session, bank, 2235, "חיוב מ-כאל").id)
+    assert c1.id not in r.matched_account_ids
+    assert r.status == "mismatch" and r.gap == 1500

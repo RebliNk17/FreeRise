@@ -17,7 +17,7 @@ def test_search_one_box(authed, ids, sf):  # noqa: F811
         s.execute(
             update(Account)
             .where(Account.id == ids["card"])
-            .values(provider_account_id="4580123457134", holder="נועה")
+            .values(provider_account_id="4580123451234", holder="נועה")
         )
         s.commit()
     _txn(sf, ids["card"], date(2026, 9, 1), -119.95, "Falafel Hakosem", key="falafel hakosem")
@@ -25,7 +25,7 @@ def test_search_one_box(authed, ids, sf):  # noqa: F811
     _txn(sf, ids["bank"], date(2026, 9, 3), 1200.5, "Refund")
 
     assert _q(authed, q="falafel") == ["Falafel Hakosem"]  # text
-    assert _q(authed, q="7134") == ["Falafel Hakosem"]  # card's last 4 digits
+    assert _q(authed, q="1234") == ["Falafel Hakosem"]  # card's last 4 digits
     assert _q(authed, q="נועה") == ["Falafel Hakosem"]  # holder
     assert _q(authed, q="120") == ["Falafel Hakosem"]  # amount ±0.10
     assert _q(authed, q="1,200.50") == ["Refund"]  # credits too, commas ok

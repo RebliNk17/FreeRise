@@ -62,7 +62,7 @@ export type Credential = {
   verify_run_id?: number | null; // set when the request started a connection check
 };
 
-/** An account/card under a connection: label is "מקס ••4720". */
+/** An account/card under a connection: label is "מקס ••1234". */
 export type AccountBrief = { label: string; holder: string; kind: "bank" | "card" | "fund"; active: boolean };
 
 /** GET /credentials/{id}/verify: the connecting screen's state. */
