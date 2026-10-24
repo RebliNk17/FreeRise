@@ -42,7 +42,7 @@ export function TotalCard({ d }: { d: HomeData }) {
           </>
         )}
       </p>
-      <Expander label={<span className="text-sm font-semibold text-brand">פירוט לפי סוג</span>} buttonClassName="flex min-h-11 border-t border-hairline pt-2">
+      <Expander label={<span className="text-sm font-semibold text-brand">פירוט לפי סוג</span>} className="border-t border-hairline pt-1.5" buttonClassName="flex min-h-11 px-1">
         <ul className="flex flex-col divide-y divide-hairline pt-1">
           {segs.map((s) => {
             const o = s.spent > s.expected + 0.5;

@@ -81,7 +81,7 @@ export function NextCycleCard() {
           </div>
         </Expander>
         <Expander
-          buttonClassName="flex min-h-11 border-t border-hairline"
+          className="border-t border-hairline" buttonClassName="flex min-h-11 px-1"
           label={
             <span className="flex items-baseline gap-2 text-sm">
               <span className="flex-1">הכנסות צפויות</span>

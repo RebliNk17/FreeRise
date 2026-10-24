@@ -21,7 +21,7 @@ export function VariableCard({ v }: { v: HomeData["variable"] }) {
     >
       <SpentHeader spent={v.spent} expected={v.allowance} labels={["יצא", "תקציב החודש"]} />
       {v.weeks.length > 0 && (
-        <Expander label={<span className="text-sm font-semibold text-brand">פירוט שבועי</span>} buttonClassName="flex min-h-11 border-t border-hairline pt-2">
+        <Expander label={<span className="text-sm font-semibold text-brand">פירוט שבועי</span>} className="border-t border-hairline pt-1.5" buttonClassName="flex min-h-11 px-1">
           <div className="pt-2">
             <WeekTable weeks={v.weeks} col="left" />
           </div>
