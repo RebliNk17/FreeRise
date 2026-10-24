@@ -163,7 +163,7 @@ def test_engine_selection(monkeypatch):
     monkeypatch.delenv("FREERISE_IBS_PROVIDERS", raising=False)
     for provider in ibs.COMPANIES:  # default "all": every provider the package has
         assert isinstance(make_scraper(provider, creds), ibs.IbsScraper), provider
-    assert not ibs.enabled("mislaka") and not ibs.enabled("hafenix")
+    assert not ibs.enabled("mislaka") and not ibs.enabled("hafenix") and not ibs.enabled("migdal")
     monkeypatch.setenv("FREERISE_IBS_PROVIDERS", "all,-max")  # one provider back on Python
     assert not isinstance(make_scraper("max", creds), ibs.IbsScraper)
     assert isinstance(make_scraper("leumi", creds), ibs.IbsScraper)
@@ -178,7 +178,7 @@ def test_engine_selection(monkeypatch):
 
 def test_every_package_provider_is_mapped():
     """Python-only = no package equivalent; stored field names = the package's loginFields."""
-    assert set(PROVIDER_CONFIGS) - set(ibs.COMPANIES) == {"hafenix", "mislaka", "demo"}
+    assert set(PROVIDER_CONFIGS) - set(ibs.COMPANIES) == {"hafenix", "migdal", "mislaka", "demo"}
     for key, (_, fields) in ibs.COMPANIES.items():
         cfg = PROVIDER_CONFIGS[key]
         stored = {

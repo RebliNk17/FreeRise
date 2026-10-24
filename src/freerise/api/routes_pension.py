@@ -121,7 +121,7 @@ def list_funds(db: DB) -> FundsOut:
     ov = funds_overview(db)
     creds = db.scalars(
         select(Credential)
-        .where(Credential.provider == "mislaka", Credential.verified)
+        .where(Credential.provider.in_(("mislaka", "hafenix", "migdal")), Credential.verified)
         .order_by(Credential.id)
     ).all()
     latest = {

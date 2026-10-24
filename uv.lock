@@ -290,6 +290,7 @@ dependencies = [
     { name = "cryptography" },
     { name = "fastapi" },
     { name = "httpx" },
+    { name = "israeli-pension-scrapers" },
     { name = "playwright" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic-settings" },
@@ -314,6 +315,7 @@ requires-dist = [
     { name = "cryptography", specifier = ">=50.0.2" },
     { name = "fastapi", specifier = ">=0.161.1" },
     { name = "httpx", specifier = ">=0.28.1" },
+    { name = "israeli-pension-scrapers", url = "https://github.com/RebliNk17/israeli-pension-scrapers/archive/64c83595e12f9ae9b6c1dfcaa1a2de4edfe11dfc.tar.gz" },
     { name = "playwright", specifier = ">=1.64.1" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3.6" },
     { name = "pydantic-settings", specifier = ">=2.16.1" },
@@ -491,6 +493,18 @@ sdist = { url = "https://files.pythonhosted.org/packages/01/e1/2069291243c926a2f
 wheels = [
     { url = "https://files.pythonhosted.org/packages/56/43/4ca9e49d27a1fcf6bece6f6aec0ea46bb9112489b93d4b688fb415457bdb/iniconfig-2.3.1-py3-none-any.whl", hash = "sha256:9121e2c1fdb355232495be3194c8dfe87ccc2d5dee45947b78e68f499790d7a7", size = 7552, upload-time = "2026-10-06T22:48:36.959Z" },
 ]
+
+[[package]]
+name = "israeli-pension-scrapers"
+version = "0.2.0"
+source = { url = "https://github.com/RebliNk17/israeli-pension-scrapers/archive/64c83595e12f9ae9b6c1dfcaa1a2de4edfe11dfc.tar.gz" }
+dependencies = [
+    { name = "httpx" },
+]
+sdist = { hash = "sha256:e8d0f58a2d6c74f4fc673f69c9239198389dc674b22240c8b2448b28db43aac0" }
+
+[package.metadata]
+requires-dist = [{ name = "httpx", specifier = ">=0.27.0" }]
 
 [[package]]
 name = "mako"
