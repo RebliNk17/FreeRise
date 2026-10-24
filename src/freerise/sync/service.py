@@ -178,6 +178,15 @@ def _upsert_txn(
     return ("updated" if changed else None), row
 
 
+def _no_money_moved(t: ScrapedTxn) -> bool:
+    """₪0 rows (waived fees, CashCal placeholders) are noise. A pending foreign charge
+    can show ₪0 before conversion, so only drop it once completed or in shekels."""
+    if _money(t.charged_amount) != 0:
+        return False
+    status = getattr(t.status, "value", t.status)
+    return status != "pending" or (t.original_currency or "ILS") in ("ILS", "₪")
+
+
 def _store(
     s: Session, cred: Credential, accounts: list[AccountResult], start: date
 ) -> tuple[int, int]:
@@ -187,6 +196,8 @@ def _store(
         seen: Counter[str] = Counter()
         touched: set[int] = set()
         for t in a.transactions:
+            if _no_money_moved(t):
+                continue
             key = txn_key(t)
             seen[key] += 1
             if not t.identifier and seen[key] > 1:
