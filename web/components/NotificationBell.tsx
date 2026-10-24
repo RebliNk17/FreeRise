@@ -6,7 +6,7 @@ import { Bell, Info, TriangleAlert } from "lucide-react";
 import { EmptyState, Status } from "@/components/Card";
 import { Sheet, SheetTitle } from "@/components/Sheet";
 import { api, send, type Notification } from "@/lib/api";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatTime } from "@/lib/format";
 import { useApi } from "@/lib/useApi";
 
 /** Fired after marking read, so the badge refreshes without waiting for the poll. */
@@ -100,7 +100,7 @@ function NotificationsSheet({ onClose }: { onClose: () => void }) {
                 <span className="flex items-baseline gap-2">
                   <span className={`flex-1 ${n.read_at ? "" : "font-bold"}`}>{n.title}</span>
                   <span dir="ltr" className="shrink-0 text-xs text-faint">
-                    {formatDate(n.created_at)}
+                    {formatDate(n.created_at)} · {formatTime(n.created_at)}
                   </span>
                 </span>
                 {n.body && <span className="block text-sm text-muted">{n.body}</span>}
