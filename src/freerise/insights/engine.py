@@ -23,6 +23,7 @@ from freerise.cashflow.plan import (
     projected_month_end,
 )
 from freerise.cashflow.summary import UNCATEGORIZED, CycleSummary
+from freerise.forecast.next_cycle import installments_ending
 from freerise.models import (
     Account,
     Category,
@@ -503,6 +504,25 @@ def fixed_not_charged(ctx: Ctx) -> list[Insight]:
     return out
 
 
+def installments_stopping(ctx: Ctx) -> list[Insight]:
+    """Final installments charged this cycle: next cycle is lighter by their sum."""
+    lines = installments_ending(ctx.session, ctx.cycle)
+    if not lines:
+        return []
+    total = sum((x.amount for x in lines), Decimal(0))
+    names = ", ".join(x.label for x in lines)
+    return [
+        Insight(
+            f"installments_stopping:{ctx.cycle.start}",
+            "installments_stopping",
+            "positive",
+            f"יפסיקו {len(lines)} תשלומים" if len(lines) > 1 else "יפסיק תשלום",
+            f"מהחודש הבא לא יחויבו עוד {ils(total)} בחודש: {names}.",
+            amount=total,
+        )
+    ]
+
+
 RULES = (
     negative_cycle,
     low_balance_before_income,
@@ -518,6 +538,7 @@ RULES = (
     variable_income_expected,
     eating_out_weekend,
     fixed_not_charged,
+    installments_stopping,
 )
 
 

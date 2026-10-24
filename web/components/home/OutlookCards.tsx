@@ -55,7 +55,7 @@ export function BalancesCard() {
 }
 
 /** "החודש הבא" (#next): expected fixed charges and income with their dates and accounts,
- * the change from this cycle, and installments that stop — everything the old /forecast page showed. */
+ * and the change from this cycle. Installments that stop are an insight slide (installments_stopping). */
 export function NextCycleCard() {
   const { data: f } = useApi<Forecast>("/forecast/next", useHome().version);
   if (!f) return null;
@@ -93,22 +93,6 @@ export function NextCycleCard() {
             <ExpectedItems income items={f.income_items} none="לא זוהו הכנסות קבועות." />
           </div>
         </Expander>
-        {f.installments_stopping.length > 0 ? (
-          <Expander
-            buttonClassName="flex min-h-11 border-t border-hairline"
-            label={
-              <span className="text-sm font-semibold">
-                יפסיקו תשלומים בסך <Money value={f.installments_stopping_total} className="font-bold text-positive" /> ({f.installments_stopping.length})
-              </span>
-            }
-          >
-            <div className="pt-1">
-              <ExpectedItems items={f.installments_stopping} none="" />
-            </div>
-          </Expander>
-        ) : (
-          <p className="border-t border-hairline pt-3 text-sm text-muted">אין תשלומים שמסתיימים בחודש הבא.</p>
-        )}
       </Card>
     </div>
   );
