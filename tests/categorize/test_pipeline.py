@@ -144,3 +144,72 @@ def test_fee_rules_do_not_hijack_bank_card_bills(session, cat):
     t = _bank_txn(session, "עמלת פעולה בערוץ ישיר", amount="-6.90")
     categorize_pending(session)
     assert t.category_id == cat("עמלות").id
+
+
+def _incoming(session, description, owner="שי כהן", amount="3700"):
+    from datetime import date
+    from decimal import Decimal
+
+    from freerise.categorize.normalize import normalize_merchant
+    from freerise.models import Account, Credential, Transaction
+
+    cred = Credential(provider="hapoalim", label="b", owner=owner, secret_enc=b"x")
+    acct = Account(
+        credential=cred, provider_account_id=f"in-{description}", kind="bank", display_name="b"
+    )
+    session.add(acct)
+    session.flush()
+    t = Transaction(
+        account_id=acct.id,
+        txn_key=f"in-{description}",
+        date=date(2026, 10, 9),
+        processed_date=date(2026, 10, 9),
+        raw={},
+        amount=Decimal(amount),
+        description=description,
+        status="completed",
+        merchant_key=normalize_merchant(description),
+    )
+    session.add(t)
+    session.flush()
+    return t
+
+
+def test_incoming_transfer_from_someone_else_is_income(session, cat):
+    t = _incoming(session, "העברה מהפועלים/אזולאי יעקב עומ")
+    categorize_pending(session)
+    assert t.category_id == cat("הכנסות אחרות").id
+
+
+def test_incoming_transfer_from_ourselves_stays_a_transfer(session, cat):
+    own = _incoming(session, "העברה מב הפועלים ביט/שי כהן")
+    mine = _incoming(session, "העברה ממפייבוקס שלי", amount="318.30")
+    to_us = _incoming(session, "העברה מ- ישראל מאיר ל- שי כהן ואורטל", amount="31000")
+    categorize_pending(session)
+    assert own.category_id == mine.category_id == cat("העברות").id
+    assert to_us.category_id == cat("הכנסות אחרות").id  # our name only as the recipient
+
+
+def test_incoming_transfer_with_outgoing_twin_stays_a_transfer(session, cat):
+    t = _incoming(session, "העברה מחשבון אחר", owner="xx", amount="500")
+    twin = _incoming(session, "העברה לחשבון שלי", owner="yy", amount="-500")
+    categorize_pending(session)
+    assert t.category_id == twin.category_id == cat("העברות").id
+
+
+def test_outgoing_transfer_and_user_rule_untouched(session, cat):
+    out = _incoming(session, "העברה לבעל הדירה", amount="-3700")
+    mine = _incoming(session, "העברה ממישהו", amount="100")
+    rule(session, mine.merchant_key, cat("העברות").id, "user")
+    categorize_pending(session)
+    assert out.category_id == mine.category_id == cat("העברות").id
+
+
+def test_reclassify_existing_seed_transfer(session, cat):
+    from freerise.categorize.pipeline import reclassify_incoming_transfers
+
+    t = _incoming(session, "העברה מהפועלים/שרותי בורסה והש", amount="7231.40")
+    t.category_id, t.category_source = cat("העברות").id, "map"
+    session.flush()
+    assert reclassify_incoming_transfers(session) == 1
+    assert t.category_id == cat("הכנסות אחרות").id
