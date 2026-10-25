@@ -1,6 +1,6 @@
 [project]
 name = "freerise"
-version = "1.1.0"
+version = "1.2.0"
 description = "Free, self-hosted household finance app for Israeli banks and credit cards"
 authors = [
     { name = "Shai Cohen", email = "shai@cohens.dev" }

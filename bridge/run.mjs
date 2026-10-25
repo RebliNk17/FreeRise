@@ -336,8 +336,7 @@ async function main() {
     );
   }
   if (req.companyId === 'visaCal') {
-    // freerise patch: Cal pure-HTTP mobile API (`api-cc.cal-online.co.il`) + web fallback.
-    // Reverse-engineered from `com.onoapps.cal4u` v6.26.17 (`AuthenticationApiService`).
+    // freerise patch: Cal pure-HTTP API (`api-cc.cal-online.co.il`) + web fallback.
     // Authenticates directly against `https://api-cc.cal-online.co.il/Authentication/api/login/regularLogin`
     // (or `/Authentication/api/login/bioLogin` when a long-term `hash` is stored in `otpLongTermToken`)
     // without launching Chrome, falling back to the web flow only if the mobile endpoint is unreachable.
