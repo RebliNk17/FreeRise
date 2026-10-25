@@ -17,7 +17,7 @@ from freerise.crypto import decrypt_json, encrypt_json, mask
 from freerise.models import Account, Credential, OtpRequest, SyncRun, User
 from freerise.sync import demo_provider
 from freerise.sync.otp import answer_otp
-from freerise.sync.service import login_paused
+from freerise.sync.service import active_run_id, login_paused
 
 router = APIRouter()
 Me = Annotated[User, Depends(current_user)]
@@ -82,6 +82,7 @@ class CredentialOut(BaseModel):
     last_failure_kind: str | None  # of the latest finished run; null after a success
     # Scheduled syncs stopped after repeated login failures; a successful manual sync resumes.
     sync_paused: bool = False
+    syncing: bool = False  # a sync is queued or running now
     fields: dict[str, str | None]
     accounts: list[AccountBrief] = []
     verify_run_id: int | None = None  # set when this request started a verify run
@@ -122,6 +123,7 @@ def _out(c: Credential) -> CredentialOut:
             .limit(1)
         ),
         sync_paused=login_paused(object_session(c), c.id),
+        syncing=active_run_id(object_session(c), c.id) is not None,
         fields=mask(decrypt_json(c.secret_enc)),
         accounts=_accounts(c),
     )

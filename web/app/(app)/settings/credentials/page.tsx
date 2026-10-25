@@ -10,6 +10,7 @@ import { friendlyError, technicalDetails } from "@/lib/connectErrors";
 import { AccountBriefs } from "@/components/InactiveFilter";
 import { ProviderLogo } from "@/components/ProviderLogo";
 import { ConnectSheet, TechDetails } from "@/components/ConnectSheet";
+import { announceSync, type RunRef } from "../../sync/SyncToasts";
 import { Select } from "@/components/ui/Select";
 import { EmptyState } from "@/components/Card";
 
@@ -82,13 +83,21 @@ function Credentials() {
 
   async function sync(credential_id?: number) {
     try {
-      const { run_ids } = await send<{ run_ids: number[] }>("POST", "/sync", credential_id ? { credential_id } : {});
+      const { runs } = await send<{ runs: RunRef[] }>("POST", "/sync", credential_id ? { credential_id } : {});
       reload();
-      setMsg(run_ids.length ? "הסנכרון התבקש. אם יידרש קוד SMS, תופיע בקשה." : "אין חיבורים פעילים לסנכרון.");
+      announceSync(runs, creds ?? []); // bottom toast now, and again when each one finishes
     } catch {
       setMsg("בקשת הסנכרון נכשלה.");
     }
   }
+
+  // While a connection syncs, its button stays disabled; refresh until it's done.
+  const syncing = creds?.some((c) => c.syncing);
+  useEffect(() => {
+    if (!syncing) return;
+    const t = setInterval(reload, 4000);
+    return () => clearInterval(t);
+  }, [syncing]);
 
   const last = creds?.map((c) => c.last_success_at).filter((x): x is string => !!x).sort().at(-1);
 
@@ -103,7 +112,7 @@ function Credentials() {
             </p>
           )}
         </div>
-        <button className="btn shrink-0" onClick={() => sync()} disabled={!creds?.length}>
+        <button className="btn shrink-0" onClick={() => sync()} disabled={!creds?.some((c) => c.enabled && !c.syncing)}>
           <RefreshCw size={16} strokeWidth={2.2} /> סנכרון הכל
         </button>
       </div>
@@ -140,8 +149,8 @@ function Credentials() {
             )}
             {/* ponytail: masked fields list dropped — the edit form shows them as placeholders */}
             <div className="-mx-1 flex items-center gap-0.5 border-t border-hairline pt-1.5 text-[13px] font-bold">
-              <button className="card-action text-brand" onClick={() => sync(c.id)} disabled={!c.enabled}>
-                <RefreshCw size={14} /> סנכרון
+              <button className="card-action text-brand" onClick={() => sync(c.id)} disabled={!c.enabled || c.syncing}>
+                <RefreshCw size={14} className={c.syncing ? "animate-spin motion-reduce:animate-none" : ""} /> {c.syncing ? "מסנכרן…" : "סנכרון"}
               </button>
               <button className="card-action" onClick={() => setEditing(editing === c.id ? null : c.id)}>
                 עדכון פרטים

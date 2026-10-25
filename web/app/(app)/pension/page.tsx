@@ -9,6 +9,7 @@ import { Card, Status } from "@/components/Card";
 import { send, type Fund, type Funds } from "@/lib/api";
 import { formatDate, formatPct, monthName, pctColor } from "@/lib/format";
 import { useApi } from "@/lib/useApi";
+import { announceSync, type RunRef } from "../sync/SyncToasts";
 
 /** Sum fund balances per month (mislaka reports monthly; days may differ between funds). */
 function totalByMonth(funds: Fund[]) {
@@ -23,8 +24,9 @@ export default function PensionPage() {
 
   async function sync(credential_id: number) {
     try {
-      await send("POST", "/sync", { credential_id });
-      setMsg("הסנכרון התבקש. אם יידרש קוד SMS, תופיע בקשה.");
+      const { runs } = await send<{ runs: RunRef[] }>("POST", "/sync", { credential_id });
+      setMsg("");
+      announceSync(runs, (data?.credentials ?? []).map((c) => ({ ...c, provider: "mislaka" })));
     } catch {
       setMsg("בקשת הסנכרון נכשלה.");
     }

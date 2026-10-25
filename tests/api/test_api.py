@@ -245,6 +245,34 @@ def test_transactions_cursor_and_filters(authed, sf):
     assert [i["id"] for i in r["items"]] == [2]
 
 
+def test_one_sync_per_connection(authed, sf):
+    """A second click joins the queued/running sync; a stale one (worker died) doesn't block."""
+    with sf() as s:
+        s.add(Credential(provider="max", label="Max", owner="a", secret_enc=encrypt_json({})))
+        s.commit()
+    ref = {"credential_id": 1, "run_id": 1}
+    assert authed.post("/api/sync", json={"credential_id": 1}).json() == {
+        "run_ids": [1],
+        "runs": [{**ref, "already_running": False}],
+    }
+    assert authed.get("/api/credentials").json()[0]["syncing"] is True
+    assert authed.post("/api/sync", json={"credential_id": 1}).json() == {
+        "run_ids": [],
+        "runs": [{**ref, "already_running": True}],
+    }
+    assert authed.post("/api/sync", json={}).json()["runs"] == [{**ref, "already_running": True}]
+    with sf() as s:  # running for over 30 minutes: dead
+        r = s.get(SyncRun, 1)
+        r.status, r.started_at = "running", datetime.now(UTC) - timedelta(minutes=31)
+        s.commit()
+    assert authed.get("/api/credentials").json()[0]["syncing"] is False
+    assert authed.post("/api/sync", json={"credential_id": 1}).json()["run_ids"] == [2]
+    with sf() as s:
+        s.get(SyncRun, 2).status = "success"
+        s.commit()
+    assert authed.get("/api/credentials").json()[0]["syncing"] is False
+
+
 def test_manual_sync_creates_requested_run(authed, sf):
     with sf() as s:
         enc = encrypt_json({})
@@ -257,9 +285,9 @@ def test_manual_sync_creates_requested_run(authed, sf):
         )
         s.commit()
     r = authed.post("/api/sync", json={})
-    assert r.json() == {"run_ids": [1]}
+    assert r.json()["run_ids"] == [1]
     r = authed.post("/api/sync", json={"credential_id": 3})
-    assert r.json() == {"run_ids": [2]}
+    assert r.json()["run_ids"] == [2]
     assert authed.post("/api/sync", json={"credential_id": 99}).status_code == 404
     assert authed.post("/api/sync", json={"credential_id": 2}).status_code == 409
     runs = authed.get("/api/sync/runs").json()

@@ -9,6 +9,7 @@ from sqlalchemy import select
 from freerise.api.deps import DB, get_or_404
 from freerise.models import Credential, OtpRequest, SyncRun
 from freerise.sync.otp import answer_otp
+from freerise.sync.service import active_run_id
 
 router = APIRouter(prefix="/sync")
 
@@ -17,8 +18,15 @@ class SyncIn(BaseModel):
     credential_id: int | None = None
 
 
+class RunRef(BaseModel):
+    credential_id: int
+    run_id: int
+    already_running: bool  # the connection had a sync going; this request joined it
+
+
 class SyncOut(BaseModel):
-    run_ids: list[int]
+    run_ids: list[int]  # the syncs this request started
+    runs: list[RunRef] = []  # every connection asked, started or already running
 
 
 class RunOut(BaseModel):
@@ -65,10 +73,27 @@ def request_sync(body: SyncIn, db: DB) -> SyncOut:
             )
             if PROVIDER_CONFIGS[c.provider].service != "insurances"
         ]
-    runs = [SyncRun(credential_id=c.id, trigger="manual", status="requested") for c in creds]
-    db.add_all(runs)
+    busy = {c.id: active_run_id(db, c.id) for c in creds}
+    # One sync per connection at a time: a second click joins the one already going.
+    new = [
+        SyncRun(credential_id=c.id, trigger="manual", status="requested")
+        for c in creds
+        if busy[c.id] is None
+    ]
+    db.add_all(new)
     db.commit()
-    return SyncOut(run_ids=[r.id for r in runs])
+    started = {r.credential_id: r.id for r in new}
+    return SyncOut(
+        run_ids=[r.id for r in new],
+        runs=[
+            RunRef(
+                credential_id=c.id,
+                run_id=busy[c.id] or started[c.id],
+                already_running=bool(busy[c.id]),
+            )
+            for c in creds
+        ],
+    )
 
 
 @router.get("/runs")

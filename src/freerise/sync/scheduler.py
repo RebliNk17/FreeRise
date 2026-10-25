@@ -20,11 +20,10 @@ from freerise.notify.rules import generate_notifications
 from freerise.notify.senders import build_senders, deliver_pending
 from freerise.sync import demo_provider
 from freerise.sync.demo_provider import make_scraper
-from freerise.sync.service import login_paused, run_credential
+from freerise.sync.service import STALE, login_paused, run_credential
 
 log = logging.getLogger("freerise.worker")
 WORKER_LOCK = 0x46524545  # "FREE"
-STALE = timedelta(minutes=30)
 # A new connection nobody verified (check failed, tab closed) is dropped, secrets and all.
 ABANDONED = timedelta(hours=1)
 
