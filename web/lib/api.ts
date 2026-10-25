@@ -140,6 +140,7 @@ export type Uncategorized = {
   kind: "bank" | "card";
   sample_date: string; // latest
   account_label: string;
+  account_holder: string; // latest one's account holder
   first_date: string; // earliest
   installment: { number: number | null; total: number; amount: number } | null; // latest installment payment
   monthly: { amount: number; months: number; since: string } | null; // charged monthly at a similar amount

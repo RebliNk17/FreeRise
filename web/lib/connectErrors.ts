@@ -40,9 +40,17 @@ const BY_KIND: Record<string, FailureKey> = {
   provider_changed: "changed",
 };
 
+// A rejected login often says which fields were wrong; name those instead of "username or password".
+const WRONG_FIELDS: [RegExp, string, string][] = [
+  [/ID or card6Digits/i, "תעודת הזהות או 6 הספרות של הכרטיס שגויים", "בדקו את מספר תעודת הזהות ואת 6 הספרות הראשונות של הכרטיס, ונסו שוב."],
+  [/phone number or password/i, "מספר הטלפון או הסיסמה שגויים", "בדקו את מספר הטלפון ואת הסיסמה, ונסו שוב."],
+  [/invalid password|rejected the password/i, "הסיסמה שגויה", "בדקו את הסיסמה ונסו שוב."],
+];
+
 export function friendlyError(kind: string | null | undefined, error: string | null | undefined): Friendly {
   const key = BY_TEXT.find(([re]) => re.test(error ?? ""))?.[1] ?? BY_KIND[kind ?? ""] ?? "general";
-  return { key, ...TEXT[key] };
+  const fields = key === "password" ? WRONG_FIELDS.find(([re]) => re.test(error ?? "")) : undefined;
+  return { key, ...TEXT[key], ...(fields && { title: fields[1], hint: fields[2] }) };
 }
 
 /** Raw text for the collapsed "פרטים טכניים", minus remediation advice (proxies, show_browser…). */

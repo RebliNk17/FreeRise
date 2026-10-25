@@ -6,7 +6,7 @@ from statistics import median
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session, joinedload
 
-from freerise.accounts import account_holder, account_labels
+from freerise.accounts import account_holder, account_holders, account_labels
 from freerise.categorize.default_rules import provider_category
 from freerise.categorize.normalize import best_match
 from freerise.forecast.recurring import AUTO_AMOUNT, AUTO_N
@@ -303,6 +303,7 @@ def uncategorized_merchants(session: Session) -> list[dict]:
         .order_by(func.count().desc(), Transaction.merchant_key)
     ).all()
     labels = account_labels(session) if rows else {}
+    holders = account_holders(session) if rows else {}
     out = []
     for key, desc, n, total, kind, last, acct in rows:
         ts = detail[key]
@@ -317,6 +318,7 @@ def uncategorized_merchants(session: Session) -> list[dict]:
                 "kind": "card" if kind == "card" else "bank",
                 "sample_date": last,
                 "account_label": labels.get(acct, ""),
+                "account_holder": holders.get(acct, ""),
                 "first_date": ts[0].date,
                 "installment": latest
                 and {

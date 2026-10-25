@@ -58,6 +58,7 @@ class Uncategorized(BaseModel):
     kind: Literal["bank", "card"]
     sample_date: date  # latest one
     account_label: str  # latest one's account
+    account_holder: str = ""  # whose that account is
     first_date: date  # earliest one
     installment: InstallmentOut | None  # latest installment payment, if paid in installments
     monthly: MonthlyOut | None  # charged monthly at a similar amount: likely fixed

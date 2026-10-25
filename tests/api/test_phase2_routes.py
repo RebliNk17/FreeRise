@@ -170,6 +170,7 @@ def test_uncategorized_and_merchant_bulk(authed, ids, sf):
         "kind": "card",
         "sample_date": "2026-09-02",
         "account_label": unc[0]["account_label"],
+        "account_holder": "שי",
         "first_date": "2026-09-01",
         "installment": None,
         "monthly": None,  # one month only
