@@ -33,8 +33,12 @@ from scraper.models.transaction import (
     TransactionStatus,
     TransactionType,
 )
+from scraper.utils.transactions import fix_installments
 
 DEFAULT_PROVIDERS = "all"
+# The vendored engine dated each installment on its own payment month (fix_installments);
+# rows it stored must keep their date (and txn_key) when this engine scrapes them again.
+SHIFT_INSTALLMENTS = {"max", "isracard", "amex"}
 
 PROVIDERS: dict[str, str] = {
     "onezero": "onezero",
@@ -131,6 +135,18 @@ class IpsScraper:
             accounts = [self._map_account(a) for a in res.accounts]
         return ScrapingResult(success=True, accounts=accounts)
 
+    def _identifier(self, t, inst: InstallmentInfo | None) -> str | None:
+        seq = str((t.raw_data or {}).get("seqVoucherNumber") or "").strip()
+        if self.provider_name in ("isracard", "amex") and seq.isdigit() and int(seq):
+            # The web API's voucherNumberRatz, which the vendored engine keyed on (int-normalised);
+            # the package's pick, `voucherNumber`, is a short number the web API never sent.
+            return str(int(seq))
+        if t.identifier is None:
+            return None
+        if self.provider_name == "max" and inst:
+            return f"{t.identifier}_{inst.number}"  # the vendored (and npm) Max `${arn}_${n}`
+        return str(t.identifier)
+
     def _map_account(self, a: IfsAccount) -> AccountResult:
         txns: list[Transaction] = []
         for t in a.txns:
@@ -163,11 +179,13 @@ class IpsScraper:
                     charged_currency=a.currency or "ILS",
                     description=t.description,
                     memo=t.memo,
-                    identifier=str(t.identifier) if t.identifier is not None else None,
+                    identifier=self._identifier(t, inst),
                     installments=inst,
                     category=t.category,
                 )
             )
+        if self.provider_name in SHIFT_INSTALLMENTS:
+            txns = fix_installments(txns)
         return AccountResult(
             account_number=a.account_number,
             transactions=txns,
