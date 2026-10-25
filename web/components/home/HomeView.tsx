@@ -158,6 +158,7 @@ export function HomeView({ path, title }: { path: string; title: string }) {
       {sorting && unc.data && (
         <CategorizeSheet
           list={unc.data}
+          multi={data.multi_holder}
           onClose={(changed) => {
             setSorting(false);
             if (changed) {

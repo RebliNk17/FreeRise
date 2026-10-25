@@ -31,6 +31,14 @@ test("israeli-bank-scrapers error types", () => {
   expect(friendlyError("provider_changed", "GENERAL_ERROR: unexpected response").key).toBe("changed");
 });
 
+test("a rejected login names the fields that were wrong", () => {
+  expect(friendlyError("auth_failed", "INVALID_PASSWORD: Invalid ID or card6Digits").title).toBe("תעודת הזהות או 6 הספרות של הכרטיס שגויים");
+  expect(friendlyError("auth_failed", "INVALID_PASSWORD: Pepper rejected the phone number or password").title).toBe("מספר הטלפון או הסיסמה שגויים");
+  expect(friendlyError("auth_failed", "INVALID_PASSWORD: Invalid password").title).toBe("הסיסמה שגויה");
+  expect(friendlyError("auth_failed", "INVALID_PASSWORD: no detail reported by the amex scraper").title).toBe("שם המשתמש או הסיסמה שגויים");
+  expect(friendlyError("other", "GENERAL_ERROR: Invalid password").key).toBe("general"); // only refines a password failure
+});
+
 test("never suggests bypassing bot protection", () => {
   for (const k of ["auth_failed", "provider_changed", "timeout", "otp_timeout", "other"]) {
     const f = friendlyError(k, BLOCKED);

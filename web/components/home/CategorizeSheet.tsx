@@ -9,6 +9,7 @@ import { Switch } from "@/components/Switch";
 import { api, send, type Category, type Uncategorized } from "@/lib/api";
 import { merchantPicks, merchantProgress, merchantSummary, pendingCount, pendingLabel, txnsLeft } from "@/lib/categorize";
 import { categoryLabel, formatDate } from "@/lib/format";
+import { accountWithHolder } from "@/lib/home";
 
 /** Home chip "N עסקאות לסיווג · M בתי עסק": tap opens the sheet. */
 export function CategorizeChip({ list, onOpen }: { list: Uncategorized[]; onOpen: () => void }) {
@@ -25,7 +26,7 @@ export function CategorizeChip({ list, onOpen }: { list: Uncategorized[]; onOpen
 }
 
 /** One merchant at a time: quick category buttons (most used first), "עוד קטגוריות", always-like-this toggle, skip. */
-export function CategorizeSheet({ list, onClose }: { list: Uncategorized[]; onClose: (changed: boolean) => void }) {
+export function CategorizeSheet({ list, multi, onClose }: { list: Uncategorized[]; multi: boolean; onClose: (changed: boolean) => void }) {
   const [queue] = useState(list); // fixed for the session so the progress count stays honest
   const [i, setI] = useState(0);
   const [cats, setCats] = useState<Category[]>([]);
@@ -99,7 +100,7 @@ export function CategorizeSheet({ list, onClose }: { list: Uncategorized[]; onCl
             </p>
             <p className="text-xs text-muted">
               לאחרונה <span dir="ltr">{formatDate(u.sample_date)}</span>
-              {u.account_label && ` · ${u.account_label}`}
+              {u.account_label && ` · ${accountWithHolder(u, multi)}`}
             </p>
           </div>
           <ul className="grid grid-cols-2 gap-2" aria-label="קטגוריות נפוצות">
