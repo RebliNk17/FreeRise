@@ -37,14 +37,26 @@ const CAL_INIT_ENDPOINT = 'https://api.cal-online.co.il/Authentication/api/accou
 const CAL_INVALID_PASSWORD_MSG = 'שם המשתמש או הסיסמה שהוזנו שגויים';
 const CAL_MOBILE_BASE_URL = 'https://api-cc.cal-online.co.il';
 const CAL_MOBILE_SITE_ID = '8D37DF16-5812-4ACD-BAE7-CD1A5BFA2207';
+const CAL_MOBILE_DEVICE_UUID = crypto.randomBytes(8).toString('hex');
 const CAL_MOBILE_HEADERS = {
   Accept: 'application/json',
   'Content-Type': 'application/json; charset=UTF-8',
   'X-Site-Id': CAL_MOBILE_SITE_ID,
+  'X-Device': JSON.stringify({
+    appVersion: '6.26.17',
+    deviceLanguage: 'he',
+    manufacturer: 'Google',
+    model: 'Pixel 3',
+    osVersion: '30',
+    platform: 'android',
+    timeZoneInGMT: 'GMT+2',
+    udid: CAL_MOBILE_DEVICE_UUID,
+    uuid: CAL_MOBILE_DEVICE_UUID,
+  }),
   platform: 'android',
   version: '6.26.17',
   'User-Agent':
-    'Mozilla/5.0 (Linux; Android 11; Pixel 3 Build/RQ1A.210105.003; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/131.0.6778.135 Mobile Safari/537.36',
+    'Mozilla/5.0 (Linux; Android 11; Pixel 3 Build/RQ1A.210105.003; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/83.0.4103.120 Mobile Safari/537.36',
 };
 const FALLBACK_CHROME_MAJOR_VERSION = '127';
 
@@ -334,6 +346,23 @@ async function main() {
     let calMobileTokenGuid = '';
     let usingMobileCal = false;
     let browserInitialized = false;
+    const origCalFetch = globalThis.fetch.bind(globalThis);
+    globalThis.fetch = (input, init = {}) => {
+      const url = typeof input === 'string' ? input : input?.url || String(input);
+      if (usingMobileCal && url.startsWith('https://api.cal-online.co.il/')) {
+        const mobileUrl = url
+          .replace('https://api.cal-online.co.il/', `${CAL_MOBILE_BASE_URL}/`)
+          .replace('/Frames/api/Frames/GetFrameStatus', '/Frames/api/Frames/GetTotalFrameStatus');
+        return origCalFetch(mobileUrl, {
+          ...init,
+          headers: {
+            ...CAL_MOBILE_HEADERS,
+            Authorization: scraper.authorization,
+          },
+        });
+      }
+      return origCalFetch(input, init);
+    };
 
     const mobileCalLogin = async creds => {
       if (!useMobileCal) return false;
