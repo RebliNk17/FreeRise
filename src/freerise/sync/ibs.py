@@ -177,7 +177,9 @@ class IbsScraper:
 
     async def scrape(self) -> ScrapingResult:
         company, fields = COMPANIES[self.provider]
-        creds = {f: self.credentials[f] for f in fields if self.credentials.get(f)}
+        creds = {
+            f: self.credentials[f] for f in (*fields, "otpLongTermToken") if self.credentials.get(f)
+        }
         if "phoneNumber" in creds:  # OneZero wants +9725...; users type 05x (as the vendored one)
             creds["phoneNumber"] = normalize_israeli_mobile(creds["phoneNumber"])
         request = {
