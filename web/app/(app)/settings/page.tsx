@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Bell, CalendarRange, ChevronLeft, GripVertical, KeyRound, Palette, RefreshCw, Send, Tags, Wallet, type LucideIcon } from "lucide-react";
+import { Bell, CalendarRange, ChevronLeft, GripVertical, KeyRound, Moon, Palette, RefreshCw, Send, Sun, Tags, Wallet, type LucideIcon } from "lucide-react";
 import { Status } from "@/components/Card";
 import { Select } from "@/components/ui/Select";
+import { Switch } from "@/components/Switch";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ApiError, send, type Settings } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
@@ -74,8 +75,8 @@ export default function SettingsPage() {
               </Row>
             </Section>
 
-            <Section id="sync" title="סנכרון אוטומטי" hint="בשעות המסומנות FreeRise מושך תנועות חדשות מכל החיבורים.">
-              <SyncHours hours={data.sync_hours} onChange={(sync_hours) => patch({ sync_hours })} />
+            <Section id="sync" title="סנכרון אוטומטי" action={<SyncSwitch hours={data.sync_hours} patch={patch} />} hint="בשעות המסומנות FreeRise מושך תנועות חדשות מכל החיבורים.">
+              <SyncTimeline hours={data.sync_hours} onChange={(sync_hours) => patch({ sync_hours })} />
             </Section>
 
             <Section id="alerts" title="התראות" hint="ההתראות מופיעות בפעמון למעלה, ואפשר לקבל אותן גם בטלגרם.">
@@ -145,39 +146,64 @@ function NumberField({ label, value, onSave }: { label: string; value: number; o
   );
 }
 
-const PRESETS: { label: string; hours: number[] }[] = [
-  { label: "3 פעמים ביום", hours: [7, 14, 21] },
-  { label: "פעם ביום", hours: [7] },
-  { label: "ידני בלבד", hours: [] },
-];
+const DEFAULT_SYNC = [7, 14, 21];
 
-function SyncHours({ hours, onChange }: { hours: number[]; onChange: (h: number[]) => void }) {
-  const toggle = (h: number) => onChange(hours.includes(h) ? hours.filter((x) => x !== h) : [...hours, h].sort((a, b) => a - b));
-  const same = (a: number[]) => a.length === hours.length && a.every((h, i) => h === hours[i]);
+/** Off = no hours (manual sync only). On restores the default; ponytail: remember the last custom hours if turning it back on loses them too often. */
+function SyncSwitch({ hours, patch }: { hours: number[]; patch: Patch }) {
+  return <Switch label={hours.length ? "פעיל" : "כבוי"} checked={hours.length > 0} onChange={(on) => patch({ sync_hours: on ? DEFAULT_SYNC : [] })} />;
+}
+
+function SyncSummary({ hours }: { hours: number[] }) {
+  if (!hours.length) return <p className="text-[13px] text-muted">אין סנכרון אוטומטי. אפשר לסנכרן ידנית ממסך החיבורים.</p>;
+  const now = new Date().getHours();
+  const next = hours.find((h) => h > now) ?? hours[0];
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap gap-2">
-        {PRESETS.map((p) => (
-          <button key={p.label} type="button" aria-pressed={same(p.hours)} onClick={() => onChange(p.hours)} className={`chip min-h-9 px-3.5 text-sm ${same(p.hours) ? "bg-brand-fill text-brand-fg" : "bg-sunken text-text"}`}>
-            {p.label}
-          </button>
-        ))}
-      </div>
-      <div role="group" aria-label="שעות סנכרון" className="grid grid-cols-6 gap-1.5 sm:grid-cols-8 lg:grid-cols-12" dir="ltr">
-        {range(0, 23).map((h) => {
-          const on = hours.includes(h);
-          return (
-            <button key={h} type="button" aria-pressed={on} aria-label={`סנכרון בשעה ${hh(h)}`} onClick={() => toggle(h)} className={`min-h-10 rounded-[10px] text-[13px] font-bold tabular-nums ${on ? "bg-brand-fill text-brand-fg" : "bg-sunken text-muted hover:text-text"}`}>
+    <p className="text-[13px] text-muted">
+      {hours.length === 1 ? "סנכרון אחד" : `${hours.length} סנכרונים`} ביום · הבא ב-<span className="font-bold text-text tabular-nums">{hh(next)}</span>
+      {hours.length > 4 && <span className="text-sun-strong"> · בנקים מסוימים חוסמים כניסות תכופות, עדיף לא יותר מ-4</span>}
+    </p>
+  );
+}
+
+/** The day as one strip; night hours shaded, picked hours filled and labelled above. */
+function SyncTimeline({ hours, onChange }: { hours: number[]; onChange: (h: number[]) => void }) {
+  const toggle = (h: number) => onChange(hours.includes(h) ? hours.filter((x) => x !== h) : [...hours, h].sort((a, b) => a - b));
+  if (!hours.length) return <SyncSummary hours={hours} />;
+  return (
+    <div className="flex flex-col gap-4">
+      <div dir="ltr">
+        <div className="relative h-6 text-[13px] font-bold text-brand tabular-nums">
+          {hours.map((h) => (
+            <span key={h} className="absolute -translate-x-1/2" style={{ left: `${((h + 0.5) / 24) * 100}%` }}>
               {hh(h)}
-            </button>
-          );
-        })}
+            </span>
+          ))}
+        </div>
+        <div role="group" aria-label="שעות סנכרון" className="flex h-12 gap-0.5">
+          {range(0, 23).map((h) => {
+            const on = hours.includes(h);
+            return (
+              <button
+                key={h}
+                type="button"
+                data-tip={hh(h)}
+                aria-pressed={on}
+                aria-label={`סנכרון בשעה ${hh(h)}`}
+                onClick={() => toggle(h)}
+                className={`min-w-0 flex-1 rounded-[4px] first:rounded-l-xl last:rounded-r-xl ${on ? "bg-brand-fill" : `${h < 6 || h >= 22 ? "bg-border" : "bg-sunken"} hover:bg-brand-soft`}`}
+              />
+            );
+          })}
+        </div>
+        <div className="mt-1.5 flex justify-between text-xs text-faint tabular-nums">
+          <span className="flex items-center gap-1"><Moon size={12} aria-hidden /> 00:00</span>
+          <span>06:00</span>
+          <span className="flex items-center gap-1"><Sun size={12} aria-hidden /> 12:00</span>
+          <span>18:00</span>
+          <span>24:00</span>
+        </div>
       </div>
-      <p className="text-[13px] text-muted">
-        {hours.length === 0
-          ? "אין סנכרון אוטומטי. אפשר לסנכרן ידנית ממסך החיבורים."
-          : `${hours.length === 1 ? "סנכרון אחד" : `${hours.length} סנכרונים`} ביום. בנקים מסוימים חוסמים כניסות תכופות, אז עדיף לא יותר מ-4.`}
-      </p>
+      <SyncSummary hours={hours} />
     </div>
   );
 }
