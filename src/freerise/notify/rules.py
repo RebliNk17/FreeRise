@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from freerise.accounts import PROVIDER_HE
+from freerise.accounts import PROVIDER_HE, account_labels
 from freerise.cashflow.cycles import cycle_for, get_start_day, prev_cycle
 from freerise.cashflow.fees import fees_in_cycle
 from freerise.cashflow.plan import cycle_plan
@@ -359,6 +359,52 @@ def _insight_warnings(s: Session, today: date) -> None:
         notify(s, i.kind, i.title, i.body, i.link, f"insight:{i.key}", "warning")
 
 
+DOUBLE_MIN = Decimal(
+    50
+)  # ponytail: fixed floor (vending, parking repeat for real); a setting if asked
+
+
+def _double_charges(s: Session, today: date) -> None:
+    """Same account, merchant, amount and purchase day more than once: maybe charged twice."""
+    groups = s.execute(
+        select(
+            func.min(Transaction.id),
+            func.count(),
+            func.min(Transaction.description),
+            Transaction.amount,
+            Transaction.date,
+            Transaction.account_id,
+        )
+        .join(Account, Account.id == Transaction.account_id)
+        .outerjoin(Category, Category.id == Transaction.category_id)
+        .where(
+            Account.excluded.is_(False),
+            Transaction.status == "completed",  # a pending approval and its voucher aren't two
+            Transaction.amount <= -DOUBLE_MIN,
+            Transaction.merchant_key != "",
+            Transaction.date >= today - timedelta(days=14),
+            Category.group.is_(None) | Category.group.not_in(NON_SPENDING),
+        )
+        .group_by(
+            Transaction.account_id, Transaction.merchant_key, Transaction.date, Transaction.amount
+        )
+        .having(func.count() > 1)
+    ).all()
+    labels = account_labels(s) if groups else {}
+    for first, n, desc, amount, d, acct in groups:
+        times = "פעמיים" if n == 2 else f"{n} פעמים"
+        notify(
+            s,
+            "double_charge",
+            "חיוב כפול אפשרי",
+            f"{desc} חויב {times} {ils(-amount)} ב-{d:%d.%m} · {labels.get(acct, '')} — "
+            "אם זו לא הייתה כוונה, כדאי לבדוק מול חברת האשראי",
+            f"/search?{urlencode({'q': desc})}",
+            f"double_charge:{first}:{n}",  # a third charge alerts again
+            "warning",
+        )
+
+
 RULES = (
     _sync_failed,
     _sync_paused,
@@ -366,6 +412,7 @@ RULES = (
     _category_over_expected,
     _installments_ending,
     _large_transaction,
+    _double_charges,
     _uncategorized_growing,
     _pension_reminder,
     _card_bills,
