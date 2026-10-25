@@ -315,7 +315,7 @@ requires-dist = [
     { name = "cryptography", specifier = ">=50.0.2" },
     { name = "fastapi", specifier = ">=0.161.1" },
     { name = "httpx", specifier = ">=0.28.1" },
-    { name = "israeli-finance-scrapers", specifier = ">=0.2.0" },
+    { name = "israeli-finance-scrapers", specifier = ">=0.2.1" },
     { name = "playwright", specifier = ">=1.64.1" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3.6" },
     { name = "pydantic-settings", specifier = ">=2.16.1" },
@@ -496,15 +496,15 @@ wheels = [
 
 [[package]]
 name = "israeli-finance-scrapers"
-version = "0.2.0"
+version = "0.2.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cryptography" },
     { name = "httpx" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ee/9c/15c492cb81ae77277c99e0dcfe1cae3604f722e183648d63b4353634ce5b/israeli_finance_scrapers-0.2.0.tar.gz", hash = "sha256:15a66f08771a8c8446aefbb1dcc26a0a27013fe72a10fadb530e1714d84cceed", size = 86895, upload-time = "2026-10-25T16:14:16.041Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/30/f1/f68e4c831b42d606655c932b917f610ee0a6c7398e11cf466b192cbb9b48/israeli_finance_scrapers-0.2.1.tar.gz", hash = "sha256:deefde76e6efa5d330a56762552bd254a69539d0fba5868f435ed911adaac8c8", size = 88481, upload-time = "2026-10-25T16:40:46.144Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/1d/e0/755c0b72a1599766e2633e66e72eb1609911568d0a18f984a0039afcbb91/israeli_finance_scrapers-0.2.0-py3-none-any.whl", hash = "sha256:470101fd95f1fa6d92ddf7a357361b566b66f38f59c280fe1f0a32dfb35253d7", size = 66835, upload-time = "2026-10-25T16:14:14.722Z" },
+    { url = "https://files.pythonhosted.org/packages/93/ac/d18bd17499189e2ea135f47889450695acae0236bf2ba8df653f6d76687b/israeli_finance_scrapers-0.2.1-py3-none-any.whl", hash = "sha256:663f1311dec800b3f78604ca14c2f340645275cd938daf6932b1bf1e5d46aedb", size = 68511, upload-time = "2026-10-25T16:40:44.787Z" },
 ]
 
 [[package]]
