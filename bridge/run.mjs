@@ -35,6 +35,17 @@ const CAL_LOGIN_ENDPOINT = 'https://connect.cal-online.co.il/col-rest/calconnect
 const CAL_LOGIN_SITE_ID = '5B5160DD-F84A-4D72-B67E-65891BA194FF';
 const CAL_INIT_ENDPOINT = 'https://api.cal-online.co.il/Authentication/api/account/init';
 const CAL_INVALID_PASSWORD_MSG = 'שם המשתמש או הסיסמה שהוזנו שגויים';
+const CAL_MOBILE_BASE_URL = 'https://api-cc.cal-online.co.il';
+const CAL_MOBILE_SITE_ID = '8D37DF16-5812-4ACD-BAE7-CD1A5BFA2207';
+const CAL_MOBILE_HEADERS = {
+  Accept: 'application/json',
+  'Content-Type': 'application/json; charset=UTF-8',
+  'X-Site-Id': CAL_MOBILE_SITE_ID,
+  platform: 'android',
+  version: '6.26.17',
+  'User-Agent':
+    'Mozilla/5.0 (Linux; Android 11; Pixel 3 Build/RQ1A.210105.003; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/131.0.6778.135 Mobile Safari/537.36',
+};
 const FALLBACK_CHROME_MAJOR_VERSION = '127';
 
 // Masks automation fingerprints (navigator.webdriver, matching sec-ch-ua headers)
@@ -313,16 +324,101 @@ async function main() {
     );
   }
   if (req.companyId === 'visaCal') {
-    // freerise patch: Cal login resilience.
-    // 1. Direct API login fallback: Cal's browser login / dashboard redirect (`digital-web.cal-online.co.il`
-    //    -> `message.cal-online.co.il` maintenance page, or F5 WAF rejecting browser requests) can
-    //    fail even when `connect.cal-online.co.il` accepts the credentials directly.
-    //    Back-to-back runs (e.g. a verify run immediately followed by the full-history sync) can hit
-    //    a transient 400 on the first direct POST, so we only trust `INVALID_PASSWORD` from the
-    //    browser login form unless the browser form itself was unreachable.
-    // 2. When `digital-web.cal-online.co.il` redirects to `message.cal-online.co.il`, fetch the card
-    //    list directly from `/Authentication/api/account/init` instead of waiting for dashboard sessionStorage.
+    // freerise patch: Cal pure-HTTP mobile API (`api-cc.cal-online.co.il`) + web fallback.
+    // Reverse-engineered from `com.onoapps.cal4u` v6.26.17 (`AuthenticationApiService`).
+    // Authenticates directly against `https://api-cc.cal-online.co.il/Authentication/api/login/regularLogin`
+    // (or `/Authentication/api/login/bioLogin` when a long-term `hash` is stored in `otpLongTermToken`)
+    // without launching Chrome, falling back to the web flow only if the mobile endpoint is unreachable.
+    const useMobileCal = process.env.FREERISE_CAL_USE_MOBILE_API !== '0';
     let calDirectError = null;
+    let calMobileTokenGuid = '';
+    let usingMobileCal = false;
+    let browserInitialized = false;
+
+    const mobileCalLogin = async creds => {
+      if (!useMobileCal) return false;
+      try {
+        let data = null;
+        if (creds.otpLongTermToken) {
+          const bioRes = await fetch(`${CAL_MOBILE_BASE_URL}/Authentication/api/login/bioLogin`, {
+            method: 'POST',
+            headers: CAL_MOBILE_HEADERS,
+            body: JSON.stringify({ hash: creds.otpLongTermToken }),
+          }).catch(() => null);
+          if (bioRes?.ok) {
+            const parsed = await bioRes.json().catch(() => null);
+            if (parsed?.statusCode === 1 && parsed?.result?.calConnectToken) {
+              data = parsed;
+            }
+          }
+        }
+        if (!data) {
+          const res = await fetch(`${CAL_MOBILE_BASE_URL}/Authentication/api/login/regularLogin`, {
+            method: 'POST',
+            headers: CAL_MOBILE_HEADERS,
+            body: JSON.stringify({
+              username: creds.username,
+              password: creds.password,
+              uuid: crypto.randomUUID().replace(/-/g, ''),
+              newPassword: null,
+            }),
+          });
+          if (res.ok) {
+            data = await res.json().catch(() => null);
+          }
+        }
+        if (data?.statusCode === 1 && data?.result?.calConnectToken) {
+          scraper.authorization = `CALAuthScheme ${String(data.result.calConnectToken).trim()}`;
+          calMobileTokenGuid = data.result.temporaryGuid ?? '';
+          if (data.result.hash) {
+            mintedIdToken = data.result.hash;
+          }
+          usingMobileCal = true;
+          calDirectError = null;
+          return true;
+        }
+        if (data?.statusCode === 4) {
+          calDirectError = 'INVALID_PASSWORD';
+          return false;
+        }
+      } catch {}
+      return false;
+    };
+
+    const origInitialize = scraper.initialize.bind(scraper);
+    const origTerminate = scraper.terminate.bind(scraper);
+    const origLogin = scraper.login.bind(scraper);
+    scraper.initialize = async () => {
+      if (useMobileCal) {
+        await send({ type: 'progress', stage: 'INITIALIZING' });
+        return;
+      }
+      browserInitialized = true;
+      return origInitialize();
+    };
+    scraper.terminate = async success => {
+      if (!browserInitialized) {
+        await send({ type: 'progress', stage: 'TERMINATING' });
+        return;
+      }
+      return origTerminate(success);
+    };
+    scraper.getXSiteId = async () => (usingMobileCal ? CAL_MOBILE_SITE_ID : '09031987-273E-2311-906C-8AF85B17C8D9');
+    scraper.login = async creds => {
+      if (useMobileCal) {
+        await send({ type: 'progress', stage: 'LOGGING_IN' });
+        if (await mobileCalLogin(creds)) {
+          return { success: true };
+        }
+        if (calDirectError === 'INVALID_PASSWORD') {
+          return { success: false, errorType: 'INVALID_PASSWORD' };
+        }
+        browserInitialized = true;
+        await origInitialize();
+      }
+      return origLogin(creds);
+    };
+
     const directCalLogin = async creds => {
       if (scraper.authorization) return true;
       for (let attempt = 0; attempt < 2; attempt++) {
@@ -427,18 +523,24 @@ async function main() {
     scraper.getCards = async () => {
       if (scraper.authorization) {
         const xSiteId = await scraper.getXSiteId();
-        const res = await fetch(CAL_INIT_ENDPOINT, {
+        const initUrl = usingMobileCal
+          ? `${CAL_MOBILE_BASE_URL}/Authentication/api/account/init`
+          : CAL_INIT_ENDPOINT;
+        const initHeaders = usingMobileCal
+          ? { ...CAL_MOBILE_HEADERS, Authorization: scraper.authorization }
+          : {
+              Authorization: scraper.authorization,
+              'X-Site-Id': xSiteId,
+              'Content-Type': 'application/json',
+              Origin: 'https://digital-web.cal-online.co.il',
+              Referer: 'https://digital-web.cal-online.co.il',
+              'User-Agent':
+                'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36',
+            };
+        const res = await fetch(initUrl, {
           method: 'POST',
-          headers: {
-            Authorization: scraper.authorization,
-            'X-Site-Id': xSiteId,
-            'Content-Type': 'application/json',
-            Origin: 'https://digital-web.cal-online.co.il',
-            Referer: 'https://digital-web.cal-online.co.il',
-            'User-Agent':
-              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36',
-          },
-          body: '{}',
+          headers: initHeaders,
+          body: JSON.stringify(usingMobileCal ? { tokenGuid: calMobileTokenGuid } : {}),
         }).catch(() => null);
         if (res?.ok) {
           const initData = await res.json().catch(() => null);
