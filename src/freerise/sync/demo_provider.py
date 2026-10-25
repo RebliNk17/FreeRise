@@ -81,8 +81,8 @@ def make_scraper(provider: str, credentials: dict, options: ScraperOptions | Non
         if not demo_enabled():
             raise ValueError("demo provider is disabled")
         return DemoScraper(provider, credentials, options)
+    if ips.enabled(provider):  # israeli-finance-scrapers (pure-HTTP Python)
+        return ips.IpsScraper(provider, credentials, options)
     if ibs.enabled(provider):  # the npm package; FREERISE_IBS_PROVIDERS picks which providers
         return ibs.IbsScraper(provider, credentials, options)
-    if ips.enabled(provider):  # israeli-pension-scrapers (haphoenix, migdal, ...)
-        return ips.IpsScraper(provider, credentials, options)
     return create_scraper(provider, credentials, options)

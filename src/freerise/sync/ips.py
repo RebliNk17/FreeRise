@@ -1,53 +1,87 @@
-"""Run an institutional pension/savings provider through `israeli-pension-scrapers`.
+"""Run banks, credit cards, and pension providers through `israeli-finance-scrapers`.
 
-Maps the unified `PensionScrapingResult` (`FundPolicy`, `InvestmentTrack`, `DepositTransaction`,
-`InsuranceCover`) onto `ScrapingResult` / `AccountResult` so `ingest_mislaka` stores policies,
-balance snapshots, investment tracks, management fees, and monthly salary deposits identically
-across all pension providers (HaPhoenix, Migdal, etc.).
+Maps the unified `ScrapingResult` (`Account` for banks/cards and `FundPolicy` for pensions/savings)
+onto FreeRise's `ScrapingResult` / `AccountResult` models so all 8 pure-HTTP providers
+(`onezero`, `pepper`, `visa cal`, `max`, `isracard`, `amex`, `hafenix`, `migdal`) run natively in
+Python without launching a browser.
 """
 
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import Callable
 from typing import Any
 
-from israeli_pension_scrapers import (
+from israeli_finance_scrapers import (
+    Account as IfsAccount,
+)
+from israeli_finance_scrapers import (
     FundPolicy,
 )
-from israeli_pension_scrapers import (
-    ScraperOptions as IpsOptions,
+from israeli_finance_scrapers import (
+    ScraperOptions as IfsOptions,
 )
-from israeli_pension_scrapers import (
-    create_scraper as create_ips_scraper,
+from israeli_finance_scrapers import (
+    create_scraper as create_ifs_scraper,
 )
 from scraper import ScraperOptions, ScrapingResult
 from scraper.models.account import AccountResult
-from scraper.models.transaction import Transaction, TransactionStatus, TransactionType
+from scraper.models.transaction import (
+    InstallmentInfo,
+    Transaction,
+    TransactionStatus,
+    TransactionType,
+)
+
+DEFAULT_PROVIDERS = "all"
 
 PROVIDERS: dict[str, str] = {
+    "onezero": "onezero",
+    "pepper": "pepper",
+    "visa cal": "visa_cal",
+    "max": "max",
+    "isracard": "isracard",
+    "amex": "amex",
     "hafenix": "haphoenix",
     "migdal": "migdal",
 }
 
 _ERROR_MAP: dict[str, str] = {
     "INVALID_CREDENTIALS": "INVALID_PASSWORD",
+    "INVALID_PASSWORD": "INVALID_PASSWORD",
     "INVALID_OTP": "INVALID_OTP",
+    "OTP_CANCELED": "GENERAL_ERROR",
     "OTP_TIMEOUT": "OTP_TIMEOUT",
     "ACCOUNT_BLOCKED": "ACCOUNT_BLOCKED",
+    "TOKEN_EXPIRED": "INVALID_PASSWORD",
     "NETWORK_ERROR": "GENERAL_ERROR",
     "PROVIDER_ERROR": "GENERAL_ERROR",
     "PARSE_ERROR": "GENERAL_ERROR",
+    "INIT_ERROR": "GENERAL_ERROR",
     "GENERAL_ERROR": "GENERAL_ERROR",
+}
+
+_STAGES: dict[str, str] = {
+    "initializing": "initializing",
+    "logging_in": "logging in",
+    "login_success": "fetching data",
+    "fetching_data": "fetching data",
 }
 
 
 def enabled(provider: str) -> bool:
-    return provider in PROVIDERS
+    if provider in ("hafenix", "migdal"):
+        return True
+    chosen = {
+        p.strip() for p in os.environ.get("FREERISE_IFS_PROVIDERS", DEFAULT_PROVIDERS).split(",")
+    }
+    on = provider in chosen or "all" in chosen
+    return provider in PROVIDERS and on and f"-{provider}" not in chosen
 
 
 class IpsScraper:
-    """Adapter around `israeli_pension_scrapers.BasePensionScraper` matching `BaseScraper`."""
+    """Adapter around `israeli_finance_scrapers.BaseScraper` matching FreeRise's `BaseScraper`."""
 
     def __init__(
         self,
@@ -63,28 +97,83 @@ class IpsScraper:
         self.refreshed_otp_long_term_token: str | None = None
 
     async def scrape(self) -> ScrapingResult:
-        ips_key = PROVIDERS[self.provider_name]
-        ips_opts = IpsOptions(
-            start_date=getattr(self.options, "start_date", None),
+        ifs_key = PROVIDERS[self.provider_name]
+        start_dt = getattr(self.options, "start_date", None)
+        start_str = (
+            start_dt.isoformat()
+            if hasattr(start_dt, "isoformat")
+            else (str(start_dt) if start_dt else None)
+        )
+        ifs_opts = IfsOptions(
+            start_date=start_str,
             timeout=float(getattr(self.options, "timeout", 60.0) or 60.0),
         )
-        inner = create_ips_scraper(ips_key, self.credentials, ips_opts)
+        inner = create_ifs_scraper(ifs_key, self.credentials, ifs_opts)
         inner.on_otp_request = self.on_otp_request
-        inner.on_progress = self.on_progress
+        if self.on_progress:
+            inner.on_progress = lambda st: self.on_progress(_STAGES.get(st, st))
 
         res = await inner.scrape()
-        self.refreshed_otp_long_term_token = res.refreshed_long_term_token
+        if res.long_term_token and res.long_term_token != self.credentials.get("otpLongTermToken"):
+            self.refreshed_otp_long_term_token = res.long_term_token
 
         if not res.success:
-            err_key = res.error_type.value if res.error_type else "GENERAL_ERROR"
+            err_key = str(res.error_type or "GENERAL_ERROR")
             return ScrapingResult(
                 success=False,
                 error_type=_ERROR_MAP.get(err_key, "GENERAL_ERROR"),
                 error_message=res.error_message,
             )
 
-        accounts = [self._map_fund(f) for f in res.funds]
+        if res.funds:
+            accounts = [self._map_fund(f) for f in res.funds]
+        else:
+            accounts = [self._map_account(a) for a in res.accounts]
         return ScrapingResult(success=True, accounts=accounts)
+
+    def _map_account(self, a: IfsAccount) -> AccountResult:
+        txns: list[Transaction] = []
+        for t in a.txns:
+            inst = (
+                InstallmentInfo(number=t.installments.number, total=t.installments.total)
+                if t.installments is not None
+                else None
+            )
+            t_type = (
+                TransactionType.INSTALLMENTS
+                if (t.type.value == "installments" or inst is not None)
+                else TransactionType.NORMAL
+            )
+            t_status = (
+                TransactionStatus.PENDING
+                if t.status.value == "pending"
+                else TransactionStatus.COMPLETED
+            )
+            bdate = t.date[:10] if t.date else ""
+            pdate = (t.processed_date[:10] if t.processed_date else bdate) or bdate
+            txns.append(
+                Transaction(
+                    type=t_type,
+                    status=t_status,
+                    date=bdate,
+                    processed_date=pdate,
+                    original_amount=t.original_amount,
+                    original_currency=t.original_currency or a.currency or "ILS",
+                    charged_amount=t.charged_amount,
+                    charged_currency=a.currency or "ILS",
+                    description=t.description,
+                    memo=t.memo,
+                    identifier=str(t.identifier) if t.identifier is not None else None,
+                    installments=inst,
+                    category=t.category,
+                )
+            )
+        return AccountResult(
+            account_number=a.account_number,
+            transactions=txns,
+            balance=a.balance,
+            card_frame=a.credit_limit,
+        )
 
     def _map_fund(self, f: FundPolicy) -> AccountResult:
         tracks = [

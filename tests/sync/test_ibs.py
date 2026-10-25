@@ -15,7 +15,7 @@ from sqlalchemy import select
 
 from freerise.crypto import decrypt_json, encrypt_json
 from freerise.models import Account, Credential, OtpRequest, SyncRun, Transaction
-from freerise.sync import ibs
+from freerise.sync import ibs, ips
 from freerise.sync.dedup import txn_key
 from freerise.sync.demo_provider import make_scraper
 from freerise.sync.otp import OtpTimeout, answer_otp
@@ -160,7 +160,11 @@ def test_nan_amount_fails_instead_of_storing_a_guess():
 
 def test_engine_selection(monkeypatch):
     creds = {"username": "u", "password": "p"}
+    monkeypatch.delenv("FREERISE_IFS_PROVIDERS", raising=False)
     monkeypatch.delenv("FREERISE_IBS_PROVIDERS", raising=False)
+    for provider in ips.PROVIDERS:
+        assert isinstance(make_scraper(provider, creds), ips.IpsScraper), provider
+    monkeypatch.setenv("FREERISE_IFS_PROVIDERS", "")
     for provider in ibs.COMPANIES:  # default "all": every provider the package has
         assert isinstance(make_scraper(provider, creds), ibs.IbsScraper), provider
     assert not ibs.enabled("mislaka") and not ibs.enabled("hafenix") and not ibs.enabled("migdal")
