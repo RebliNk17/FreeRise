@@ -39,6 +39,7 @@ FIRST_SYNC_DAYS = 730
 # full history follows in a background run.
 VERIFY_DAYS = 30
 STAGES = {"logging in": "login", "fetching data": "fetch"}  # BaseScraper progress messages
+STALE = timedelta(minutes=30)  # a run queued or started longer ago than this is dead
 
 
 def _scrub(text: str, secrets: dict) -> str:
@@ -66,6 +67,22 @@ def failure_kind(error_type: str | None, error: str) -> str:
     if any(h in text for h in PROVIDER_CHANGED_HINTS):
         return "provider_changed"
     return "other"
+
+
+def active_run_id(s: Session, credential_id: int) -> int | None:
+    """The connection's sync that is queued or in progress, if any. Older than STALE = dead
+    (worker restarted or crashed), so it can't block the next sync forever."""
+    fresh = datetime.now(UTC) - STALE
+    return s.scalar(
+        select(SyncRun.id)
+        .where(
+            SyncRun.credential_id == credential_id,
+            ((SyncRun.status == "requested") & (SyncRun.created_at > fresh))
+            | ((SyncRun.status == "running") & (SyncRun.started_at > fresh)),
+        )
+        .order_by(SyncRun.id.desc())
+        .limit(1)
+    )
 
 
 def login_paused(s: Session, credential_id: int) -> bool:

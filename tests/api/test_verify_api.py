@@ -69,7 +69,7 @@ async def test_new_connection_pending_until_verified(authed, sf):
     assert rid and status(authed, cid)["stage"] == "sending"
     # hidden and never synced while pending
     assert authed.get("/api/credentials").json() == []
-    assert authed.post("/api/sync", json={}).json() == {"run_ids": []}
+    assert authed.post("/api/sync", json={}).json() == {"run_ids": [], "runs": []}
     assert authed.post("/api/sync", json={"credential_id": cid}).status_code == 409
     sched = factory()
     await run_all(sf, scraper_factory=sched, stagger=(0, 0))

@@ -57,6 +57,7 @@ export type Credential = {
   last_error: string | null;
   last_failure_kind: "auth_failed" | "provider_changed" | "timeout" | "otp_timeout" | "other" | null;
   sync_paused: boolean; // scheduled syncs stopped after repeated login failures; a successful sync resumes them
+  syncing: boolean; // a sync is queued or running now (one per connection at a time)
   fields: Record<string, string>;
   accounts: AccountBrief[];
   verify_run_id?: number | null; // set when the request started a connection check

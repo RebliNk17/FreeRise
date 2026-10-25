@@ -24,6 +24,7 @@ import { ThemeButton } from "@/components/ThemeToggle";
 import { Logo } from "@/components/Logo";
 import { send } from "@/lib/api";
 import { OtpPrompt } from "./sync/OtpPrompt";
+import { SyncToasts } from "./sync/SyncToasts";
 import { NotificationBell } from "@/components/NotificationBell";
 
 type NavLink = { href: string; label: string; icon: LucideIcon };
@@ -97,6 +98,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       )}
 
       <OtpPrompt />
+      <SyncToasts />
     </div>
   );
 }
