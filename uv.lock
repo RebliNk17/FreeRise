@@ -290,7 +290,7 @@ dependencies = [
     { name = "cryptography" },
     { name = "fastapi" },
     { name = "httpx" },
-    { name = "israeli-pension-scrapers" },
+    { name = "israeli-finance-scrapers" },
     { name = "playwright" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic-settings" },
@@ -315,7 +315,7 @@ requires-dist = [
     { name = "cryptography", specifier = ">=50.0.2" },
     { name = "fastapi", specifier = ">=0.161.1" },
     { name = "httpx", specifier = ">=0.28.1" },
-    { name = "israeli-pension-scrapers", url = "https://github.com/RebliNk17/israeli-pension-scrapers/releases/download/v0.2.0/israeli_pension_scrapers-0.2.0-py3-none-any.whl" },
+    { name = "israeli-finance-scrapers", specifier = ">=0.2.0" },
     { name = "playwright", specifier = ">=1.64.1" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3.6" },
     { name = "pydantic-settings", specifier = ">=2.16.1" },
@@ -495,18 +495,17 @@ wheels = [
 ]
 
 [[package]]
-name = "israeli-pension-scrapers"
+name = "israeli-finance-scrapers"
 version = "0.2.0"
-source = { url = "https://github.com/RebliNk17/israeli-pension-scrapers/releases/download/v0.2.0/israeli_pension_scrapers-0.2.0-py3-none-any.whl" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
+    { name = "cryptography" },
     { name = "httpx" },
 ]
+sdist = { url = "https://files.pythonhosted.org/packages/ee/9c/15c492cb81ae77277c99e0dcfe1cae3604f722e183648d63b4353634ce5b/israeli_finance_scrapers-0.2.0.tar.gz", hash = "sha256:15a66f08771a8c8446aefbb1dcc26a0a27013fe72a10fadb530e1714d84cceed", size = 86895, upload-time = "2026-10-25T16:14:16.041Z" }
 wheels = [
-    { url = "https://github.com/RebliNk17/israeli-pension-scrapers/releases/download/v0.2.0/israeli_pension_scrapers-0.2.0-py3-none-any.whl", hash = "sha256:137cf9ab95e448cbac715f141982ebcb7617d40211915e0274bdce2f9ef5c1d7" },
+    { url = "https://files.pythonhosted.org/packages/1d/e0/755c0b72a1599766e2633e66e72eb1609911568d0a18f984a0039afcbb91/israeli_finance_scrapers-0.2.0-py3-none-any.whl", hash = "sha256:470101fd95f1fa6d92ddf7a357361b566b66f38f59c280fe1f0a32dfb35253d7", size = 66835, upload-time = "2026-10-25T16:14:14.722Z" },
 ]
-
-[package.metadata]
-requires-dist = [{ name = "httpx", specifier = ">=0.27.0" }]
 
 [[package]]
 name = "mako"
