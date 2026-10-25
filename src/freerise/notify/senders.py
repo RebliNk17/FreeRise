@@ -25,6 +25,14 @@ def enabled_channels(session: Session) -> list[str]:
     return list(v) if v else ["in_app"]
 
 
+def telegram_kinds(session: Session) -> set[str]:
+    """Kinds that reach a Telegram chat right now (bot linked, channel on)."""
+    cfg = telegram.load(session)
+    if not cfg.get("chat_id") or "telegram" not in enabled_channels(session):
+        return set()
+    return set(telegram.kinds_of(cfg))
+
+
 def build_senders(session: Session) -> list[Sender]:
     # in_app is written by notify() itself
     cfg = telegram.load(session)

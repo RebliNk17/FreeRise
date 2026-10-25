@@ -259,7 +259,8 @@ export type TelegramConfig = {
   chat_name: string | null;
   linked: boolean;
   enabled: boolean;
-  kinds: string[] | null; // null = every kind
+  kinds: string[]; // what is sent: the saved pick, else every kind but feed_kinds
+  feed_kinds: string[]; // a message per transaction; off by default
   link_code: string | null; // set while waiting for /start in Telegram
   link_url: string | null;
   all_kinds: Record<string, string>;

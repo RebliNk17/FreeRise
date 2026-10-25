@@ -11,7 +11,7 @@ export default function NotificationsPage() {
         <h1 className="page-title flex-1">התראות</h1>
         <ReadAllButton {...n} />
       </div>
-      <NotificationList {...n} />
+      <NotificationList {...n} full />
     </div>
   );
 }

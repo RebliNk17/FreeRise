@@ -29,6 +29,7 @@ from freerise.models import (
 from freerise.models import (
     Notification as _N,
 )
+from freerise.notify.reports import monthly_report, telegram_feed, weekly_report
 from freerise.notify.store import notify
 
 BANK_NAMES = {
@@ -427,6 +428,9 @@ RULES = (
     _card_bills,
     _fees,
     _insight_warnings,
+    weekly_report,
+    monthly_report,
+    telegram_feed,
 )
 
 

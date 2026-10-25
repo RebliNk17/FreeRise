@@ -45,6 +45,8 @@ def test_connect_link_test_disconnect(authed, monkeypatch):
 
     r = authed.post("/api/settings/telegram/link").json()
     assert r["linked"] and r["enabled"] and r["chat_name"] == "Shai" and r["link_code"] is None
+    # by default everything but the per-transaction feed
+    assert "weekly_report" in r["kinds"] and not set(r["feed_kinds"]) & set(r["kinds"])
     assert sent[-1]["chat_id"] == 42
 
     assert authed.post("/api/settings/telegram/test").status_code == 204

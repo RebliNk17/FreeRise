@@ -6,6 +6,7 @@ No webhook: linking reads getUpdates on demand, so it works on a server with no 
 
 import base64
 import html
+import re
 import secrets
 from datetime import UTC, datetime
 
@@ -18,8 +19,11 @@ from freerise.models import Notification, Setting
 
 KEY = "telegram"
 ICONS = {"info": "🔔", "warning": "⚠️", "critical": "🚨"}
-# Every kind notify/rules.py can create; the settings page lets you pick which reach Telegram.
+# Every kind notify/rules.py and notify/reports.py can create; the settings page lets you pick
+# which reach Telegram.
 KINDS = {
+    "weekly_report": "סיכום שבועי",
+    "monthly_report": "סיכום חודשי",
     "sync_failed": "סנכרון נכשל",
     "sync_paused": "סנכרון הושהה",
     "large_transaction": "עסקה גדולה",
@@ -36,7 +40,47 @@ KINDS = {
     "negative_cycle": "חודש במינוס",
     "low_balance_before_income": "יתרה נמוכה לפני משכורת",
     "pension_reminder": "תזכורת פנסיה",
+    "new_payment": "כל חיוב חדש",
+    "installment_new": "עסקת תשלומים חדשה",
+    "installment_ended": "עסקת תשלומים שהסתיימה",
 }
+# A message per transaction: off unless picked, Telegram only (never in the app's bell).
+FEED = ("new_payment", "installment_new", "installment_ended")
+EMOJI = {
+    "weekly_report": "📊",
+    "monthly_report": "🗓️",
+    "sync_paused": "⏸️",
+    "large_transaction": "💸",
+    "double_charge": "👀",
+    "new_recurring": "🔁",
+    "weekly_allowance_used": "⏳",
+    "category_over_expected": "📈",
+    "installments_ending": "🧾",
+    "uncategorized_growing": "🏷️",
+    "card_bill_mismatch": "🧐",
+    "card_unknown": "💳",
+    "fees_paid": "🏦",
+    "new_fee": "🏦",
+    "negative_cycle": "📉",
+    "pension_reminder": "🧓",
+    "new_payment": "💳",
+    "installment_new": "🧾",
+    "installment_ended": "🎉",
+}
+BUTTONS = {
+    "sync_failed": "לתיקון החיבור",
+    "sync_paused": "לתיקון החיבור",
+    "weekly_report": "לתזרים",
+    "monthly_report": "לתזרים המלא",
+}
+# A minus right after a letter is Hebrew's "מ-₪5", not a negative amount.
+MONEY = re.compile(r"(?<!\w)-?₪-?[\d,]+(?:\.\d+)?")
+
+
+def kinds_of(cfg: dict) -> list[str]:
+    """Kinds sent to Telegram: the saved pick, else every kind but the FEED."""
+    picked = cfg.get("kinds")
+    return list(picked) if picked is not None else [k for k in KINDS if k not in FEED]
 
 
 class TelegramError(Exception):
@@ -114,15 +158,23 @@ def link_chat(cfg: dict, chat: dict) -> None:
     cfg["since"] = datetime.now(UTC).isoformat()
 
 
-def format_message(n: Notification, app_url: str | None) -> str:
-    text = f"{ICONS.get(n.severity, '🔔')} <b>{html.escape(n.title)}</b>\n{html.escape(n.body)}"
-    if app_url and n.link:
-        href = html.escape(app_url.rstrip("/") + n.link, quote=True)
-        text += f'\n\n<a href="{href}">פתיחה ב-FreeRise ←</a>'
+def format_message(n: Notification, url: str | None = None) -> str:
+    """Kind's emoji, bold title, body with amounts in bold; `url` adds a text link."""
+    icon = EMOJI.get(n.kind) or ICONS.get(n.severity, "🔔")
+    body = MONEY.sub(r"<b>\g<0></b>", html.escape(n.body))
+    text = f"{icon} <b>{html.escape(n.title)}</b>\n{body}"
+    if url:
+        text += f'\n\n<a href="{html.escape(url, quote=True)}">פתיחה ב-FreeRise ←</a>'
     return text
 
 
-def send_text(token: str, chat_id: int, text: str) -> None:
+def send_text(token: str, chat_id: int, text: str, button: tuple[str, str] | None = None) -> None:
+    """button: (label, url) under the message."""
+    extra = (
+        {"reply_markup": {"inline_keyboard": [[{"text": button[0], "url": button[1]}]]}}
+        if button
+        else {}
+    )
     call(
         token,
         "sendMessage",
@@ -130,6 +182,7 @@ def send_text(token: str, chat_id: int, text: str) -> None:
         text=text,
         parse_mode="HTML",
         link_preview_options={"is_disabled": True},
+        **extra,
     )
 
 
@@ -139,7 +192,14 @@ class TelegramSender:
     def __init__(self, cfg: dict, app_url: str | None):
         self.token, self.chat_id, self.app_url = token_of(cfg), cfg["chat_id"], app_url
         self.since = datetime.fromisoformat(cfg["since"]) if cfg.get("since") else None
-        self.kinds = cfg.get("kinds")  # None = every kind
+        self.kinds = kinds_of(cfg)
 
     def send(self, n: Notification) -> None:
-        send_text(self.token, self.chat_id, format_message(n, self.app_url))
+        url = self.app_url.rstrip("/") + n.link if self.app_url and n.link else None
+        if not url:
+            return send_text(self.token, self.chat_id, format_message(n))
+        try:
+            button = (BUTTONS.get(n.kind, "פתיחה ב-FreeRise"), url)
+            send_text(self.token, self.chat_id, format_message(n), button)
+        except TelegramError:  # buttons take public URLs only (not e.g. http://localhost)
+            send_text(self.token, self.chat_id, format_message(n, url))

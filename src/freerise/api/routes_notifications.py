@@ -7,6 +7,7 @@ from sqlalchemy import func, select, update
 
 from freerise.api.deps import DB, get_or_404
 from freerise.models import Notification
+from freerise.notify.telegram import FEED
 
 router = APIRouter()
 
@@ -31,7 +32,11 @@ class Count(BaseModel):
 def list_notifications(
     db: DB, unread_only: bool = False, limit: Annotated[int, Query(ge=1, le=500)] = 50
 ) -> list[NotificationOut]:
-    q = select(Notification).order_by(Notification.created_at.desc(), Notification.id.desc())
+    q = (
+        select(Notification)
+        .where(Notification.kind.not_in(FEED))  # Telegram only
+        .order_by(Notification.created_at.desc(), Notification.id.desc())
+    )
     if unread_only:
         q = q.where(Notification.read_at.is_(None))
     return list(db.scalars(q.limit(limit)))
@@ -39,7 +44,9 @@ def list_notifications(
 
 @router.get("/notifications/unread-count")
 def unread_count(db: DB) -> Count:
-    n = db.scalar(select(func.count()).where(Notification.read_at.is_(None)))
+    n = db.scalar(
+        select(func.count()).where(Notification.read_at.is_(None), Notification.kind.not_in(FEED))
+    )
     return Count(count=n)
 
 

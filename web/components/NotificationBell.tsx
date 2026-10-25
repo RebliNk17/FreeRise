@@ -123,8 +123,8 @@ function when(iso: string) {
   return d === today ? formatTime(iso) : d.slice(6) === today.slice(6) ? d.slice(0, 5) : d;
 }
 
-/** One card, a row per notification: severity icon, title, time, a two-line body. */
-export function NotificationList({ data, error, open }: Notifications) {
+/** One card, a row per notification: severity icon, title, time, the body (two lines unless `full`). */
+export function NotificationList({ data, error, open, full = false }: Notifications & { full?: boolean }) {
   return (
     <>
       <Status loading={!data && !error} error={error} />
@@ -144,7 +144,7 @@ export function NotificationList({ data, error, open }: Notifications) {
                       {when(n.created_at)}
                     </time>
                   </span>
-                  {n.body && <span className="line-clamp-2 text-xs text-muted">{n.body}</span>}
+                  {n.body && <span className={`block text-xs whitespace-pre-line text-muted ${full ? "" : "line-clamp-2"}`}>{n.body}</span>}
                 </span>
               </button>
             </li>
