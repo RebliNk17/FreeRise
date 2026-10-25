@@ -99,16 +99,25 @@ def ingest_mislaka(session: Session, credential_id: int, result: ScrapingResult)
                 select(FundDeposit.date, FundDeposit.amount).where(FundDeposit.fund_id == fund.id)
             )
         }
+        extra = m.get("deposit_details") or {}  # salary month, split, insured salary (ips.py)
         for t in a.transactions:
             key = (_date(t.date), Decimal(str(t.charged_amount)).quantize(CENT))
+            raw = dataclasses.asdict(t)
+            if d := extra.get(f"{key[0]}|{key[1]}"):
+                raw["details"] = d
             if key not in seen:
                 seen.add(key)
-                session.add(
-                    FundDeposit(
-                        fund_id=fund.id, date=key[0], amount=key[1], raw=dataclasses.asdict(t)
-                    )
-                )
+                session.add(FundDeposit(fund_id=fund.id, date=key[0], amount=key[1], raw=raw))
                 stats.deposits += 1
+            elif "details" in raw:  # backfill rows stored before details were kept
+                for row in session.scalars(
+                    select(FundDeposit).where(
+                        FundDeposit.fund_id == fund.id,
+                        FundDeposit.date == key[0],
+                        FundDeposit.amount == key[1],
+                    )
+                ):
+                    row.raw = raw
 
     for r in result.extras.get(REPORTS_KEY) or []:
         if not (d := _date(r.get("calc_date"))):

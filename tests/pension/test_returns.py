@@ -57,3 +57,43 @@ def test_funds_overview_ytd_monthly_and_total(session):
         (date(2026, 1, 31), Decimal("1020.00")),
         (date(2026, 2, 28), Decimal("1100.00")),
     ]
+
+
+def test_monthly_gains_from_month_ends(session):
+    from freerise.pension.returns import monthly_gains
+
+    f = mk_fund(
+        session,
+        [
+            (date(2026, 7, 31), "1000"),
+            (date(2026, 8, 15), "1040"),
+            (date(2026, 8, 31), "1100.25"),
+            (date(2026, 10, 25), "1300"),  # September missing: no October row
+        ],
+        [(date(2026, 8, 10), "50"), (date(2026, 7, 5), "50")],
+    )
+    [g] = monthly_gains(session)
+    assert (g.fund_ids, g.month, g.deposits, g.gain) == (
+        [f.id],
+        date(2026, 8, 1),
+        Decimal("50.00"),
+        Decimal("50.25"),
+    )
+
+
+def test_portfolio_history_gains_as_a_group(session):
+    from freerise.pension.returns import monthly_gains
+
+    ph = [{"date": "2026-08-01", "balance": 1000.0}, {"date": "2026-09-01", "balance": 1100.5}]
+    a = mk_fund(session, [(date(2026, 10, 20), "600")], [(date(2026, 8, 5), "30")], pid="a")
+    b = mk_fund(session, [(date(2026, 10, 20), "500")], [(date(2026, 8, 6), "20")], pid="b")
+    b.credential_id = a.credential_id
+    a.details = b.details = {"portfolio_history": ph}
+    session.flush()
+    [g] = monthly_gains(session)
+    assert (sorted(g.fund_ids), g.month, g.deposits, g.gain) == (
+        sorted([a.id, b.id]),
+        date(2026, 8, 1),
+        Decimal("50.00"),
+        Decimal("50.50"),
+    )

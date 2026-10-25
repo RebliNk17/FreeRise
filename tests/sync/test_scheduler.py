@@ -301,3 +301,23 @@ def test_recheck_running_after_stagger_sleep(sf):
     f = fake_factory(ok())
     asyncio.run(run_all(sf, scraper_factory=f, stagger=(1, 1), sleep=sleep))
     assert len(f.created) == 1
+
+
+def test_pension_with_token_syncs_once_a_day(sf):
+    with sf() as s:
+        for provider, secret in (
+            ("migdal", {"id": "1", "otpLongTermToken": "t"}),
+            ("hafenix", {"id": "1"}),  # no token: login would send an SMS
+            ("mislaka", {"id": "1", "otpLongTermToken": "t"}),  # SMS every time: manual
+        ):
+            s.add(
+                Credential(
+                    provider=provider, label=provider, owner="shai", secret_enc=encrypt_json(secret)
+                )
+            )
+        s.commit()
+    f = fake_factory(ok())
+    asyncio.run(run_all(sf, scraper_factory=f, **NO_WAIT))
+    assert len(f.created) == 1
+    asyncio.run(run_all(sf, scraper_factory=f, **NO_WAIT))
+    assert len(f.created) == 1  # already synced today

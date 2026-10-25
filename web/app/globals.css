@@ -235,3 +235,11 @@ body {
 @keyframes sheet-in { from { transform: translateY(100%); } }
 
 @media (max-width: 39.99rem) and (prefers-reduced-motion: no-preference) { .sheet { animation: sheet-in 220ms ease-out; } }
+
+/* Cards rising in on load (pension page); stagger with an inline animation-delay. */
+@media (prefers-reduced-motion: no-preference) {
+  .rise { animation: rise 500ms cubic-bezier(.2, .7, .2, 1) both; }
+  .grow-x { animation: grow-x 900ms cubic-bezier(.2, .7, .2, 1) both; transform-origin: right; }
+}
+@keyframes rise { from { opacity: 0; transform: translateY(12px); } }
+@keyframes grow-x { from { transform: scaleX(0); } }
