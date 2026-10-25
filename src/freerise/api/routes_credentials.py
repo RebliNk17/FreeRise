@@ -15,7 +15,7 @@ from freerise.accounts import account_holder, account_label, active_card_ids
 from freerise.api.deps import DB, current_user, get_or_404
 from freerise.crypto import decrypt_json, encrypt_json, mask
 from freerise.models import Account, Credential, OtpRequest, SyncRun, User
-from freerise.sync import demo_provider
+from freerise.sync import demo_provider, ips
 from freerise.sync.otp import answer_otp
 from freerise.sync.service import active_run_id, login_paused
 
@@ -47,6 +47,7 @@ class Provider(BaseModel):
     service: str
     required_fields: list[str]
     optional_fields: list[str]
+    login_methods: list[list[str]]  # each a complete login; the first is required_fields
     requires_2fa: bool
 
 
@@ -100,6 +101,7 @@ class CredentialPatch(BaseModel):
     owner: str | None = None
     enabled: bool | None = None
     fields: dict[str, str] | None = None
+    method: int | None = None  # index into login_methods: drops the other methods' stored fields
 
 
 def _out(c: Credential) -> CredentialOut:
@@ -129,15 +131,39 @@ def _out(c: Credential) -> CredentialOut:
     )
 
 
-def _check_fields(provider: str, new: dict[str, str], full: dict[str, str]) -> None:
-    """`new` = submitted keys (must be known); `full` = resulting secret (must have required)."""
+def login_methods(provider: str) -> list[list[str]]:
+    alt = ips.LOGIN_METHODS.get(provider) if ips.enabled(provider) else None
+    return alt or [PROVIDER_CONFIGS[provider].required_fields]
+
+
+def _check_fields(
+    provider: str, new: dict[str, str], full: dict[str, str], method: int | None = None
+) -> None:
+    """`new` = submitted keys (must be known); `full` = resulting secret (must hold the chosen
+    login method, else any one; `missing` lists what the nearest one lacks)."""
     if provider not in providers_offered():
         raise HTTPException(422, "unknown provider")
-    cfg = PROVIDER_CONFIGS[provider]
-    unknown = set(new) - set(cfg.required_fields) - set(cfg.optional_fields)
-    missing = [f for f in cfg.required_fields if not full.get(f)]
+    methods = login_methods(provider)
+    known = {f for m in methods for f in m} | set(PROVIDER_CONFIGS[provider].optional_fields)
+    unknown = set(new) - known
+    if method is not None:  # checked by _for_method
+        methods = [methods[method]]
+    missing = min(([f for f in m if not full.get(f)] for m in methods), key=len)
     if unknown or missing:
         raise HTTPException(422, {"missing": missing, "unknown": sorted(unknown)})
+
+
+def _for_method(provider: str, method: int | None, fields: dict) -> dict:
+    """`fields` without what only the other login methods use (the engine prefers a stored
+    password, so switching to an SMS login has to drop it)."""
+    if method is None:
+        return fields
+    methods = login_methods(provider)
+    if not 0 <= method < len(methods):
+        raise HTTPException(422, "unknown login method")
+    keep = {*methods[method], *PROVIDER_CONFIGS[provider].optional_fields}
+    other = {f for m in methods for f in m} - keep
+    return {k: v for k, v in fields.items() if k not in other}
 
 
 @router.get("/providers")
@@ -149,6 +175,7 @@ def providers() -> list[Provider]:
             service=c.service,
             required_fields=c.required_fields,
             optional_fields=c.optional_fields,
+            login_methods=login_methods(k),
             requires_2fa=c.requires_2fa,
         )
         for k in providers_offered()
@@ -250,10 +277,13 @@ def update_credential(id: int, body: CredentialPatch, db: DB, me: Me) -> Credent
         if (v := getattr(body, k)) is not None:
             setattr(c, k, v)
     run_id = None
+    stored = decrypt_json(c.secret_enc)
+    kept = _for_method(c.provider, body.method, stored)
     # omitted or empty-string fields keep their stored value
-    if new := {k: v for k, v in (body.fields or {}).items() if v}:
-        merged = decrypt_json(c.secret_enc) | new
-        _check_fields(c.provider, body.fields, merged)
+    new = {k: v for k, v in (body.fields or {}).items() if v}
+    if new or kept != stored:
+        merged = kept | new
+        _check_fields(c.provider, body.fields or {}, merged, body.method)
         if dup := _duplicate_of(db, c.provider, merged, exclude=c.id):
             _refuse_duplicate(dup)
         if c.verified:  # the old details stay in use until the new ones verify

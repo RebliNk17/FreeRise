@@ -1,7 +1,8 @@
 /** Pure helpers behind components/ui/Select.tsx (listbox keyboard model). */
 import type { ReactNode } from "react";
 
-export type Option = { value: string; label: string; icon?: ReactNode; group?: string; disabled?: boolean };
+/** `keywords`: extra text the search matches, e.g. English names of a Hebrew label. */
+export type Option = { value: string; label: string; keywords?: string; icon?: ReactNode; group?: string; disabled?: boolean };
 
 /** Next enabled index for a navigation key, or `current` when the key isn't one / nothing is enabled. */
 export function moveIndex(options: Option[], current: number, key: string): number {
@@ -29,8 +30,9 @@ export function typeahead(options: Option[], query: string, from: number): numbe
   return -1;
 }
 
-/** Options whose label contains every whitespace-separated term of `q` (case-insensitive). */
+/** Options whose label or keywords contain every whitespace-separated term of `q` (case-insensitive). */
 export function filterOptions(options: Option[], q: string): Option[] {
   const terms = q.toLocaleLowerCase().split(/\s+/).filter(Boolean);
-  return terms.length ? options.filter((o) => terms.every((t) => o.label.toLocaleLowerCase().includes(t))) : options;
+  const text = (o: Option) => `${o.label} ${o.keywords ?? ""}`.toLocaleLowerCase();
+  return terms.length ? options.filter((o) => terms.every((t) => text(o).includes(t))) : options;
 }

@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Lock, Plus, RefreshCw } from "lucide-react";
 import { ApiError, api, send, type Credential, type Provider } from "@/lib/api";
 import { formatDate } from "@/lib/format";
-import { SERVICE_LABELS, fieldLabel, filledFields, isSecretField, providerName } from "@/lib/providers";
+import { SERVICE_LABELS, fieldLabel, filledFields, isSecretField, methodLabel, providerKeywords, providerName, storedMethod } from "@/lib/providers";
 import { friendlyError, technicalDetails } from "@/lib/connectErrors";
 import { AccountBriefs } from "@/components/InactiveFilter";
 import { ProviderLogo } from "@/components/ProviderLogo";
@@ -319,6 +319,10 @@ function AddCredential({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const provider = providers.find((p) => p.key === key);
+  const methods = provider?.login_methods ?? [];
+  const [picked, setMethod] = useState<number | null>(null); // null: the fixed login's method, else the first
+  const method = picked ?? (fix ? storedMethod(methods, Object.keys(fix.fields)) : 0);
+  const keys = provider ? formFields(provider, method) : [];
   // ponytail: one household, so no "whose is it" question; reuse the existing owner (it still feeds account holders/pension).
   const owner = fix?.owner ?? owners[0] ?? "";
   const ref = useRef<HTMLDialogElement>(null);
@@ -332,13 +336,13 @@ function AddCredential({
     e.preventDefault();
     if (!provider) return;
     const f = new FormData(e.currentTarget);
-    const fields = filledFields([...provider.required_fields, ...provider.optional_fields], f);
+    const fields = filledFields(keys, f);
     setBusy(true);
     setError("");
     try {
       const body = { label: String(f.get("label") ?? "").trim() || providerName(key), owner, fields };
       let c = fix
-        ? await send<Credential>("PATCH", `/credentials/${fix.id}`, body)
+        ? await send<Credential>("PATCH", `/credentials/${fix.id}`, { ...body, method })
         : await send<Credential>("POST", "/credentials", { ...body, provider: key });
       if (!c.verify_run_id) c = await send<Credential>("POST", `/credentials/${c.id}/verify`); // nothing secret changed
       onStarted(c);
@@ -376,37 +380,42 @@ function AddCredential({
           <Select
             label="ספק"
             value={key}
-            onChange={setKey}
+            onChange={(k) => {
+              setKey(k);
+              setMethod(null);
+            }}
             options={providers.map((p) => ({
               value: p.key,
               label: providerName(p.key),
+              keywords: providerKeywords(p.key),
               icon: <ProviderLogo provider={p.key} />,
               group: SERVICE_LABELS[p.service],
             }))}
           />
         )}
       </div>
-      {provider &&
-        [...provider.required_fields.map((k) => [k, true] as const), ...provider.optional_fields.map((k) => [k, false] as const)].map(
-          ([k, required]) => (
-            <label key={`${key}:${k}`} className="flex flex-col gap-1.5 text-[13px] text-muted">
-              <span>
-                {fieldLabel(k)}
-                {!required && <span className="text-faint"> (רשות)</span>}
-              </span>
-              <input
-                name={`field:${k}`}
-                type={isSecretField(k) ? "password" : "text"}
-                required={required && !fix}
-                placeholder={isSecretField(k) ? (fix?.fields[k] ?? "") : ""}
-                defaultValue={isSecretField(k) ? undefined : (fix?.fields[k] ?? undefined)}
-                autoComplete="off"
-                className="input"
-                dir="ltr"
-              />
-            </label>
-          ),
-        )}
+      <MethodSwitch methods={methods} value={method} onChange={setMethod} provider={key} />
+      {keys.map((k) => {
+        const required = methods[method].includes(k);
+        return (
+          <label key={`${key}:${k}`} className="flex flex-col gap-1.5 text-[13px] text-muted">
+            <span>
+              {fieldLabel(k)}
+              {!required && <span className="text-faint"> (רשות)</span>}
+            </span>
+            <input
+              name={`field:${k}`}
+              type={isSecretField(k) ? "password" : "text"}
+              required={required && !(fix && k in fix.fields)}
+              placeholder={isSecretField(k) ? (fix?.fields[k] ?? "") : ""}
+              defaultValue={isSecretField(k) ? undefined : (fix?.fields[k] ?? undefined)}
+              autoComplete="off"
+              className="input"
+              dir="ltr"
+            />
+          </label>
+        );
+      })}
       <label className="flex flex-col gap-1.5 text-[13px] text-muted">
         <span>
           כינוי<span className="text-faint"> (רשות)</span>
@@ -433,6 +442,36 @@ function AddCredential({
   );
 }
 
+/** The chosen login method's fields, then the provider's optional ones. */
+const formFields = (p: Provider, method: number) => [...new Set([...p.login_methods[method], ...p.optional_fields])];
+
+/** Only for providers with more than one way in (Max: password, or ID + card digits and an SMS code). */
+function MethodSwitch({ methods, value, onChange, provider }: { methods: string[][]; value: number; onChange: (i: number) => void; provider: string }) {
+  if (methods.length < 2) return null;
+  return (
+    <div className="flex flex-col gap-1.5 text-[13px] text-muted">
+      דרך התחברות
+      <div role="radiogroup" aria-label="דרך התחברות" className="flex rounded-[14px] bg-sunken p-1">
+        {methods.map((m, i) => (
+          <button
+            key={m.join()}
+            type="button"
+            role="radio"
+            aria-checked={value === i}
+            onClick={() => onChange(i)}
+            className={`min-h-10 flex-1 rounded-[11px] px-2 py-1.5 text-sm font-semibold ${value === i ? "bg-surface text-text shadow-card" : "text-muted"}`}
+          >
+            {methodLabel(m)}
+          </button>
+        ))}
+      </div>
+      {!methods[value].some(isSecretField) && (
+        <span className="text-xs">{providerName(provider)} ישלחו קוד ב-SMS ונבקש להזין אותו. ייתכן שיידרש קוד גם בסנכרונים הבאים.</span>
+      )}
+    </div>
+  );
+}
+
 /** 409 = this login is already connected (credentials API refuses duplicates). */
 function saveError(err: unknown, invalid: string): string {
   if (!(err instanceof ApiError)) return "השמירה נכשלה.";
@@ -454,7 +493,11 @@ function EditCredential({
   onDone: () => void;
   onVerify: (credentialId: number) => void;
 }) {
-  const keys = provider ? [...provider.required_fields, ...provider.optional_fields] : Object.keys(credential.fields);
+  const methods = provider?.login_methods ?? [];
+  const stored = Object.keys(credential.fields);
+  const [picked, setMethod] = useState<number | null>(null);
+  const method = picked ?? storedMethod(methods, stored);
+  const keys = provider ? formFields(provider, method) : stored;
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   // Non-secret fields (ID, card digits, username) in clear; passwords are never sent back.
@@ -469,12 +512,13 @@ function EditCredential({
     e.preventDefault();
     const filled = filledFields(keys, new FormData(e.currentTarget));
     const fields = Object.fromEntries(Object.entries(filled).filter(([k, v]) => details?.[k] !== v));
-    if (!Object.keys(fields).length) return onDone();
+    if (!Object.keys(fields).length && method === storedMethod(methods, stored)) return onDone();
     setBusy(true);
     setError("");
     try {
       // Staged until verified; success also re-enables a connection auto-disabled after a login failure.
-      const c = await send<Credential>("PATCH", `/credentials/${credential.id}`, { fields });
+      // `method` drops the other methods' stored fields (a stored password would win over an SMS login)
+      const c = await send<Credential>("PATCH", `/credentials/${credential.id}`, provider ? { fields, method } : { fields });
       if (c.verify_run_id) onVerify(c.id);
       else onDone();
     } catch (err) {
@@ -488,12 +532,14 @@ function EditCredential({
   return (
     <form onSubmit={submit} className="flex flex-col gap-2 border-t border-hairline pt-3">
       <p className="text-xs text-muted">סיסמה ריקה נשארת ללא שינוי. הפרטים הקיימים נשארים בשימוש עד שהחדשים יאומתו.</p>
+      <MethodSwitch methods={methods} value={method} onChange={setMethod} provider={credential.provider} />
       {keys.map((k) => (
         <label key={k} className="flex flex-col gap-1.5 text-[13px] text-muted">
           {fieldLabel(k)}
           <input
             name={`field:${k}`}
             type={isSecretField(k) ? "password" : "text"}
+            required={methods[method]?.includes(k) && !stored.includes(k)}
             defaultValue={isSecretField(k) ? "" : (details[k] ?? "")}
             placeholder={isSecretField(k) ? "••••" : ""}
             autoComplete="off"

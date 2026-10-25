@@ -465,3 +465,73 @@ def test_details_show_ids_never_passwords(authed):
     r = authed.get(f"/api/credentials/{cid}/details")
     assert r.json() == {"id": "012345678", "card6Digits": "123456"}
     assert "pw-secret" not in r.text
+
+
+def _post(client, provider, fields):
+    body = {"provider": provider, "label": "x", "owner": "שי", "fields": fields}
+    return client.post("/api/credentials", json=body)
+
+
+def test_any_complete_login_method_connects(authed, monkeypatch):
+    by_key = {p["key"]: p for p in authed.get("/api/providers").json()}
+    assert by_key["max"]["login_methods"] == [
+        ["username", "password"],
+        ["id", "card8Digits"],
+        ["id", "bankAccountNum"],
+    ]
+    for key in ("leumi", "onezero", "pepper", "hafenix", "migdal"):  # one way in: unchanged
+        assert by_key[key]["login_methods"] == [by_key[key]["required_fields"]]
+    for key in ("max", "visa cal", "isracard", "amex"):
+        for i, method in enumerate(by_key[key]["login_methods"]):
+            assert _post(authed, key, {f: f"{i}{f}" for f in method}).status_code == 201, (key, i)
+    r = _post(authed, "max", {"id": "012345678"})
+    assert r.status_code == 422 and r.json()["detail"]["missing"] == ["card8Digits"]
+    assert _post(authed, "max", {"id": "1", "card4Digits": "1234"}).status_code == 422  # Cal's
+    # Max on the npm engine: username + password only
+    monkeypatch.setenv("FREERISE_IFS_PROVIDERS", "all,-max")
+    assert _post(authed, "max", {"id": "1", "card8Digits": "12345678"}).status_code == 422
+
+
+def test_switching_login_method_drops_the_other_ones_fields(authed, sf):
+    login = {"username": "u", "password": "pw-1", "id": "012345678"}
+    cid = _post(authed, "max", login).json()["id"]
+    with sf() as s:
+        c = s.get(Credential, cid)
+        c.verified, c.secret_enc = True, encrypt_json({**login, "otpLongTermToken": "t"})
+        s.commit()
+    url = f"/api/credentials/{cid}"
+    assert authed.patch(url, json={"method": 3}).status_code == 422
+    r = authed.patch(url, json={"fields": {}, "method": 2})  # bank account left empty
+    assert r.status_code == 422 and r.json()["detail"]["missing"] == ["bankAccountNum"]
+    # a stored password would win in the engine, so it goes; the ID and device token stay
+    r = authed.patch(url, json={"fields": {"card8Digits": "12345678"}, "method": 1})
+    assert r.status_code == 200 and r.json()["verify_run_id"]
+    with sf() as s:
+        c = s.get(Credential, cid)
+        assert decrypt_json(c.pending_secret_enc) == {
+            "id": "012345678",
+            "card8Digits": "12345678",
+            "otpLongTermToken": "t",
+        }
+        assert decrypt_json(c.secret_enc)["password"] == "pw-1"  # in use until verified
+
+    # Isracard: picking SMS with nothing else changed still re-verifies, without the password
+    card = {"id": "123456782", "card6Digits": "123456", "password": "pw-2"}
+    iid = _post(authed, "isracard", card).json()["id"]
+    r = authed.patch(f"/api/credentials/{iid}", json={"fields": {}, "method": 1})
+    assert r.json()["verify_run_id"]
+    with sf() as s:
+        assert decrypt_json(s.get(Credential, iid).secret_enc) == {
+            "id": "123456782",
+            "card6Digits": "123456",
+        }
+
+
+def test_same_login_refused_across_methods(authed, sf):
+    cid = _post(authed, "visa cal", {"id": "012345678", "card4Digits": "1234"}).json()["id"]
+    with sf() as s:
+        s.get(Credential, cid).verified = True
+        s.commit()
+    r = _post(authed, "visa cal", {"id": "012345678", "bankAccountNum": "12-345-678"})
+    assert r.status_code == 409 and r.json()["detail"]["credential_id"] == cid
+    assert _post(authed, "visa cal", {"username": "u", "password": "p"}).status_code == 201

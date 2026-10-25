@@ -45,6 +45,7 @@ export type Provider = {
   service: string;
   required_fields: string[];
   optional_fields: string[];
+  login_methods: string[][]; // each a complete login; the first is required_fields
 };
 
 export type Credential = {
