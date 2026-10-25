@@ -59,7 +59,13 @@ from freerise.reconcile.card_bills import (
     cards_synced_after,
     reconcile_range,
 )
-from freerise.sync.service import PAUSE_AFTER, login_paused
+from freerise.sync.service import (
+    PAUSE_AFTER,
+    SYNC_TRIES,
+    failures_in_row,
+    login_paused,
+    retryable,
+)
 
 log = logging.getLogger("freerise.notify")
 # Same labels as web/app/(app)/settings/credentials/page.tsx.
@@ -258,7 +264,8 @@ def _pension_reminder(s: Session, today: date) -> None:
 
 def _sync_failed(s: Session, today: date) -> None:
     """One alert per connection per failure streak (a success starts a new one), naming the
-    provider: a connection's label is usually just the owner's name."""
+    provider: a connection's label is usually just the owner's name. Only once the scheduler's
+    retries are used up; a wrong password or code is never retried, so it alerts at once."""
     tz = ZoneInfo(get_settings().tz)
     since = datetime.combine(today - timedelta(days=2), time.min, tz)
     # No enabled filter: an auth failure auto-disables the credential before this runs.
@@ -271,6 +278,8 @@ def _sync_failed(s: Session, today: date) -> None:
         run = s.scalar(runs.order_by(SyncRun.id.desc()).limit(1))
         if not run or run.status not in ("failed", "otp_timeout") or run.finished_at < since:
             continue
+        if c.enabled and retryable(run) and failures_in_row(s, c.id) < SYNC_TRIES:
+            continue  # the scheduler tries again first (sync/scheduler.py)
         streak = s.scalar(
             select(func.max(SyncRun.id)).where(
                 SyncRun.credential_id == c.id, SyncRun.status == "success"

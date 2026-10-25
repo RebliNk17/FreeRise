@@ -120,17 +120,22 @@ def test_auth_failure_on_disabled_credential_notifies(session):
 
 def test_sync_failed_blocked_is_not_site_changed(session):
     a = _acct(session)
-    session.add(
-        SyncRun(
-            credential_id=a.credential_id,
-            trigger="schedule",
-            status="failed",
-            failure_kind="provider_changed",
-            error="AUTOMATION_BLOCKED: login failed: WAF",
-            finished_at=datetime(2026, 10, 22, 8, tzinfo=UTC),
+    for i in range(3):  # retryable: alerts only once the scheduler's tries are used up
+        if i == 2:
+            generate_notifications(session, TODAY)
+            assert "sync_failed" not in _kinds(session)
+        session.add(
+            SyncRun(
+                credential_id=a.credential_id,
+                trigger="schedule",
+                status="failed",
+                failure_kind="provider_changed",
+                error="AUTOMATION_BLOCKED: login failed: WAF",
+                started_at=datetime(2026, 10, 22, 8, i, tzinfo=UTC),
+                finished_at=datetime(2026, 10, 22, 8, i, tzinfo=UTC),
+            )
         )
-    )
-    session.flush()
+        session.flush()
     _fires_once(session, "sync_failed")
     body = session.scalar(select(Notification.body).where(Notification.kind == "sync_failed"))
     assert body == "הספק חוסם זמנית חיבור אוטומטי"

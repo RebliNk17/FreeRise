@@ -13,7 +13,7 @@ from freerise.notify.rules import generate_notifications
 from freerise.sync.scheduler import run_all
 from freerise.sync.service import PAUSE_AFTER, login_paused, run_credential
 
-NO_WAIT = {"stagger": (0, 0)}
+NO_WAIT = {"stagger": (0, 0), "retry_gap": (0, 0)}
 # What Max's lock screen looks like through the package: no auth error type, just a timeout.
 LOCKED = ScrapingResult(success=False, error_type="TIMEOUT", error_message="30000 ms exceeded")
 
@@ -44,11 +44,16 @@ def scheduled(sf, **kw):
     return asyncio.run(run_all(sf, scraper_factory=factory(**kw), **NO_WAIT))
 
 
+def once(sf, cred_id, **kw):
+    """One scheduled attempt, without run_all's retries."""
+    return asyncio.run(run_credential(sf, cred_id, "schedule", factory(**kw)))
+
+
 def test_login_failures_pause_schedule_until_manual_success(sf, credential):
     assert PAUSE_AFTER == 2
-    scheduled(sf, stage="logging in")
+    once(sf, credential.id, stage="logging in")
     assert not paused(sf, credential.id)  # one failure may be a slow site
-    scheduled(sf, stage="logging in")
+    once(sf, credential.id, stage="logging in")
     assert paused(sf, credential.id)
     with sf() as s:
         c = s.get(Credential, credential.id)
@@ -88,8 +93,15 @@ def test_successful_verify_clears(sf, credential):
     assert not paused(sf, credential.id)
 
 
+def test_scheduled_retries_stop_at_the_pause(sf, credential):
+    scheduled(sf, stage="logging in")  # tried, retried once, then paused: no third login
+    assert paused(sf, credential.id)
+    with sf() as s:
+        assert len(s.scalars(select(SyncRun.id)).all()) == PAUSE_AFTER
+
+
 def test_failed_verify_and_otp_timeout_are_not_counted(sf, credential):
-    scheduled(sf, stage="logging in")
+    once(sf, credential.id, stage="logging in")
     asyncio.run(run_credential(sf, credential.id, "verify", factory(stage="logging in")))
     assert not paused(sf, credential.id)  # verify tried new details, not this connection's own
     now = datetime.now(UTC)
@@ -104,7 +116,7 @@ def test_failed_verify_and_otp_timeout_are_not_counted(sf, credential):
             )
         )
         s.commit()
-    scheduled(sf, stage="logging in")
+    once(sf, credential.id, stage="logging in")
     assert not paused(sf, credential.id)  # the code was not typed in; the login itself may work
 
 

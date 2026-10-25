@@ -20,7 +20,15 @@ from freerise.notify.rules import generate_notifications
 from freerise.notify.senders import build_senders, deliver_pending
 from freerise.sync import demo_provider
 from freerise.sync.demo_provider import make_scraper
-from freerise.sync.service import STALE, login_paused, run_credential
+from freerise.sync.service import (
+    RETRY_GAP,
+    STALE,
+    SYNC_TRIES,
+    failures_in_row,
+    login_paused,
+    retryable,
+    run_credential,
+)
 
 log = logging.getLogger("freerise.worker")
 WORKER_LOCK = 0x46524545  # "FREE"
@@ -53,6 +61,7 @@ async def run_all(
     scraper_factory=make_scraper,
     *,
     stagger: tuple[float, float] = (30, 120),
+    retry_gap: tuple[float, float] = RETRY_GAP,
     sleep=asyncio.sleep,
 ) -> list[SyncRun]:
     with session_factory.begin() as s:
@@ -80,6 +89,33 @@ async def run_all(
             known.append(c)
     creds = known
 
+    results = await _sync_each(session_factory, creds, trigger, scraper_factory, stagger, sleep)
+    await after_sync(session_factory)
+    if trigger != "schedule":
+        return results
+    # Sites fail now and then: try again before the rules alert anyone (SYNC_TRIES in all).
+    last = results
+    for _ in range(SYNC_TRIES - 1):
+        failed = {r.credential_id for r in last if retryable(r)}
+        if not failed:
+            break
+        await sleep(random.uniform(*retry_gap))
+        with session_factory() as s:  # still on, and no manual sync fixed it meanwhile
+            again = [
+                c
+                for c in creds
+                if c.id in failed
+                and (fresh := s.get(Credential, c.id))
+                and fresh.enabled
+                and failures_in_row(s, c.id)
+            ]
+        last = await _sync_each(session_factory, again, trigger, scraper_factory, stagger, sleep)
+        results += last
+        await after_sync(session_factory)
+    return results
+
+
+async def _sync_each(session_factory, creds, trigger, scraper_factory, stagger, sleep):
     results: list[SyncRun] = []
     prev = None
     for c in creds:
@@ -107,7 +143,6 @@ async def run_all(
         if run.status != "success":
             log.warning("credential %s sync %s", c.id, run.status)
         results.append(run)
-    await after_sync(session_factory)
     return results
 
 

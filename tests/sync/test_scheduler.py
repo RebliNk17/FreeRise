@@ -2,13 +2,14 @@ import asyncio
 from datetime import UTC, datetime
 
 from fakes import fake_factory, ok
+from scraper import ScrapingResult
 from sqlalchemy import select
 
 from freerise.crypto import encrypt_json
 from freerise.models import Credential, SyncRun
 from freerise.sync.scheduler import process_requested, run_all
 
-NO_WAIT = {"stagger": (0, 0)}
+NO_WAIT = {"stagger": (0, 0), "retry_gap": (0, 0)}
 
 
 def add_creds(sf, *specs):
@@ -42,7 +43,8 @@ def test_one_failure_does_not_block_others(sf):
         return fake_factory(ok())(provider, credentials, options)
 
     asyncio.run(run_all(sf, scraper_factory=factory, **NO_WAIT))
-    assert [r.status for r in runs(sf)] == ["success", "failed", "success"]
+    # the failed one is tried again after the others
+    assert [r.status for r in runs(sf)] == ["success", "failed", "success", "success"]
 
 
 def test_disabled_credential_skipped(sf):
@@ -271,6 +273,7 @@ def test_after_sync_generates_notifications(sf):
                 credential_id=cred.id,
                 trigger="manual",
                 status="failed",
+                failure_kind="auth_failed",  # never retried, so it alerts at once
                 finished_at=datetime.now(UTC),
                 error="x",
             )
@@ -301,3 +304,56 @@ def test_recheck_running_after_stagger_sleep(sf):
     f = fake_factory(ok())
     asyncio.run(run_all(sf, scraper_factory=f, stagger=(1, 1), sleep=sleep))
     assert len(f.created) == 1
+
+
+class FailsFetching:
+    """Logged in, then the site broke: retried on schedule, never paused (not a login problem)."""
+
+    on_progress = on_otp_request = None
+
+    async def scrape(self):
+        self.on_progress("fetching data")
+        return ScrapingResult(success=False, error_type="GENERIC", error_message="site down")
+
+
+def test_failed_sync_retried_then_alerts_once(sf):
+    from freerise.models import Notification
+    from freerise.sync.service import SYNC_TRIES
+
+    add_creds(sf, ("max", True))
+    gaps = []
+
+    async def sleep(n):
+        gaps.append(n)
+
+    asyncio.run(
+        run_all(
+            sf,
+            scraper_factory=lambda *a: FailsFetching(),
+            stagger=(0, 0),
+            retry_gap=(300, 900),
+            sleep=sleep,
+        )
+    )
+    assert [r.status for r in runs(sf)] == ["failed"] * SYNC_TRIES
+    assert len(gaps) == SYNC_TRIES - 1 and all(300 <= g <= 900 for g in gaps)
+    with sf() as s:
+        (n,) = s.scalars(select(Notification).where(Notification.kind == "sync_failed"))
+        assert n.link == "/settings/credentials"
+
+
+def test_no_alert_before_the_last_try_and_no_retry_once_it_works(sf):
+    from freerise.models import Notification
+
+    add_creds(sf, ("max", True))
+    results = [ScrapingResult(success=False, error_type="GENERIC", error_message="slow"), ok()]
+    alerts = []
+
+    def factory(provider, credentials, options):
+        with sf() as s:
+            alerts.append(s.scalar(select(Notification.kind)))
+        return fake_factory(results.pop(0))(provider, credentials, options)
+
+    asyncio.run(run_all(sf, scraper_factory=factory, **NO_WAIT))
+    assert [r.status for r in runs(sf)] == ["failed", "success"]  # no third try
+    assert alerts == [None, None]  # the first failure alerted nobody

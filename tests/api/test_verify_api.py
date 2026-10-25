@@ -72,7 +72,7 @@ async def test_new_connection_pending_until_verified(authed, sf):
     assert authed.post("/api/sync", json={}).json() == {"run_ids": [], "runs": []}
     assert authed.post("/api/sync", json={"credential_id": cid}).status_code == 409
     sched = factory()
-    await run_all(sf, scraper_factory=sched, stagger=(0, 0))
+    await run_all(sf, scraper_factory=sched, stagger=(0, 0), retry_gap=(0, 0))
     assert sched.created == []
 
     f = factory()
@@ -181,7 +181,7 @@ async def test_abandoned_new_connection_dropped(authed, sf):
         run = s.scalar(select(SyncRun).where(SyncRun.credential_id == old))
         run.created_at = datetime.now(UTC) - timedelta(hours=2)
         s.commit()
-    await run_all(sf, scraper_factory=factory(), stagger=(0, 0))
+    await run_all(sf, scraper_factory=factory(), stagger=(0, 0), retry_gap=(0, 0))
     with sf() as s:
         assert s.get(Credential, old) is None and s.get(Credential, fresh) is not None
 
@@ -233,7 +233,7 @@ async def test_update_verifies_before_replacing_old_details(authed, sf):
     authed.post(f"/api/credentials/{cid}/verify")
     # while staged, scheduled syncs keep using the old details
     sched = factory()
-    await run_all(sf, scraper_factory=sched, stagger=(0, 0))
+    await run_all(sf, scraper_factory=sched, stagger=(0, 0), retry_gap=(0, 0))
     assert sched.created[0][1]["password"] == "old"
     await process_requested(sf, scraper_factory=factory())
     with sf() as s:
