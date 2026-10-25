@@ -468,7 +468,7 @@ def test_details_show_ids_never_passwords(authed):
 
 
 def _post(client, provider, fields):
-    body = {"provider": provider, "label": "x", "owner": "שי", "fields": fields}
+    body = {"provider": provider, "label": "x", "owner": "דנה", "fields": fields}
     return client.post("/api/credentials", json=body)
 
 
@@ -516,13 +516,13 @@ def test_switching_login_method_drops_the_other_ones_fields(authed, sf):
         assert decrypt_json(c.secret_enc)["password"] == "pw-1"  # in use until verified
 
     # Isracard: picking SMS with nothing else changed still re-verifies, without the password
-    card = {"id": "123456782", "card6Digits": "123456", "password": "pw-2"}
+    card = {"id": "999999999", "card6Digits": "123456", "password": "pw-2"}
     iid = _post(authed, "isracard", card).json()["id"]
     r = authed.patch(f"/api/credentials/{iid}", json={"fields": {}, "method": 1})
     assert r.json()["verify_run_id"]
     with sf() as s:
         assert decrypt_json(s.get(Credential, iid).secret_enc) == {
-            "id": "123456782",
+            "id": "999999999",
             "card6Digits": "123456",
         }
 
