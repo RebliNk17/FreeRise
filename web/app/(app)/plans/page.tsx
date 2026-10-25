@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Check, Pencil, Plus, Trash2, PartyPopper } from "lucide-react";
 import { Amount } from "@/components/Amount";
 import { Card, ProgressBar, Status, EmptyState } from "@/components/Card";
@@ -9,8 +10,18 @@ import { formatDate } from "@/lib/format";
 import { useApi } from "@/lib/useApi";
 
 export default function PlansPage() {
+  return (
+    <Suspense>
+      <Plans />
+    </Suspense>
+  );
+}
+
+function Plans() {
   const { data, error, reload } = useApi<SavingsPlans>("/plans");
-  const [editing, setEditing] = useState<SavingsPlan | "new" | null>(null);
+  // /plans?monthly=2400 (home's "יש לכם מקום לחסוך" card) opens a new plan for that monthly amount.
+  const monthly = Number(useSearchParams().get("monthly")) || undefined;
+  const [editing, setEditing] = useState<SavingsPlan | "new" | null>(monthly ? "new" : null);
 
   return (
     <div className="flex flex-col gap-4">
@@ -27,7 +38,7 @@ export default function PlansPage() {
           </Card>
 
           {editing === "new" ? (
-            <PlanForm onDone={() => {
+            <PlanForm monthly={monthly} onDone={() => {
                 setEditing(null);
                 reload();
               }} onCancel={() => setEditing(null)} />
@@ -146,12 +157,13 @@ function PlanCard({ plan: p, onEdit, onChanged }: { plan: SavingsPlan; onEdit: (
   );
 }
 
-function PlanForm({ plan, onDone, onCancel }: { plan?: SavingsPlan; onDone: () => void; onCancel: () => void }) {
-  const [name, setName] = useState(plan?.name ?? "");
-  const [target, setTarget] = useState(plan ? String(plan.target_amount) : "");
-  const [date, setDate] = useState(plan?.target_date ?? "");
+/** `monthly` (new plans only): a year of that amount, set as the fixed monthly sum. */
+function PlanForm({ plan, monthly, onDone, onCancel }: { plan?: SavingsPlan; monthly?: number; onDone: () => void; onCancel: () => void }) {
+  const [name, setName] = useState(plan?.name ?? (monthly ? "חיסכון חודשי" : ""));
+  const [target, setTarget] = useState(plan ? String(plan.target_amount) : monthly ? String(+(monthly * 12).toFixed(2)) : "");
+  const [date, setDate] = useState(plan?.target_date ?? (monthly ? inAYear() : ""));
   const [saved, setSaved] = useState(String(plan?.saved_amount ?? 0));
-  const [override, setOverride] = useState(plan?.monthly_override != null ? String(plan.monthly_override) : "");
+  const [override, setOverride] = useState(plan?.monthly_override != null ? String(plan.monthly_override) : monthly ? String(monthly) : "");
   const [active, setActive] = useState(plan?.active ?? true);
   const [error, setError] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -220,4 +232,11 @@ function PlanForm({ plan, onDone, onCancel }: { plan?: SavingsPlan; onDone: () =
       </form>
     </Card>
   );
+}
+
+/** Local date a year from today, as the date input wants it (YYYY-MM-DD). */
+function inAYear() {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() + 1);
+  return d.toLocaleDateString("en-CA");
 }
