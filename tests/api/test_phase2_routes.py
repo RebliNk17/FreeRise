@@ -465,6 +465,21 @@ def test_pension_funds(authed, sf):
     ]
     d = authed.get(f"/api/pension/funds/{fid}").json()
     assert d["fund"] == fund
+    assert body["deposits"] == [
+        {
+            "fund_id": fid,
+            "date": "2026-03-01",
+            "amount": 2000.0,
+            "employer": None,
+            "salary_month": None,
+            "employee_amount": None,
+            "employer_amount": None,
+            "compensation_amount": None,
+            "insured_salary": None,
+        }
+    ]
+    assert body["gains"] == []  # no adjacent month ends
+    assert fund["yearly_movements"] == [] and fund["insurance_covers"] == []
     assert d["yearly"][-1]["year"] == 2026 and d["yearly"][-1]["deposits"] == 2000.0
     assert d["deposits"] == [{"date": "2026-03-01", "amount": 2000.0}]
     assert d["tracks"] == [{"name": "כללי"}]

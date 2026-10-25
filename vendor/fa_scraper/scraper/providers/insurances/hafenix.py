@@ -710,11 +710,11 @@ class HaPhoenixScraper(BrowserScraper):
                 description = f"הפקדה - {employer_name}" if employer_name else "הפקדה"
                 memo_parts = []
                 if employee:
-                    memo_parts.append(f"עובד: {employee:.0f}")
+                    memo_parts.append(f"עובד: {employee:.2f}")
                 if employer:
-                    memo_parts.append(f"מעסיק: {employer:.0f}")
+                    memo_parts.append(f"מעסיק: {employer:.2f}")
                 if compensation:
-                    memo_parts.append(f"פיצויים: {compensation:.0f}")
+                    memo_parts.append(f"פיצויים: {compensation:.2f}")
                 memo = " / ".join(memo_parts) if memo_parts else None
 
                 transactions.append(

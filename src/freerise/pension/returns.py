@@ -1,8 +1,10 @@
 """Yearly history and Modified Dietz returns for pension / hishtalmut funds."""
 
+import json
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
+from itertools import pairwise
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -102,3 +104,71 @@ def funds_overview(session: Session) -> FundsOverview:
             )
         )
     return FundsOverview(out, sum((o.latest_balance for o in out), Decimal(0)).quantize(CENT))
+
+
+@dataclass
+class MonthGain:
+    fund_ids: list[int]  # one fund, or a group its provider reports only as a sum (Phoenix)
+    month: date  # first of the month
+    start_balance: Decimal  # last balance of the month before
+    end_balance: Decimal  # last balance of this month (so far, for the current one)
+    deposits: Decimal
+    gain: Decimal  # balance change minus deposits: after fees and insurance
+
+
+def _month_end(d: date) -> date:
+    return d - timedelta(days=1) if d.day == 1 else d
+
+
+def _month_pairs(points: list[tuple[date, Decimal]]):
+    """(month before, month) pairs of month-end points in consecutive calendar months."""
+    ends = list({(d.year, d.month): (d, b) for d, b in sorted(points)}.values())  # last per month
+    for a, b in pairwise(ends):
+        if (b[0].year * 12 + b[0].month) - (a[0].year * 12 + a[0].month) == 1:
+            yield a, b
+
+
+def _gain(ids: list[int], a, b, deps) -> MonthGain:
+    flows = sum((d.amount for d in deps if a[0] < d.date <= b[0]), Decimal(0))
+    return MonthGain(
+        ids,
+        b[0].replace(day=1),
+        a[1],
+        b[1],
+        flows.quantize(CENT),
+        (b[1] - a[1] - flows).quantize(CENT),
+    )
+
+
+def monthly_gains(session: Session) -> list[MonthGain]:
+    """Per fund and calendar month, wherever that month and the one before have a balance. A group
+    with a shared portfolio_history (details) gets one row for months its funds lack their own."""
+    out: list[MonthGain] = []
+    deps_of: dict[int, list] = {}
+    groups: dict[tuple[int, str], list[int]] = {}
+    for fund in session.scalars(select(Fund).order_by(Fund.id)):
+        snaps, deps_of[fund.id] = _load(session, fund.id)
+        out += [
+            _gain([fund.id], a, b, deps_of[fund.id])
+            for a, b in _month_pairs([(x.as_of, x.balance) for x in snaps])
+        ]
+        if ph := (fund.details or {}).get("portfolio_history"):
+            groups.setdefault((fund.credential_id, json.dumps(ph, sort_keys=True)), []).append(
+                fund.id
+            )
+    for (_, ph), ids in groups.items():
+        # Dated the 1st (Phoenix): the balance as the month opens, i.e. the previous month's end.
+        points = [
+            (_month_end(date.fromisoformat(p["date"][:10])), Decimal(str(p["balance"])))
+            for p in json.loads(ph)
+        ]
+        for a, b in _month_pairs(points):
+            month = b[0].replace(day=1)
+            own = [
+                g for g in out if g.month == month and g.fund_ids[0] in ids and len(g.fund_ids) == 1
+            ]
+            if len(own) == len(ids):
+                continue  # every fund has its own month: keep the detail
+            out = [g for g in out if g not in own]
+            out.append(_gain(ids, a, b, [d for i in ids for d in deps_of[i]]))
+    return out
