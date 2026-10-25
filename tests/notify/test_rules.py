@@ -301,3 +301,25 @@ def test_new_fee_burst_guard(session):
     n = session.scalar(select(Notification).where(Notification.kind == "fees_paid"))
     assert n.body == "עד כה החודש שילמתם ₪6.9 עמלות בחיוב אחד (a)"
     assert "new_fee" not in _kinds(session)
+
+
+def test_double_charge_fires_once(session):
+    a = _acct(session)
+    _tx(session, a, TODAY - timedelta(days=1), -120.40, desc="SHOP")
+    _tx(session, a, TODAY - timedelta(days=1), -120.40, desc="SHOP")
+    _fires_once(session, "double_charge")
+    assert "פעמיים" in session.scalar(select(Notification.body))
+
+
+def test_double_charge_skips_other_days_small_and_excluded(session):
+    a, ex = _acct(session), _acct(session, excluded=True)
+    _tx(session, a, TODAY, -300, desc="gym")
+    _tx(session, a, TODAY - timedelta(days=1), -300, desc="gym")  # another day
+    _tx(session, a, TODAY, -23, desc="kiosk")
+    _tx(session, a, TODAY, -23, desc="kiosk")  # under the floor
+    _tx(session, ex, TODAY, -500, desc="x")
+    _tx(session, ex, TODAY, -500, desc="x")  # excluded account
+    _tx(session, a, TODAY - timedelta(days=20), -400, desc="old")
+    _tx(session, a, TODAY - timedelta(days=20), -400, desc="old")  # outside the window
+    generate_notifications(session, TODAY)
+    assert "double_charge" not in _kinds(session)

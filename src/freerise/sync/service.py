@@ -161,7 +161,7 @@ def _upsert_account(s: Session, cred: Credential, a: AccountResult) -> Account:
 
 
 def _upsert_txn(
-    s: Session, acc: Account, t: ScrapedTxn, key: str
+    s: Session, acc: Account, t: ScrapedTxn, key: str, fresh: set[str]
 ) -> tuple[str | None, Transaction]:
     """Returns ("added" | "updated" | None (unchanged), row)."""
     f = _fields(t)
@@ -179,6 +179,27 @@ def _upsert_txn(
                 Transaction.date == f["date"],
                 Transaction.amount == f["amount"],
                 Transaction.description == f["description"],
+            )
+            .limit(1)
+        )
+    if row is None:
+        # Same charge under another identity (the provider or engine renumbered it, e.g. Isracard
+        # web vs mobile voucher numbers): adopt the row this scrape no longer reports by its key.
+        # Descriptions differ too ("SHOP COM" / "SHOP.COM", 20-char cuts), so they only rank.
+        row = s.scalar(
+            select(Transaction)
+            .where(
+                Transaction.account_id == acc.id,
+                Transaction.txn_key.not_in(fresh),
+                Transaction.date == f["date"],
+                Transaction.processed_date == f["processed_date"],
+                Transaction.amount == f["amount"],
+                Transaction.installment_number.is_not_distinct_from(f["installment_number"]),
+            )
+            .order_by(
+                Transaction.description != f["description"],
+                Transaction.merchant_key != f["merchant_key"],
+                Transaction.id,
             )
             .limit(1)
         )
@@ -212,6 +233,7 @@ def _store(
         acc = _upsert_account(s, cred, a)
         seen: Counter[str] = Counter()
         touched: set[int] = set()
+        keyed = []
         for t in a.transactions:
             if _no_money_moved(t):
                 continue
@@ -221,7 +243,10 @@ def _store(
                 # ponytail: identical identifier-less txns keyed by occurrence order;
                 # assumes the provider returns them in a stable order.
                 key = f"{key}|#{seen[key]}"
-            r, row = _upsert_txn(s, acc, t, key)
+            keyed.append((t, key))
+        fresh = {k for _, k in keyed}
+        for t, key in keyed:
+            r, row = _upsert_txn(s, acc, t, key, fresh)
             added += r == "added"
             updated += r == "updated"
             s.flush()

@@ -23,6 +23,7 @@ KINDS = {
     "sync_failed": "סנכרון נכשל",
     "sync_paused": "סנכרון הושהה",
     "large_transaction": "עסקה גדולה",
+    "double_charge": "חיוב כפול אפשרי",
     "new_recurring": "חיוב קבוע חדש",
     "weekly_allowance_used": "תקציב השבוע נוצל",
     "category_over_expected": "חריגה בקטגוריה",

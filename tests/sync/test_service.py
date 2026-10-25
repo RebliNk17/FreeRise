@@ -66,6 +66,43 @@ async def test_pending_becomes_completed(sf, credential):
         assert rows[0].identifier == "x9"
 
 
+async def test_new_engine_identifier_adopts_the_old_row(sf, credential):
+    # A charge stored under one engine's identity, scraped again under another's.
+    old = ok(account("1111", txn(-42.5, "SHOP SHOP COM", identifier="4321")))
+    new = ok(account("1111", txn(-42.5, "SHOP SHOP.COM", identifier="987654321")))
+    await run_credential(sf, credential.id, "manual", scraper_factory=fake_factory(old))
+    with sf() as s:
+        first = s.scalar(select(Transaction.id))
+    run = await run_credential(sf, credential.id, "manual", scraper_factory=fake_factory(new))
+    assert (run.added, run.updated) == (0, 1)
+    with sf() as s:
+        rows = s.scalars(select(Transaction)).all()
+    assert [(r.id, r.identifier, r.txn_key) for r in rows] == [(first, "987654321", "987654321")]
+
+
+async def test_adoption_prefers_the_same_description(sf, credential):
+    old = ok(account("1111", txn(-50, "Cafe", identifier="c1"), txn(-50, "Books", identifier="b1")))
+    new = ok(account("1111", txn(-50, "Books", identifier="b2"), txn(-50, "Cafe", identifier="c2")))
+    await run_credential(sf, credential.id, "manual", scraper_factory=fake_factory(old))
+    await run_credential(sf, credential.id, "manual", scraper_factory=fake_factory(new))
+    with sf() as s:
+        rows = s.scalars(select(Transaction).order_by(Transaction.id)).all()
+    assert [(r.description, r.identifier) for r in rows] == [("Cafe", "c2"), ("Books", "b2")]
+
+
+async def test_identical_second_purchase_is_not_adopted(sf, credential):
+    a = txn(-23, "קפה", identifier="a")
+    b = txn(-23, "קפה", identifier="b")
+    await run_credential(
+        sf, credential.id, "manual", scraper_factory=fake_factory(ok(account("1111", a)))
+    )
+    run = await run_credential(
+        sf, credential.id, "manual", scraper_factory=fake_factory(ok(account("1111", b, a)))
+    )
+    assert (run.added, run.updated) == (1, 0)
+    assert count(sf, Transaction) == 2
+
+
 async def test_login_failure_records_error(sf, credential):
     bad = ScrapingResult(success=False, error_type="invalid_password", error_message="nope")
     run = await run_credential(sf, credential.id, "manual", scraper_factory=fake_factory(bad))
