@@ -31,6 +31,21 @@ const LOGO_FILES = new Set([
   "beyahad-bishvilha.png", "behatsdaa.svg", "mislaka.svg",
 ]);
 
+// English names people search by that the key doesn't already contain ("cal" is in "visa cal").
+const ALIASES: Record<string, string> = {
+  hafenix: "phoenix haphoenix",
+  mizrahi: "tefahot",
+  "otsar hahayal": "otzar",
+  beinleumi: "international fibi",
+  amex: "american express",
+  union: "igud",
+  "visa cal": "kal",
+  mislaka: "clearing house",
+};
+
+/** Search text for the provider picker, next to the Hebrew name: the key plus English aliases. */
+export const providerKeywords = (key: string) => `${key} ${ALIASES[key] ?? ""}`.trim();
+
 export const SERVICE_LABELS: Record<string, string> = {
   banks: "בנקים",
   credit_cards: "כרטיסי אשראי",
@@ -49,6 +64,9 @@ const FIELD_LABELS: Record<string, string> = {
   password: "סיסמה",
   username: "שם משתמש",
   card6Digits: "6 ספרות הכרטיס",
+  card8Digits: "8 ספרות הכרטיס",
+  card4Digits: "4 ספרות אחרונות של הכרטיס",
+  bankAccountNum: "מספר חשבון הבנק",
   email: "אימייל",
   phoneNumber: "טלפון",
   userCode: "קוד משתמש",
@@ -60,6 +78,14 @@ const FIELD_LABELS: Record<string, string> = {
 export const providerName = (key: string) => PROVIDER_NAMES[key] ?? key;
 export const fieldLabel = (key: string) => FIELD_LABELS[key] ?? key;
 export const isSecretField = (key: string) => key.includes("password") || key.includes("Token");
+
+/** Login method switch label; a method without a password logs in with an SMS code. */
+export const methodLabel = (fields: string[]) =>
+  fields.some(isSecretField) ? "סיסמה" : fields.includes("bankAccountNum") ? "חשבון בנק + SMS" : "כרטיס + SMS";
+
+/** Index of the method a saved login uses: the first whose fields are all stored (else 0). */
+export const storedMethod = (methods: string[][], stored: string[]) =>
+  Math.max(0, methods.findIndex((m) => m.every((f) => stored.includes(f))));
 
 /** Non-empty, trimmed form values for `keys` (inputs named `field:<key>`). Empty = keep/omit. */
 export function filledFields(keys: string[], form: { get(name: string): unknown }): Record<string, string> {

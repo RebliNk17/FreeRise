@@ -51,6 +51,15 @@ PROVIDERS: dict[str, str] = {
     "migdal": "migdal",
 }
 
+# Other logins the engine accepts besides `required_fields` (always the first method).
+# The SMS ones get their code through `on_otp_request`, like OneZero/Pepper.
+LOGIN_METHODS: dict[str, list[list[str]]] = {
+    "max": [["username", "password"], ["id", "card8Digits"], ["id", "bankAccountNum"]],
+    "visa cal": [["username", "password"], ["id", "card4Digits"], ["id", "bankAccountNum"]],
+    "isracard": [["id", "card6Digits", "password"], ["id", "card6Digits"]],
+    "amex": [["id", "card6Digits", "password"], ["id", "card6Digits"]],
+}
+
 _ERROR_MAP: dict[str, str] = {
     "INVALID_CREDENTIALS": "INVALID_PASSWORD",
     "INVALID_PASSWORD": "INVALID_PASSWORD",

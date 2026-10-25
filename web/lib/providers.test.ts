@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { fieldLabel, filledFields, isSecretField, providerLogo, providerName } from "./providers";
+import { filterOptions } from "./listbox";
+import { fieldLabel, filledFields, isSecretField, methodLabel, providerKeywords, providerLogo, providerName, storedMethod } from "./providers";
 
 test("secret fields", () => {
   expect(isSecretField("password")).toBe(true);
@@ -40,4 +41,35 @@ test("every logo file named in the map exists", async () => {
     expect(src).not.toBeNull();
     expect(await Bun.file(`${import.meta.dir}/../public${src}`).exists()).toBe(true);
   }
+});
+
+const MAX = [["username", "password"], ["id", "card8Digits"], ["id", "bankAccountNum"]];
+const ISRACARD = [["id", "card6Digits", "password"], ["id", "card6Digits"]];
+
+test("method labels", () => {
+  expect(MAX.map(methodLabel)).toEqual(["סיסמה", "כרטיס + SMS", "חשבון בנק + SMS"]);
+  expect(ISRACARD.map(methodLabel)).toEqual(["סיסמה", "כרטיס + SMS"]);
+});
+
+test("the stored login picks its method", () => {
+  expect(storedMethod(MAX, ["username", "password", "id", "otpLongTermToken"])).toBe(0);
+  expect(storedMethod(MAX, ["id", "card8Digits", "otpLongTermToken"])).toBe(1);
+  expect(storedMethod(MAX, ["id", "bankAccountNum"])).toBe(2);
+  // the password method holds the SMS one's fields too: a stored password wins, as in the engine
+  expect(storedMethod(ISRACARD, ["id", "card6Digits", "password"])).toBe(0);
+  expect(storedMethod(ISRACARD, ["id", "card6Digits"])).toBe(1);
+  expect(storedMethod(MAX, [])).toBe(0);
+});
+
+test("provider search finds English names too", () => {
+  const keys = ["hapoalim", "leumi", "onezero", "pepper", "max", "visa cal", "isracard", "amex", "hafenix", "migdal"];
+  const options = keys.map((k) => ({ value: k, label: providerName(k), keywords: providerKeywords(k) }));
+  const find = (q: string) => filterOptions(options, q).map((o) => o.value);
+  expect(find("cal")).toEqual(["visa cal"]);
+  expect(find("Phoenix")).toEqual(["hafenix"]);
+  expect(find("poalim")).toEqual(["hapoalim"]);
+  expect(find("one zero")).toEqual(["onezero"]);
+  expect(find("American Express")).toEqual(["amex"]);
+  for (const k of ["max", "isracard", "pepper", "migdal", "leumi"]) expect(find(k.toUpperCase())).toEqual([k]);
+  expect(find("כאל")).toEqual(["visa cal"]); // Hebrew still works
 });
