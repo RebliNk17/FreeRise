@@ -1,6 +1,6 @@
 [project]
 name = "freerise"
-version = "1.0.0"
+version = "1.1.0"
 description = "Free, self-hosted household finance app for Israeli banks and credit cards"
 authors = [
     { name = "Shai Cohen", email = "shai@cohens.dev" }
@@ -13,7 +13,7 @@ dependencies = [
     "cryptography>=50.0.2",
     "fastapi>=0.161.1",
     "httpx>=0.28.1",
-    "israeli-pension-scrapers @ https://github.com/RebliNk17/israeli-pension-scrapers/archive/64c83595e12f9ae9b6c1dfcaa1a2de4edfe11dfc.tar.gz",
+    "israeli-pension-scrapers @ https://github.com/RebliNk17/israeli-pension-scrapers/releases/download/v0.2.0/israeli_pension_scrapers-0.2.0-py3-none-any.whl",
     "playwright>=1.64.1",
     "psycopg[binary]>=3.3.6",
     "pydantic-settings>=2.16.1",
