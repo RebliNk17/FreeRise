@@ -18,6 +18,7 @@ test("splitAmounts bolds ₪ amounts on either side, not trailing punctuation", 
 
 test("illustrationFor maps kinds", () => {
   expect(illustrationFor("category_up", "warning")).toBe("spike");
+  expect(illustrationFor("category_creep", "warning")).toBe("spike");
   expect(illustrationFor("category_trend", "warning")).toBe("spike");
   expect(illustrationFor("category_trend", "positive")).toBe("shrink");
   expect(illustrationFor("category_down", "positive")).toBe("shrink");

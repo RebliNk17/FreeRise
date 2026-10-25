@@ -215,6 +215,28 @@ def test_category_trend_quiet_at_normal_pace(session):
     assert "category_up" not in got and "category_down" not in got
 
 
+def test_category_creep(session):
+    a = _acct(session)
+    _history(session, a, food=1000, months=range(4, 7))  # Apr-Jun
+    _history(session, a, food=1500, months=range(7, 10))  # Jul-Sep
+    got = _kinds(session)["category_creep"]
+    assert got.title.startswith("סופר") and got.severity == "warning"
+    assert got.amount == Decimal(500)
+    assert "₪1,500" in got.body and "₪1,000" in got.body and "+50%" in got.body
+    assert got.link == "/progress"
+    assert got.key.startswith("category_creep:") and got.key.endswith(":1500")
+    # same months seen from next cycle -> same key, so a dismiss sticks
+    nxt = _kinds(session, date(2026, 10, 30))["category_creep"]
+    assert nxt.key == got.key
+
+
+def test_category_creep_quiet(session):
+    a = _acct(session)
+    _history(session, a, food=1000, out=100, months=range(4, 7))
+    _history(session, a, food=1100, out=250, months=range(7, 10))  # +10%; +150% but only ₪150
+    assert "category_creep" not in _kinds(session)
+
+
 def test_saving_capacity_and_fixed_heavy(session):
     a = _acct(session)
     for m in range(4, 10):
@@ -224,6 +246,7 @@ def test_saving_capacity_and_fixed_heavy(session):
     got = _kinds(session)
     assert got["saving_capacity"].amount == Decimal(2400)
     assert "₪2,400" in got["saving_capacity"].body
+    assert got["saving_capacity"].link == "/plans?monthly=2400.00"
     assert got["fixed_heavy"].severity == "warning" and "70%" in got["fixed_heavy"].body
     # standing insights: same key next cycle, so a dismiss sticks
     assert got["fixed_heavy"].key == "fixed_heavy:70"

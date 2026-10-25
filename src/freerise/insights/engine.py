@@ -44,7 +44,7 @@ log = logging.getLogger("freerise.insights")
 SNOOZE_DAYS = 7
 OVERDUE_DAYS = 3  # as home's "לא ירד עדיין"
 PRUNE_DAYS = 120  # insight states untouched this long are forgotten
-CAP = 6
+CAP = 8  # carousel: room for the look-back warnings and still a saving tip
 DISPLAY = {"כלכלה": "סופר"}  # same as web CATEGORY_DISPLAY
 Severity = Literal["info", "warning", "positive"]
 ORDER = {"warning": 0, "positive": 1, "info": 2}
@@ -282,6 +282,38 @@ def category_trend(ctx: Ctx) -> list[Insight]:
     return out
 
 
+def category_creep(ctx: Ctx) -> list[Insight]:
+    """Spending that grew over the last 3 complete cycles vs. the 3 before (as on /progress)."""
+    from freerise.insights.progress import category_changes  # progress imports this module
+
+    ups = [
+        x
+        for x in category_changes(ctx.hist)
+        if x.category_id is not None
+        and x.current >= x.previous * Decimal("1.25")
+        and x.current - x.previous >= 200
+    ]
+    out = []
+    for x in sorted(ups, key=lambda x: x.previous - x.current)[:2]:
+        name = DISPLAY.get(x.name, x.name)
+        out.append(
+            Insight(
+                # same monthly level -> stays dismissed; a further rise shows it again
+                f"category_creep:{x.category_id}:{x.current // 500 * 500:.0f}",
+                "category_creep",
+                "warning",
+                f"{name}: עלייה בחודשים האחרונים",
+                f"בשלושת החודשים האחרונים יצאו על {name} בממוצע {ils(x.current)} בחודש, "
+                f"לעומת {ils(x.previous)} בשלושת החודשים שלפניהם ({x.change_pct:+.0%}). "
+                "שווה לבדוק מה השתנה.",
+                "למגמות שלי",
+                "/progress",
+                x.current - x.previous,
+            )
+        )
+    return out
+
+
 def saving_capacity(ctx: Ctx) -> list[Insight]:
     pos = [s.net for s in ctx.hist if s.net > 0]
     if not ctx.hist or median(s.net for s in ctx.hist) <= 0:
@@ -300,7 +332,9 @@ def saving_capacity(ctx: Ctx) -> list[Insight]:
             "יש לכם מקום לחסוך",
             f"גם בחודשים החלשים של חצי השנה האחרונה נשארו לפחות {ils(x)}. "
             f"אתם יכולים להעביר עוד {ils(extra)} לחיסכון כבר בתחילת כל חודש{more}.",
-            amount=extra,
+            "לפתיחת תוכנית חיסכון",
+            f"/plans?monthly={extra:.2f}",  # opens a new plan prefilled with this amount
+            extra,
         )
     ]
 
@@ -531,6 +565,7 @@ RULES = (
     no_goal,
     goal_status,
     category_trend,
+    category_creep,
     saving_capacity,
     fixed_heavy,
     fees,

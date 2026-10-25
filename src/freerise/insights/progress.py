@@ -56,7 +56,7 @@ def _cat_avgs(sums: list[CycleSummary]) -> dict[int | None, tuple[str, Decimal]]
     return {k: (names[k], v / len(sums)) for k, v in tot.items()}
 
 
-def _changes(hist: list[CycleSummary]) -> list[CategoryChange]:
+def category_changes(hist: list[CycleSummary]) -> list[CategoryChange]:
     cur, prev = hist[:3], hist[3:6]
     if not cur or not prev:
         return []
@@ -77,7 +77,7 @@ def progress(session: Session, today: date) -> Progress:
     hist = history(session, cycle)  # newest first
     nets = [s.net for s in hist]
     savings = [group_total(s, "savings") for s in hist]
-    changes = _changes(hist)
+    changes = category_changes(hist)
     ups = sorted(
         (x for x in changes if x.current > x.previous), key=lambda x: x.previous - x.current
     )

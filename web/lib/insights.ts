@@ -15,6 +15,7 @@ export type IllustrationName = "spike" | "drain" | "piggy" | "receipt" | "card" 
 export function illustrationFor(kind: string, severity: Insight["severity"]): IllustrationName {
   switch (kind) {
     case "category_up":
+    case "category_creep":
       return "spike";
     case "category_down":
     case "installments_stopping":
