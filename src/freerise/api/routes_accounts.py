@@ -106,11 +106,19 @@ class BillIssueOut(BaseModel):
     gap: float
 
 
+class BilledElsewhereOut(BaseModel):
+    id: int
+    label: str
+    holder: str
+    amount: float
+
+
 class DataHealthOut(BaseModel):
     ok: bool
     connections: list[ConnectionOut]
     idle_accounts: list[IdleAccountOut]
     card_bills: list[BillIssueOut]
+    billed_elsewhere: list[BilledElsewhereOut]
     uncategorized: int
 
 
@@ -122,5 +130,6 @@ def get_data_health(db: DB) -> DataHealthOut:
         connections=[ConnectionOut(**vars(c)) for c in h.connections],
         idle_accounts=[IdleAccountOut(**vars(a)) for a in h.idle_accounts],
         card_bills=[BillIssueOut(**vars(b)) for b in h.card_bills],
+        billed_elsewhere=[BilledElsewhereOut(**vars(b)) for b in h.billed_elsewhere],
         uncategorized=h.uncategorized,
     )

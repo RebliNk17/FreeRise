@@ -10,13 +10,14 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from freerise.accounts import PROVIDER_HE, account_labels
+from freerise.accounts import PROVIDER_HE, account_holder, account_label, account_labels
 from freerise.cashflow.cycles import cycle_for, get_start_day, prev_cycle
 from freerise.cashflow.fees import fees_in_cycle
 from freerise.cashflow.plan import cycle_plan
 from freerise.categorize.pipeline import uncategorized_merchants
 from freerise.config import get_settings
 from freerise.forecast.next_cycle import installments_ending
+from freerise.health import BILL_DAYS
 from freerise.insights import engine
 from freerise.models import (
     Account,
@@ -58,6 +59,7 @@ def provider_name(provider: str) -> str:
 from freerise.reconcile.card_bills import (
     HEALTH_LINK,
     ISSUER_NAMES,
+    cards_billed_elsewhere,
     cards_synced_after,
     reconcile_range,
 )
@@ -376,6 +378,23 @@ def _card_bills(s: Session, today: date) -> None:
             )
 
 
+def _cards_billed_elsewhere(s: Session, today: date) -> None:
+    start = today - timedelta(days=BILL_DAYS)
+    found = cards_billed_elsewhere(s, reconcile_range(s, start, today), start)
+    for a in s.scalars(select(Account).where(Account.id.in_(found))):
+        notify(
+            s,
+            "card_billed_elsewhere",
+            "חיוב כרטיס שלא נמצא בבנק",
+            f"{account_label(a)} ({account_holder(a)}) חויב {ils(found[a.id])} ב־{BILL_DAYS} "
+            "הימים האחרונים, אבל החיוב לא ירד מאף חשבון בנק מחובר — אם הוא יורד מחשבון אחר, "
+            "כדאי לחבר אותו; אם הוא כן בבנק, סמנו את השורה שם כ״חיוב כרטיס אשראי״.",
+            HEALTH_LINK,
+            f"card_billed_elsewhere:{a.id}",  # once per card
+            "warning",
+        )
+
+
 def _insight_warnings(s: Session, today: date) -> None:
     """Cash-flow warnings from the insights engine; keys carry the cycle start -> once a cycle.
 
@@ -445,6 +464,7 @@ RULES = (
     _pension_reminder,
     _pension_deposits,
     _card_bills,
+    _cards_billed_elsewhere,
     _fees,
     _insight_warnings,
     weekly_report,

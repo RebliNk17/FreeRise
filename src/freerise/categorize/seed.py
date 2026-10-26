@@ -14,6 +14,7 @@ CARD_BILL_PATTERNS = (
     "חיוב מ-ישראכרט",
     "חיוב מ-כאל",
     "אמריקן אקספרס",
+    "פרימיום אקספרס",  # Amex's bank-side name
     "ישראכרט",
 )
 # RiseUp lists bank-side card bills under these categories.

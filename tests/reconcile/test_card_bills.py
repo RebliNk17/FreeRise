@@ -208,3 +208,33 @@ def test_card_with_own_debit_not_reused(session):
     r = reconcile_bill(session, _bill(session, bank, 2235, "חיוב מ-כאל").id)
     assert c1.id not in r.matched_account_ids
     assert r.status == "mismatch" and r.gap == 1500
+
+
+def test_card_billed_from_unconnected_bank(session):
+    from freerise.health import data_health
+
+    bank = _acct(session, "x", "bank")
+    paid = _acct(session, "isracard", name="c1")
+    other = _acct(session, "amex", name="c2")  # its bill goes to a bank we don't have
+    _tx(session, paid, -300, BILL)
+    _bill(session, bank, 300)
+    _tx(session, other, -75.5, BILL - timedelta(days=5))
+    _tx(session, other, -20, BILL + timedelta(days=10))  # bill date not reached in the bank yet
+    h = data_health(session, TODAY)
+    assert [(c.id, c.amount) for c in h.billed_elsewhere] == [(other.id, Decimal("75.5"))]
+    assert not h.ok
+    for _ in range(2):
+        generate_notifications(session, TODAY)
+    (n,) = session.scalars(select(Notification).where(Notification.kind == "card_billed_elsewhere"))
+    assert "₪75.5" in n.body and n.link == "/accounts#health"
+
+
+def test_no_bank_connected_flags_no_card(session):
+    from freerise.health import data_health
+
+    _tx(session, _acct(session, "amex"), -75, BILL)
+    assert data_health(session, TODAY).billed_elsewhere == []
+
+
+def test_premium_express_is_amex():
+    assert issuer_of("חיוב מ-פרימיום אקספרס") == "amex"

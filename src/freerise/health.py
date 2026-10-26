@@ -7,9 +7,9 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
-from freerise.accounts import PROVIDER_HE, account_label, active_card_ids
+from freerise.accounts import PROVIDER_HE, account_holder, account_label, active_card_ids
 from freerise.models import Account, Credential, Transaction
-from freerise.reconcile.card_bills import reconcile_range
+from freerise.reconcile.card_bills import cards_billed_elsewhere, reconcile_range
 
 MONTHS = 12  # look back this far for months with no data
 IDLE_DAYS = 90
@@ -47,10 +47,19 @@ class BillIssue:
 
 
 @dataclass
+class BilledElsewhere:
+    id: int
+    label: str
+    holder: str
+    amount: Decimal  # billed in the last BILL_DAYS, positive
+
+
+@dataclass
 class DataHealth:
     connections: list[ConnectionHealth]
     idle_accounts: list[IdleAccount]
     card_bills: list[BillIssue]
+    billed_elsewhere: list[BilledElsewhere]
     uncategorized: int
 
     @property
@@ -58,6 +67,7 @@ class DataHealth:
         return not (
             self.idle_accounts
             or self.card_bills
+            or self.billed_elsewhere
             or self.uncategorized
             or any(c.months_without_data or c.last_error for c in self.connections)
         )
@@ -132,6 +142,8 @@ def data_health(session: Session, today: date) -> DataHealth:
         for a in accounts
         if a.id in active and (last.get(a.id) or date.min) < today - timedelta(days=IDLE_DAYS)
     ]
+    bill_start = today - timedelta(days=BILL_DAYS)
+    all_bills = reconcile_range(session, bill_start, today)
     bills = [
         BillIssue(
             b.bank_txn_id,
@@ -141,8 +153,14 @@ def data_health(session: Session, today: date) -> DataHealth:
             b.status,
             b.gap,
         )
-        for b in reconcile_range(session, today - timedelta(days=BILL_DAYS), today)
+        for b in all_bills
         if b.status != "matched"
+    ]
+    by_id = {a.id: a for a in accounts}
+    elsewhere = [
+        BilledElsewhere(i, account_label(by_id[i]), account_holder(by_id[i]), v)
+        for i, v in cards_billed_elsewhere(session, all_bills, bill_start).items()
+        if i in by_id
     ]
     uncategorized = session.scalar(
         select(func.count())
@@ -150,4 +168,4 @@ def data_health(session: Session, today: date) -> DataHealth:
         .join(Account, Account.id == Transaction.account_id)
         .where(Account.excluded.is_(False), Transaction.category_id.is_(None))
     )
-    return DataHealth(conns, idle, bills, uncategorized)
+    return DataHealth(conns, idle, bills, elsewhere, uncategorized)

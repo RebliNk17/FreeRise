@@ -31,6 +31,7 @@ export type Health = {
     status: "mismatch" | "unknown_card";
     gap: number;
   }[];
+  billed_elsewhere: { id: number; label: string; holder: string; amount: number }[];
   uncategorized: number;
 };
 
@@ -95,6 +96,26 @@ function problems(d: Health, onAdd: () => void, onCategorize: () => void): { key
             לחבר את הכרטיס
           </button>
           .
+        </>
+      ),
+    });
+  if (d.billed_elsewhere.length)
+    out.push({
+      key: "elsewhere",
+      text: (
+        <>
+          <b>
+            {d.billed_elsewhere.length === 1
+              ? "כרטיס שהחיוב שלו לא נמצא בבנק"
+              : `${d.billed_elsewhere.length} כרטיסים שהחיוב שלהם לא נמצא בבנק`}
+          </b>
+          : הכרטיס חויב, אבל החיוב לא ירד מאף חשבון בנק מחובר. אם הוא יורד מחשבון
+          אחר, כדאי{" "}
+          <button type="button" className="link" onClick={onAdd}>
+            לחבר את החשבון
+          </button>
+          . אם כן רואים אותו בבנק, סמנו את השורה שם כ״חיוב כרטיס אשראי״. פירוט
+          למטה.
         </>
       ),
     });
@@ -182,6 +203,24 @@ export function DataHealth({ data, onAdd, onCategorize }: { data: Health; onAdd:
                 ) : (
                   "אין עסקאות"
                 )}
+              </span>
+            </p>
+          ))}
+        </section>
+      )}
+      {data.billed_elsewhere.length > 0 && (
+        <section className="flex flex-col gap-1 border-t border-hairline pt-3 text-sm">
+          <h3 className="flex items-center gap-1 font-bold text-sun-strong">
+            <TriangleAlert size={14} aria-hidden /> כרטיסים שהחיוב שלהם לא נמצא
+            בבנק
+          </h3>
+          {data.billed_elsewhere.map((c) => (
+            <p key={c.id} className="flex gap-2">
+              <span className="flex-1">
+                {c.label} · {c.holder}
+              </span>
+              <span className="text-xs text-muted">
+                חויב <Money value={c.amount} /> ב־90 יום
               </span>
             </p>
           ))}
