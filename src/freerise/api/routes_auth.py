@@ -4,11 +4,18 @@ from collections import deque
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from freerise.api.deps import COOKIE, DB, current_user
-from freerise.auth import SESSION_TTL, create_session, revoke, verify_password, verify_user_totp
+from freerise.auth import (
+    SESSION_TTL,
+    create_session,
+    revoke,
+    set_password,
+    verify_password,
+    verify_user_totp,
+)
 from freerise.config import get_settings
 from freerise.models import User
 
@@ -49,6 +56,11 @@ class Login(BaseModel):
 class Me(BaseModel):
     id: int
     username: str
+
+
+class NewPassword(BaseModel):
+    current: str
+    new: str = Field(min_length=8, max_length=200)
 
 
 def totp_required() -> bool:
@@ -97,3 +109,19 @@ def logout(db: DB, request: Request, response: Response) -> None:
 @router.get("/me")
 def me(user: Annotated[User, Depends(current_user)]) -> Me:
     return Me(id=user.id, username=user.username)
+
+
+@router.post("/password", status_code=204)
+def change_password(
+    body: NewPassword, db: DB, request: Request, user: Annotated[User, Depends(current_user)]
+) -> None:
+    """Needs the current password, so a stolen session alone can't lock the owner out. Wrong
+    guesses count toward the login limit; 403, not 401, so the app doesn't log out."""
+    if not _claim_attempt(user.username):
+        raise HTTPException(429, "too many attempts")
+    if not verify_password(user.password_hash, body.current):
+        raise HTTPException(403, "wrong password")  # provisional failure stays
+    with _lock:
+        _failures.pop(user.username, None)
+    set_password(db, user, body.new, keep_token=request.cookies.get(COOKIE, ""))
+    db.commit()

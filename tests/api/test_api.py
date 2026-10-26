@@ -11,6 +11,7 @@ from freerise.models import Account, Balance, Credential, OtpRequest, SyncRun, T
 ROUTES = [
     ("post", "/api/auth/logout"),
     ("get", "/api/auth/me"),
+    ("post", "/api/auth/password"),
     ("get", "/api/providers"),
     ("get", "/api/credentials"),
     ("post", "/api/credentials"),
@@ -105,6 +106,40 @@ def test_login_rate_limited(client, user):
         assert r.status_code == 401
     good = {"username": "shai", "password": user["password"], "totp": user["totp"]()}
     assert client.post("/api/auth/login", json=good).status_code == 429
+
+
+def test_change_password(authed, user):
+    from fastapi.testclient import TestClient
+
+    from freerise.api.main import app
+
+    other = TestClient(app)  # the same user on another device
+    login = {"username": "shai", "password": user["password"], "totp": user["totp"]()}
+    assert other.post("/api/auth/login", json=login).status_code == 204
+
+    wrong = authed.post("/api/auth/password", json={"current": "nope", "new": "brand-new-pw"})
+    assert wrong.status_code == 403  # not 401: that would bounce the app to the login page
+    assert authed.get("/api/auth/me").status_code == 200
+    short = authed.post("/api/auth/password", json={"current": user["password"], "new": "short"})
+    assert short.status_code == 422
+
+    ok = authed.post(
+        "/api/auth/password", json={"current": user["password"], "new": "brand-new-pw"}
+    )
+    assert ok.status_code == 204
+    assert authed.get("/api/auth/me").status_code == 200  # this device stays signed in
+    assert other.get("/api/auth/me").status_code == 401  # the other one is signed out
+    assert TestClient(app).post("/api/auth/login", json=login).status_code == 401
+    new_login = {**login, "password": "brand-new-pw"}
+    assert TestClient(app).post("/api/auth/login", json=new_login).status_code == 204
+
+
+def test_change_password_rate_limited(authed, user):
+    for _ in range(5):
+        r = authed.post("/api/auth/password", json={"current": "x", "new": "brand-new-pw"})
+        assert r.status_code == 403
+    good = {"current": user["password"], "new": "brand-new-pw"}
+    assert authed.post("/api/auth/password", json=good).status_code == 429
 
 
 def test_providers(authed):
