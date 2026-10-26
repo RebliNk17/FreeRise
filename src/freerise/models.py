@@ -58,6 +58,15 @@ class UserSession(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class Invite(Base):
+    """A one-time link that lets someone join the household with a login of their own."""
+
+    __tablename__ = "invites"
+    token_hash: Mapped[str] = mapped_column(String, unique=True)
+    created_by: Mapped[int] = _fk("users")
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class Credential(Base):
     __tablename__ = "credentials"
     provider: Mapped[str]

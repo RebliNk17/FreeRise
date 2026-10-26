@@ -15,6 +15,7 @@ import {
   Search,
   Settings,
   Target,
+  Users,
   Wallet,
   X,
   type LucideIcon,
@@ -42,6 +43,7 @@ const MORE: NavLink[] = [
   { href: "/chat", label: "שאל אותי על התזרים", icon: MessagesSquare },
   { href: "/search", label: "חיפוש עסקאות", icon: Search },
   { href: "/accounts", label: "חשבונות וחיבורים", icon: Wallet },
+  { href: "/account", label: "החשבון ובני הבית", icon: Users },
   { href: "/settings", label: "הגדרות", icon: Settings },
 ];
 
@@ -131,7 +133,8 @@ function ScrollToHash() {
   return null;
 }
 
-const isActive = (href: string, pathname: string) => pathname.startsWith(href);
+// Whole segments: /accounts mustn't light up /account.
+const isActive = (href: string, pathname: string) => pathname === href || pathname.startsWith(`${href}/`);
 
 function ActiveBottomTabs({ onMore }: { onMore: () => void }) {
   return <BottomTabs pathname={usePathname()} onMore={onMore} />;

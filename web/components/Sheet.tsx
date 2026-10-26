@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 
-/** Bottom sheet (native modal <dialog>: focus trap + Escape); backdrop tap or swipe-down on the header closes too.
+/** Bottom sheet (native modal <dialog>: focus trap + Escape); backdrop tap or swipe-down on the header closes too,
+ * unless `form` (a stray tap mustn't throw away what was typed).
  * header: rendered in the swipe handle area (under the grab bar); children scroll. */
-export function Sheet({ labelledBy, onClose, header, children }: { labelledBy: string; onClose: () => void; header?: React.ReactNode; children: React.ReactNode }) {
+export function Sheet({ labelledBy, onClose, header, form = false, children }: { labelledBy: string; onClose: () => void; header?: React.ReactNode; form?: boolean; children: React.ReactNode }) {
   const ref = useRef<HTMLDialogElement>(null);
   const [dy, setDy] = useState<number | null>(null);
   const startY = useRef<number | null>(null);
@@ -39,12 +40,12 @@ export function Sheet({ labelledBy, onClose, header, children }: { labelledBy: s
         e.preventDefault();
         onClose();
       }}
-      onClick={(e) => e.target === ref.current && onClose()}
+      onClick={(e) => !form && e.target === ref.current && onClose()}
       style={dy != null ? { translate: `0 ${dy}px`, transition: "none" } : undefined}
       className="mx-auto mt-auto mb-0 max-h-[90dvh] w-full max-w-lg overflow-hidden rounded-t-[28px] border-0 bg-bg p-0 text-text shadow-[0_-10px_40px_rgb(0_0_0/0.25)] transition-[translate] duration-300 ease-out backdrop:bg-(--backdrop) starting:translate-y-full motion-reduce:transition-none"
     >
       <div className="flex max-h-[90dvh] flex-col">
-        <header className="flex touch-none flex-col gap-3.5 px-5 pt-2.5 pb-4" {...swipe}>
+        <header className="flex touch-none flex-col gap-3.5 px-5 pt-2.5 pb-4" {...(form ? {} : swipe)}>
           <div className="mx-auto h-[5px] w-11 rounded-full bg-border" aria-hidden />
           {header}
         </header>
