@@ -1,5 +1,6 @@
 import logging
 from contextlib import asynccontextmanager
+from importlib.metadata import version
 
 from fastapi import APIRouter, Depends, FastAPI
 
@@ -91,4 +92,4 @@ app.include_router(protected, prefix="/api")
 
 @app.get("/api/health")
 def health() -> dict:
-    return {"ok": True}
+    return {"ok": True, "version": version("freerise")}

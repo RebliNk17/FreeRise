@@ -1,5 +1,6 @@
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+from importlib.metadata import version
 
 import pytest
 
@@ -75,7 +76,7 @@ def test_requires_auth(client, method, path):
 
 
 def test_health_unauthenticated(client):
-    assert client.get("/api/health").json() == {"ok": True}
+    assert client.get("/api/health").json() == {"ok": True, "version": version("freerise")}
 
 
 def test_login_with_totp(client, user):
