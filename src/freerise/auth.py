@@ -69,6 +69,17 @@ def revoke(session: Session, token: str) -> None:
     session.flush()
 
 
+def set_password(session: Session, user: User, password: str, keep_token: str) -> None:
+    """New password; signs out the user's other sessions (keep_token's stays)."""
+    user.password_hash = hash_password(password)
+    session.execute(
+        delete(UserSession)
+        .where(UserSession.user_id == user.id)
+        .where(UserSession.token_hash != _hash_token(keep_token))
+    )
+    session.flush()
+
+
 def create_user(session: Session, username: str, password: str) -> tuple[User, str]:
     secret = new_totp_secret()
     user = User(
