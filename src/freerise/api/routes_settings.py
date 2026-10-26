@@ -88,7 +88,8 @@ class TelegramOut(BaseModel):
     chat_name: str | None = None
     linked: bool = False
     enabled: bool = False
-    kinds: list[str] | None = None  # None = all
+    kinds: list[str] = []  # what is sent (the saved pick, else the default set)
+    feed_kinds: list[str] = list(tg.FEED)  # off by default: a message per transaction
     link_code: str | None = None
     link_url: str | None = None
     all_kinds: dict[str, str] = tg.KINDS
@@ -111,7 +112,7 @@ def _tg_out(db: DB, cfg: dict) -> TelegramOut:
         chat_name=cfg.get("chat_name"),
         linked=bool(cfg.get("chat_id")),
         enabled="telegram" in enabled_channels(db),
-        kinds=cfg.get("kinds"),
+        kinds=tg.kinds_of(cfg),
         link_code=code,
         link_url=f"https://t.me/{bot}?start={code}" if bot and code else None,
     )

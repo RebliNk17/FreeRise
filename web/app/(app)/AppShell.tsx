@@ -102,8 +102,33 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <OtpPrompt />
       <SyncToasts />
+      <Suspense fallback={null}>
+        <ScrollToHash />
+      </Suspense>
     </div>
   );
+}
+
+/** Alert links point at a section (/accounts#health, /home#next) that renders only once its data loads,
+ * too late for the browser's own jump: scroll to it when it shows up. */
+function ScrollToHash() {
+  const pathname = usePathname();
+  useEffect(() => {
+    const id = decodeURIComponent(location.hash.slice(1));
+    if (!id) return;
+    const t = setInterval(() => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      clearInterval(t);
+      el.scrollIntoView({ behavior: "smooth" });
+    }, 200);
+    const stop = setTimeout(() => clearInterval(t), 5000);
+    return () => {
+      clearInterval(t);
+      clearTimeout(stop);
+    };
+  }, [pathname]);
+  return null;
 }
 
 const isActive = (href: string, pathname: string) => pathname.startsWith(href);

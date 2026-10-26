@@ -29,6 +29,7 @@ from freerise.models import (
 from freerise.models import (
     Notification as _N,
 )
+from freerise.notify.reports import monthly_report, telegram_feed, weekly_report
 from freerise.notify.store import notify
 from freerise.pension.deposits import deposit_alerts, message
 
@@ -60,7 +61,13 @@ from freerise.reconcile.card_bills import (
     cards_synced_after,
     reconcile_range,
 )
-from freerise.sync.service import PAUSE_AFTER, login_paused
+from freerise.sync.service import (
+    PAUSE_AFTER,
+    SYNC_TRIES,
+    failures_in_row,
+    login_paused,
+    retryable,
+)
 
 log = logging.getLogger("freerise.notify")
 # Same labels as the `short` texts in web/lib/connectErrors.ts.
@@ -276,7 +283,8 @@ def _pension_deposits(s: Session, today: date) -> None:
 
 def _sync_failed(s: Session, today: date) -> None:
     """One alert per connection per failure streak (a success starts a new one), naming the
-    provider: a connection's label is usually just the owner's name."""
+    provider: a connection's label is usually just the owner's name. Only once the scheduler's
+    retries are used up; a wrong password or code is never retried, so it alerts at once."""
     tz = ZoneInfo(get_settings().tz)
     since = datetime.combine(today - timedelta(days=2), time.min, tz)
     # No enabled filter: an auth failure auto-disables the credential before this runs.
@@ -289,6 +297,8 @@ def _sync_failed(s: Session, today: date) -> None:
         run = s.scalar(runs.order_by(SyncRun.id.desc()).limit(1))
         if not run or run.status not in ("failed", "otp_timeout") or run.finished_at < since:
             continue
+        if c.enabled and retryable(run) and failures_in_row(s, c.id) < SYNC_TRIES:
+            continue  # the scheduler tries again first (sync/scheduler.py)
         streak = s.scalar(
             select(func.max(SyncRun.id)).where(
                 SyncRun.credential_id == c.id, SyncRun.status == "success"
@@ -437,6 +447,9 @@ RULES = (
     _card_bills,
     _fees,
     _insight_warnings,
+    weekly_report,
+    monthly_report,
+    telegram_feed,
 )
 
 

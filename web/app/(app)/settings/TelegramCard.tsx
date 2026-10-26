@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, Copy, ExternalLink } from "lucide-react";
+import { Check, Copy, ExternalLink, Send } from "lucide-react";
 import { Switch } from "@/components/Switch";
 import { ApiError, send, type Settings, type TelegramConfig } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
@@ -44,28 +44,34 @@ export function TelegramCard({ settings, patch }: { settings: Settings; patch: P
   }, [waiting, setData]);
 
   const state = !tg?.bot_username ? "bot" : !tg.linked ? "link" : "ready";
+  const connected = state === "ready" && !waiting; // setup done: the stepper gives way to a status banner
 
   return (
     <Section
       id="telegram"
       title="התראות בטלגרם"
-      hint="בוט פרטי שלכם ששולח לכם את ההתראות של FreeRise. ההגדרה לוקחת כ-2 דקות."
+      hint={connected ? "ההתראות של FreeRise מגיעות אליכם בטלגרם, דרך בוט פרטי שלכם." : "בוט פרטי שלכם ששולח לכם את ההתראות של FreeRise. ההגדרה לוקחת כ-2 דקות."}
       action={tg?.linked && <Switch label={tg.enabled ? "פעיל" : "כבוי"} checked={tg.enabled} disabled={busy} onChange={(enabled) => act(() => send("PUT", "/settings/telegram", { enabled }), "השינוי נכשל")} />}
     >
       {error && <p className="text-sm text-danger">טעינת הגדרות טלגרם נכשלה.</p>}
       {tg && (
         <>
-          <ol className="flex flex-col">
-            <Step n={1} title="יוצרים בוט אצל BotFather" state={state === "bot" ? "current" : "done"} doneText={tg.bot_username ? `@${tg.bot_username}` : undefined}>
-              <CreateBot busy={busy} onToken={(token) => act(() => send("PUT", "/settings/telegram/bot", { token }), "החיבור לבוט נכשל")} />
-            </Step>
-            <Step n={2} title="מחברים את הצ'אט שלכם לבוט" state={state === "bot" ? "todo" : state === "link" || waiting ? "current" : "done"} doneText={tg.chat_name ?? undefined}>
-              {tg.link_url && <LinkChat tg={tg} />}
-            </Step>
-            <Step n={3} title="בוחרים מה לקבל" state={state === "ready" && !waiting ? "current" : "todo"} last>
-              {state === "ready" && <Ready tg={tg} settings={settings} patch={patch} busy={busy} act={act} />}
-            </Step>
-          </ol>
+          {connected ? (
+            <>
+              <Connected tg={tg} busy={busy} act={act} />
+              <Ready tg={tg} settings={settings} patch={patch} busy={busy} act={act} />
+            </>
+          ) : (
+            <ol className="flex flex-col">
+              <Step n={1} title="יוצרים בוט אצל BotFather" state={state === "bot" ? "current" : "done"} doneText={tg.bot_username ? `@${tg.bot_username}` : undefined}>
+                <CreateBot busy={busy} onToken={(token) => act(() => send("PUT", "/settings/telegram/bot", { token }), "החיבור לבוט נכשל")} />
+              </Step>
+              <Step n={2} title="מחברים את הצ'אט שלכם לבוט" state={state === "bot" ? "todo" : "current"} doneText={tg.chat_name ?? undefined}>
+                {tg.link_url && <LinkChat tg={tg} />}
+              </Step>
+              <Step n={3} title="בוחרים מה לקבל" state="todo" last />
+            </ol>
+          )}
           {err && (
             <p role="alert" className="rounded-xl bg-danger-soft px-3 py-2 text-sm font-semibold text-danger-strong">
               {err}
@@ -73,7 +79,7 @@ export function TelegramCard({ settings, patch }: { settings: Settings; patch: P
           )}
           {state !== "bot" && (
             <div className="mt-2 flex flex-wrap gap-2 border-t border-hairline pt-3">
-              {state === "ready" && !waiting && (
+              {connected && (
                 <button className="btn-ghost" disabled={busy} onClick={() => act(() => send("POST", "/settings/telegram/relink"), "הפעולה נכשלה")}>
                   {"העברה לצ'אט אחר"}
                 </button>
@@ -93,7 +99,7 @@ export function TelegramCard({ settings, patch }: { settings: Settings; patch: P
   );
 }
 
-const api0 = (): TelegramConfig => ({ bot_username: null, bot_name: null, chat_name: null, linked: false, enabled: false, kinds: null, link_code: null, link_url: null, all_kinds: {} });
+const api0 = (): TelegramConfig => ({ bot_username: null, bot_name: null, chat_name: null, linked: false, enabled: false, kinds: [], feed_kinds: [], link_code: null, link_url: null, all_kinds: {} });
 
 function Step({ n, title, state, doneText, last, children }: { n: number; title: string; state: "todo" | "current" | "done"; doneText?: string; last?: boolean; children?: React.ReactNode }) {
   return (
@@ -207,50 +213,82 @@ function LinkChat({ tg }: { tg: TelegramConfig }) {
   );
 }
 
-function Ready({ tg, settings, patch, busy, act }: { tg: TelegramConfig; settings: Settings; patch: Patch; busy: boolean; act: (fn: () => Promise<TelegramConfig | void>, fallback: string) => Promise<boolean> }) {
+type Act = (fn: () => Promise<TelegramConfig | void>, fallback: string) => Promise<boolean>;
+
+function Connected({ tg, busy, act }: { tg: TelegramConfig; busy: boolean; act: Act }) {
   const [tested, setTested] = useState(false);
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-3 rounded-2xl bg-brand-soft p-3">
+      <span aria-hidden className={`flex size-10 shrink-0 items-center justify-center rounded-full ${tg.enabled ? "bg-brand-fill text-brand-fg" : "bg-sunken text-faint"}`}>
+        <Send size={18} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="font-bold">
+          {"מחובר ל"}
+          <bdi>{tg.chat_name ?? "צ'אט שלכם"}</bdi>
+        </p>
+        <p className="text-sm text-muted">
+          {tg.enabled ? "דרך " : "ההתראות מושהות · "}
+          <bdi dir="ltr">@{tg.bot_username}</bdi>
+        </p>
+      </div>
+      <button className="btn-secondary" disabled={busy} onClick={async () => setTested(await act(() => send("POST", "/settings/telegram/test"), "השליחה נכשלה"))}>
+        {tested ? (
+          <>
+            <Check size={16} /> נשלחה, בדקו בטלגרם
+          </>
+        ) : (
+          "שליחת הודעת בדיקה"
+        )}
+      </button>
+    </div>
+  );
+}
+
+function Ready({ tg, settings, patch, busy, act }: { tg: TelegramConfig; settings: Settings; patch: Patch; busy: boolean; act: Act }) {
   const all = Object.keys(tg.all_kinds);
-  const on = new Set(tg.kinds ?? all);
-  const setKinds = (next: Set<string>) => {
-    const kinds = next.size === all.length ? null : all.filter((k) => next.has(k));
-    act(() => send("PUT", "/settings/telegram", { kinds }), "השינוי נכשל");
-  };
+  const alerts = all.filter((k) => !tg.feed_kinds.includes(k));
+  const on = new Set(tg.kinds);
+  const setKinds = (next: Set<string>) => act(() => send("PUT", "/settings/telegram", { kinds: all.filter((k) => next.has(k)) }), "השינוי נכשל");
+  const allOn = alerts.every((k) => on.has(k));
+  const checks = (kinds: string[]) => (
+    <ul className="grid gap-x-4 sm:grid-cols-2">
+      {kinds.map((k) => (
+        <li key={k}>
+          <label className="flex min-h-10 cursor-pointer items-center gap-2.5 text-[15px]">
+            <input
+              type="checkbox"
+              checked={on.has(k)}
+              disabled={busy}
+              onChange={(e) => {
+                const next = new Set(on);
+                if (e.target.checked) next.add(k);
+                else next.delete(k);
+                setKinds(next);
+              }}
+            />
+            {tg.all_kinds[k]}
+          </label>
+        </li>
+      ))}
+    </ul>
+  );
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex flex-wrap items-center gap-2 pb-2">
-        <button className="btn-secondary" disabled={busy} onClick={async () => setTested(await act(() => send("POST", "/settings/telegram/test"), "השליחה נכשלה"))}>
-          שליחת הודעת בדיקה
-        </button>
-        {tested && <span className="text-sm font-semibold text-positive">נשלחה, בדקו בטלגרם</span>}
-      </div>
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm text-muted">
-          {on.size === all.length ? "כל סוגי ההתראות נשלחים" : `${on.size} מתוך ${all.length} סוגים נשלחים`}
+          {allOn ? "כל ההתראות והסיכומים נשלחים" : `${alerts.filter((k) => on.has(k)).length} מתוך ${alerts.length} סוגים נשלחים`}
         </p>
-        <button type="button" className="link" onClick={() => setKinds(new Set(on.size === all.length ? [] : all))}>
-          {on.size === all.length ? "ניקוי הכל" : "בחירת הכל"}
+        <button type="button" className="link" onClick={() => setKinds(new Set([...on].filter((k) => !alerts.includes(k)).concat(allOn ? [] : alerts)))}>
+          {allOn ? "ניקוי הכל" : "בחירת הכל"}
         </button>
       </div>
-      <ul className="grid gap-x-4 sm:grid-cols-2">
-        {all.map((k) => (
-          <li key={k}>
-            <label className="flex min-h-10 cursor-pointer items-center gap-2.5 text-[15px]">
-              <input
-                type="checkbox"
-                checked={on.has(k)}
-                disabled={busy}
-                onChange={(e) => {
-                  const next = new Set(on);
-                  if (e.target.checked) next.add(k);
-                  else next.delete(k);
-                  setKinds(next);
-                }}
-              />
-              {tg.all_kinds[k]}
-            </label>
-          </li>
-        ))}
-      </ul>
+      {checks(alerts)}
+      <div className="mt-2 flex flex-col gap-0.5 border-t border-hairline pt-3">
+        <p className="font-bold">עדכון על כל תנועה</p>
+        <p className="text-sm text-muted">הודעה על כל חיוב שנכנס ועל עסקאות בתשלומים. נשלח רק לטלגרם, לא לפעמון באפליקציה.</p>
+      </div>
+      {checks(tg.feed_kinds)}
       <Row label="כתובת FreeRise" hint="אם האפליקציה זמינה מהטלפון, כל הודעה תכלול קישור ישיר למסך הרלוונטי.">
         <AppUrl value={settings.app_url} patch={patch} />
       </Row>

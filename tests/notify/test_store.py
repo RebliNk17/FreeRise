@@ -1,7 +1,10 @@
+import re
 from datetime import timedelta
+from pathlib import Path
 
 from sqlalchemy import select
 
+import freerise
 from freerise.models import Notification, NotificationDelivery, Setting
 from freerise.notify import telegram
 from freerise.notify.senders import deliver_pending
@@ -73,10 +76,36 @@ def test_deliver_respects_since_and_kinds(session):
 
 def test_telegram_format_escapes_and_links(session):
     n = notify(session, "k", "<a>", "x & y", "/home", "t", "warning")
-    msg = telegram.format_message(n, "https://fr.example/")
+    msg = telegram.format_message(n, "https://fr.example/home")
     assert msg.startswith("⚠️ <b>&lt;a&gt;</b>\nx &amp; y")
     assert 'href="https://fr.example/home"' in msg
-    assert "href" not in telegram.format_message(n, None)
+    assert "href" not in telegram.format_message(n)
+
+
+def test_telegram_format_kind_emoji_and_bold_amounts(session):
+    n = notify(session, "weekly_report", "סיכום", "הוצאתם ₪1,234.5, יותר מ-₪2,000 -₪3", None, "w")
+    assert telegram.format_message(n) == (
+        "📊 <b>סיכום</b>\nהוצאתם <b>₪1,234.5</b>, יותר מ-<b>₪2,000</b> <b>-₪3</b>"
+    )
+
+
+def test_telegram_link_button_falls_back_to_text_link(session, monkeypatch):
+    n = notify(session, "sync_failed", "t", "b", "/accounts?edit=3", "s", "critical")
+    sent = []
+
+    def call(token, method, **p):
+        if "reply_markup" in p and "localhost" in str(p):
+            raise telegram.TelegramError("Bad Request: BUTTON_URL_INVALID")
+        sent.append(p)
+
+    monkeypatch.setattr(telegram, "call", call)
+    cfg = {"chat_id": 1, "token_enc": None}
+    telegram.TelegramSender(cfg, "https://fr.example").send(n)
+    button = sent[-1]["reply_markup"]["inline_keyboard"][0][0]
+    assert button == {"text": "לתיקון החיבור", "url": "https://fr.example/accounts?edit=3"}
+    telegram.TelegramSender(cfg, "http://localhost:3000").send(n)
+    assert "reply_markup" not in sent[-1]
+    assert 'href="http://localhost:3000/accounts?edit=3"' in sent[-1]["text"]
 
 
 def test_find_chat_matches_code_only(monkeypatch):
@@ -96,3 +125,10 @@ def test_find_chat_matches_code_only(monkeypatch):
     assert telegram.find_chat("t", "abc") == {"id": 2, "name": "Dana"}
     assert calls[1]["offset"] == 7  # read updates are acknowledged
     assert telegram.find_chat("t", "zzz") is None
+
+
+def test_every_alert_kind_can_reach_telegram():
+    """Telegram's default list is KINDS minus the feed: a kind left out is silently never sent."""
+    src = Path(freerise.__file__).parent.rglob("*.py")
+    made = {k for p in src for k in re.findall(r'notify\(\s*\w+,\s*"(\w+)"', p.read_text())}
+    assert made and made <= telegram.KINDS.keys()

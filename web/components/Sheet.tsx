@@ -54,13 +54,14 @@ export function Sheet({ labelledBy, onClose, header, children }: { labelledBy: s
   );
 }
 
-/** Title row for a Sheet header: title + close button. */
-export function SheetTitle({ id, title, onClose }: { id: string; title: React.ReactNode; onClose: () => void }) {
+/** Title row for a Sheet header: title, an optional action, close button. */
+export function SheetTitle({ id, title, action, onClose }: { id: string; title: React.ReactNode; action?: React.ReactNode; onClose: () => void }) {
   return (
     <div className="flex items-center gap-2">
       <h2 id={id} className="min-w-0 flex-1 truncate font-display text-[19px] font-bold">
         {title}
       </h2>
+      {action}
       <button type="button" className="icon-btn ms-auto size-11" aria-label="סגירה" onClick={onClose}>
         <X size={18} />
       </button>

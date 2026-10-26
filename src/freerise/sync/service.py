@@ -32,6 +32,10 @@ DISABLED_NOTE = "הושבת אוטומטית — יש לעדכן סיסמה"
 # this many failed runs in a row that never got past login pause scheduled syncs until a run
 # (a manual retry, a verify) succeeds.
 PAUSE_AFTER = 2
+# A failed scheduled sync is tried this many times in all, a random 5–15 minutes apart, before
+# the owner is alerted (notify/rules.py). The login pause above still stops it sooner.
+SYNC_TRIES = 3
+RETRY_GAP = (5 * 60, 15 * 60)  # seconds
 # ponytail: substring heuristics over the scraper's error text; extend as new messages show up.
 PROVIDER_CHANGED_HINTS = ("unexpected", "selector", "waf", "parse")
 FIRST_SYNC_DAYS = 730
@@ -85,9 +89,9 @@ def active_run_id(s: Session, credential_id: int) -> int | None:
     )
 
 
-def login_paused(s: Session, credential_id: int) -> bool:
-    """The last PAUSE_AFTER runs all failed before fetching data (wrong details, lock screen…)."""
-    rows = s.execute(
+def _last_runs(s: Session, credential_id: int, n: int):
+    """(status, progress) of the connection's last n finished runs, newest first."""
+    return s.execute(
         select(SyncRun.status, SyncRun.progress)
         .where(
             SyncRun.credential_id == credential_id,
@@ -97,9 +101,25 @@ def login_paused(s: Session, credential_id: int) -> bool:
             (SyncRun.trigger != "verify") | (SyncRun.status == "success"),
         )
         .order_by(SyncRun.id.desc())
-        .limit(PAUSE_AFTER)
+        .limit(n)
     ).all()
+
+
+def login_paused(s: Session, credential_id: int) -> bool:
+    """The last PAUSE_AFTER runs all failed before fetching data (wrong details, lock screen…)."""
+    rows = _last_runs(s, credential_id, PAUSE_AFTER)
     return len(rows) == PAUSE_AFTER and all(st == "failed" and p != "fetch" for st, p in rows)
+
+
+def failures_in_row(s: Session, credential_id: int) -> int:
+    """Failed runs since the last success, counted up to SYNC_TRIES."""
+    rows = _last_runs(s, credential_id, SYNC_TRIES)
+    return next((i for i, (st, _) in enumerate(rows) if st == "success"), len(rows))
+
+
+def retryable(run: SyncRun) -> bool:
+    """Worth another try on schedule: not a wrong password or code (lockout risk, SMS spam)."""
+    return run.status == "failed" and run.failure_kind != "auth_failed"
 
 
 def _now() -> datetime:
