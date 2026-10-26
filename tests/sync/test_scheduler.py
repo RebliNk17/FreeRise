@@ -357,8 +357,9 @@ def test_failed_sync_retried_then_alerts_once(sf):
     )
     assert [r.status for r in runs(sf)] == ["failed"] * SYNC_TRIES
     assert len(gaps) == SYNC_TRIES - 1 and all(300 <= g <= 900 for g in gaps)
-    with sf() as s:  # one alert, after the last try
-        assert s.scalars(select(Notification.kind)).all() == ["sync_failed"]
+    with sf() as s:  # one alert, after the last try, opening that connection's edit sheet
+        (n,) = s.scalars(select(Notification)).all()
+        assert n.kind == "sync_failed" and n.link == f"/accounts?edit={runs(sf)[0].credential_id}"
 
 
 def test_no_alert_before_the_last_try_and_no_retry_once_it_works(sf):

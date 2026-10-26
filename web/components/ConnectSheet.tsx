@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, CircleAlert, LoaderCircle } from "lucide-react";
+import { Check, ChevronDown, CircleAlert, Eye, EyeOff, LoaderCircle } from "lucide-react";
 import { ApiError, api, send, type Credential, type VerifyStatus } from "@/lib/api";
-import { friendlyError, technicalDetails } from "@/lib/connectErrors";
-import { providerName } from "@/lib/providers";
+import { friendlyError, saveError, technicalDetails } from "@/lib/connectErrors";
+import { fieldLabel, filledFields, isSecretField, providerName } from "@/lib/providers";
 import { AccountBriefs } from "@/components/InactiveFilter";
 import { ProviderLogo } from "@/components/ProviderLogo";
 
@@ -73,11 +73,14 @@ export function ConnectSheet({
     }
   }
   const cancel = () => act(() => send("DELETE", `/credentials/${credentialId}/verify`).catch(() => {})).then(() => onClose(false));
-  const retry = () =>
-    act(() => send("POST", `/credentials/${credentialId}/verify`)).then(() => {
-      setSt(null);
-      setPoll((p) => p + 1);
-    });
+  const restart = () => {
+    setSt(null);
+    setPoll((p) => p + 1);
+  };
+  const retry = () => act(() => send("POST", `/credentials/${credentialId}/verify`)).then(restart);
+  // Edited details are staged and checked again (the PATCH starts the verify run); nothing edited = the same check again.
+  const save = (fields: Record<string, string>) =>
+    Object.keys(fields).length ? act(() => send("PATCH", `/credentials/${credentialId}`, { fields })).then(restart) : retry();
 
   const step = st ? STEP_OF[st.stage] : 0;
   const name = providerName(provider);
@@ -87,7 +90,7 @@ export function ConnectSheet({
       ref={ref}
       aria-labelledby="connect-title"
       onCancel={(e) => e.preventDefault()}
-      className="m-auto w-[min(26rem,calc(100%-2rem))] rounded-3xl border-0 bg-surface p-5 text-text shadow-card backdrop:bg-(--backdrop)"
+      className="m-auto max-h-[calc(100vh-2rem)] w-[min(26rem,calc(100%-2rem))] overflow-y-auto rounded-3xl border-0 bg-surface p-5 text-text shadow-card backdrop:bg-(--backdrop)"
     >
       <div className="flex items-center gap-3">
         <span className="size-12 shrink-0">
@@ -111,7 +114,13 @@ export function ConnectSheet({
       ) : st?.stage === "success" ? (
         <Success st={st} onContinue={() => onClose(true)} />
       ) : st?.stage === "failed" ? (
-        <Failed st={st} busy={busy} onRetry={retry} onFix={() => onFix({ ...st.credential, fields: { ...st.credential.fields, ...st.prefill } })} onCancel={cancel} />
+        <Failed
+          st={st}
+          busy={busy}
+          onSave={save}
+          onFix={() => onFix({ ...st.credential, fields: { ...st.credential.fields, ...st.prefill } })}
+          onCancel={cancel}
+        />
       ) : (
         <>
           <ol className="mt-5 flex flex-col gap-3" aria-live="polite">
@@ -204,12 +213,49 @@ function Success({ st, onContinue }: { st: VerifyStatus; onContinue: () => void 
   );
 }
 
-function Failed({ st, busy, onRetry, onFix, onCancel }: { st: VerifyStatus; busy: boolean; onRetry: () => void; onFix: () => void; onCancel: () => void }) {
+/**
+ * The failed check, its details fixable on the spot: non-secret fields in clear, passwords blank (a blank field
+ * keeps its stored value). A wrong password / locked / changed login isn't retried as is: that could lock the account.
+ */
+function Failed({
+  st,
+  busy,
+  onSave,
+  onFix,
+  onCancel,
+}: {
+  st: VerifyStatus;
+  busy: boolean;
+  onSave: (fields: Record<string, string>) => Promise<unknown>;
+  onFix: () => void;
+  onCancel: () => void;
+}) {
   const f = friendlyError(st.failure_kind, st.error);
-  const details = technicalDetails(st.error);
+  const tech = technicalDetails(st.error);
   const canRetry = ["otp", "otp_timeout", "timeout", "blocked", "general"].includes(f.key);
+  const keys = Object.keys(st.credential.fields); // every stored field, passwords included (their values masked)
+  // The details that just failed, in clear; passwords are never sent back.
+  const [details, setDetails] = useState<Record<string, string> | null>(null);
+  const [revealed, setRevealed] = useState<Record<string, boolean>>({});
+  const [dirty, setDirty] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    api<Record<string, string>>(`/credentials/${st.credential.id}/details`)
+      .then(setDetails)
+      .catch(() => setDetails({}));
+  }, [st.credential.id]);
+
+  function submit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError("");
+    const filled = filledFields(keys, new FormData(e.currentTarget));
+    const changed = Object.fromEntries(Object.entries(filled).filter(([k, v]) => details?.[k] !== v));
+    if (!canRetry && !Object.keys(changed).length) return;
+    onSave(changed).catch((err) => setError(saveError(err, "הערכים אינם תקינים.")));
+  }
+
   return (
-    <div className="mt-4 flex flex-col gap-3">
+    <form onSubmit={submit} onInput={() => setDirty(true)} className="mt-4 flex flex-col gap-3">
       <div className="flex gap-2 rounded-xl bg-danger-soft px-3 py-2.5 text-danger-strong" role="alert">
         <CircleAlert size={18} className="mt-0.5 shrink-0" aria-hidden />
         <div>
@@ -217,21 +263,64 @@ function Failed({ st, busy, onRetry, onFix, onCancel }: { st: VerifyStatus; busy
           <p className="text-xs">{f.hint}</p>
         </div>
       </div>
-      {details && <TechDetails text={details} />}
-      {canRetry && (
-        <button type="button" className="btn" onClick={onRetry} disabled={busy}>
-          {f.key === "otp" || f.key === "otp_timeout" ? "שליחת קוד חדש" : "ניסיון נוסף"}
-        </button>
+
+      {details && keys.length > 0 && (
+        <div className="flex flex-col gap-2 rounded-2xl bg-sunken p-3">
+          <span className="text-xs text-muted">סיסמה ריקה נשארת ללא שינוי.</span>
+          {keys.map((k) => {
+            const secret = isSecretField(k);
+            const isVisible = revealed[k];
+            return (
+              <label key={k} className="flex flex-col gap-1 text-[13px] text-muted">
+                <span>{fieldLabel(k)}</span>
+                <div className="relative flex items-center">
+                  <input
+                    name={`field:${k}`}
+                    type={secret && !isVisible ? "password" : "text"}
+                    defaultValue={secret ? "" : (details[k] ?? "")}
+                    placeholder={secret ? "••••" : ""}
+                    autoFocus={f.key === "password" && k === keys.find(isSecretField)}
+                    className="input w-full pe-9"
+                    dir="ltr"
+                    autoComplete="off"
+                  />
+                  {secret && (
+                    <button
+                      type="button"
+                      onClick={() => setRevealed((prev) => ({ ...prev, [k]: !prev[k] }))}
+                      className="absolute end-2 flex size-7 items-center justify-center rounded-lg text-muted hover:text-text"
+                      title={isVisible ? "הסתרת סיסמה" : "הצגת סיסמה"}
+                      aria-label={isVisible ? "הסתרת סיסמה" : "הצגת סיסמה"}
+                    >
+                      {isVisible ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  )}
+                </div>
+              </label>
+            );
+          })}
+        </div>
       )}
+
+      {tech && <TechDetails text={tech} />}
+      {error && (
+        <p className="text-sm text-danger" role="alert">
+          {error}
+        </p>
+      )}
+
+      <button className="btn-accent" disabled={busy || !details || (!dirty && !canRetry)} autoFocus={f.key !== "password"}>
+        {dirty || !canRetry ? "שמירה ואימות מחדש" : f.key === "otp" || f.key === "otp_timeout" ? "שליחת קוד חדש" : "ניסיון נוסף"}
+      </button>
       <div className="grid grid-cols-2 gap-2">
-        <button type="button" className={canRetry ? "btn-secondary" : "btn"} onClick={onFix} disabled={busy} autoFocus={!canRetry}>
-          תיקון פרטים
+        <button type="button" className="btn-secondary" onClick={onFix} disabled={busy}>
+          עריכה מלאה
         </button>
         <button type="button" className="btn-ghost" onClick={onCancel} disabled={busy}>
           ביטול
         </button>
       </div>
-    </div>
+    </form>
   );
 }
 

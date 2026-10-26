@@ -1,3 +1,5 @@
+import { ApiError } from "./api";
+
 /** Friendly Hebrew text for a failed sync / connection check, from the scraper's error type. */
 
 export type FailureKey = "password" | "locked" | "blocked" | "changed" | "timeout" | "otp" | "otp_timeout" | "general";
@@ -61,4 +63,14 @@ export function technicalDetails(error: string | null | undefined): string {
     .filter((s) => !/prox|show_browser|headless|stealth|captcha|user.?agent/i.test(s))
     .join(" ")
     .trim();
+}
+
+/** Saving a connection's details failed; 409 = this login is already connected (credentials API refuses duplicates). */
+export function saveError(err: unknown, invalid: string): string {
+  if (!(err instanceof ApiError)) return "השמירה נכשלה.";
+  if (err.status === 409) {
+    const label = (err.body as { detail?: { label?: string } })?.detail?.label;
+    return `החשבון הזה כבר מחובר${label ? ` (${label})` : ""}. אפשר לעדכן את הפרטים בחיבור הקיים.`;
+  }
+  return err.status === 422 ? invalid : "השמירה נכשלה.";
 }
