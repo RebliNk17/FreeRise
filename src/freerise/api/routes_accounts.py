@@ -3,13 +3,12 @@ from datetime import date, datetime
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.orm import joinedload
 
-from freerise.accounts import account_holder, account_label, active_card_ids
+from freerise.accounts import account_holder, account_label, active_card_ids, latest_balances
 from freerise.api.deps import DB, get_or_404, today
 from freerise.health import data_health
-from freerise.models import Account, Balance, Credential
+from freerise.models import Account, Credential
 
 router = APIRouter()
 
@@ -36,12 +35,7 @@ class AccountPatch(BaseModel):
 
 
 def _rows(db: DB, account_id: int | None = None) -> list[AccountOut]:
-    latest = (
-        select(Balance.account_id, Balance.balance, Balance.as_of)
-        .ext(distinct_on(Balance.account_id))
-        .order_by(Balance.account_id, Balance.as_of.desc())
-        .subquery()
-    )
+    latest = latest_balances().subquery()
     q = (
         select(Account, Credential.provider, latest.c.balance, latest.c.as_of)
         .options(joinedload(Account.credential))

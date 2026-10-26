@@ -97,7 +97,7 @@ export function SyncToasts() {
         <div key={t.key} className={`pointer-events-auto flex items-center gap-2 rounded-2xl px-4 py-3 text-sm shadow-nav ${t.failed ? "bg-danger-soft text-danger-strong" : "bg-text text-bg"}`}>
           <span className="min-w-0 flex-1">{t.text}</span>
           {t.failed && (
-            <Link href="/settings/credentials" className="shrink-0 font-bold underline">
+            <Link href="/accounts" className="shrink-0 font-bold underline">
               לפרטים
             </Link>
           )}

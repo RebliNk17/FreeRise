@@ -7,7 +7,7 @@ import { ProgressBar } from "@/components/Card";
 import { weekBarPercent } from "@/lib/format";
 
 /** ⋮ overflow menu; closes on outside pointer, Escape or selection. */
-export function Menu({ label, items, icon = <EllipsisVertical size={18} /> }: { label: string; items: { label: string; onSelect: () => void; danger?: boolean }[]; icon?: React.ReactNode }) {
+export function Menu({ label, items, icon = <EllipsisVertical size={18} /> }: { label: string; items: { label: string; onSelect: () => void; danger?: boolean; icon?: React.ReactNode }[]; icon?: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -34,12 +34,17 @@ export function Menu({ label, items, icon = <EllipsisVertical size={18} /> }: { 
               <button
                 type="button"
                 role="menuitem"
-                className={`min-h-11 w-full px-4 py-2.5 text-start text-sm font-semibold hover:bg-sunken ${i.danger ? "text-danger" : ""}`}
+                className={`flex min-h-11 w-full items-center gap-2.5 px-4 py-2.5 text-start text-sm font-semibold hover:bg-sunken ${i.danger ? "text-danger" : ""}`}
                 onClick={() => {
                   setOpen(false);
                   i.onSelect();
                 }}
               >
+                {i.icon && (
+                  <span className={`flex shrink-0 ${i.danger ? "" : "text-muted"}`} aria-hidden>
+                    {i.icon}
+                  </span>
+                )}
                 {i.label}
               </button>
             </li>

@@ -79,7 +79,7 @@ It asks for a password, then prints an `otpauth://` link **once**. Add it to you
 app (Google Authenticator, 1Password, …) to get your 2FA codes.
 
 **4. Open <http://localhost:3000>**, log in, and connect your banks and cards under
-**הגדרות → חיבורים לבנקים ואשראי** (Settings → bank and card connections). FreeRise checks
+**חשבונות וחיבורים** (Accounts & connections, in the menu). FreeRise checks
 each login and pulls your transactions right away. After that it syncs on its own at 07:00, 14:00
 and 21:00 (change the hours under **הגדרות → סנכרון אוטומטי**).
 

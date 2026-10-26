@@ -47,3 +47,10 @@ def test_plain_charges_untouched():
     plain = IfsTxn("A1", "2026-08-28", "2026-10-11", -60.0, "ILS", -60.0, "ביטוח")
     (t,) = _map("max", plain)
     assert (t.identifier, t.date) == ("A1", "2026-08-28")
+
+
+def test_card_balance_keeps_its_charge_date():
+    # Saved as the balance's as_of: "לחיוב ב-10.11" on the accounts page.
+    acc = Account("4984", AccountType.CREDIT_CARD, balance=-1713.08, balance_date="2026-11-10")
+    r = IpsScraper("visa cal", {})._map_account(acc)
+    assert (r.balance, r.balance_date) == (-1713.08, "2026-11-10")

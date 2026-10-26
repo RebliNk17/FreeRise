@@ -206,6 +206,7 @@ class IpsScraper:
             account_number=a.account_number,
             transactions=txns,
             balance=a.balance,
+            balance_date=a.balance_date,  # a card's coming charge day (YYYY-MM-DD), when the provider gives one
             card_frame=a.credit_limit,
         )
 
