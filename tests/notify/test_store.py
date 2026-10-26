@@ -1,7 +1,10 @@
+import re
 from datetime import timedelta
+from pathlib import Path
 
 from sqlalchemy import select
 
+import freerise
 from freerise.models import Notification, NotificationDelivery, Setting
 from freerise.notify import telegram
 from freerise.notify.senders import deliver_pending
@@ -122,3 +125,10 @@ def test_find_chat_matches_code_only(monkeypatch):
     assert telegram.find_chat("t", "abc") == {"id": 2, "name": "Dana"}
     assert calls[1]["offset"] == 7  # read updates are acknowledged
     assert telegram.find_chat("t", "zzz") is None
+
+
+def test_every_alert_kind_can_reach_telegram():
+    """Telegram's default list is KINDS minus the feed: a kind left out is silently never sent."""
+    src = Path(freerise.__file__).parent.rglob("*.py")
+    made = {k for p in src for k in re.findall(r'notify\(\s*\w+,\s*"(\w+)"', p.read_text())}
+    assert made and made <= telegram.KINDS.keys()
