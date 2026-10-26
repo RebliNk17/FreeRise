@@ -22,6 +22,7 @@ import {
 import { ThemeButton } from "@/components/ThemeToggle";
 import { Logo } from "@/components/Logo";
 import { send } from "@/lib/api";
+import { useApi } from "@/lib/useApi";
 import { OtpPrompt } from "./sync/OtpPrompt";
 import { SyncToasts } from "./sync/SyncToasts";
 import { NotificationBell } from "@/components/NotificationBell";
@@ -50,6 +51,7 @@ const MORE_MATCH = [...MORE.map((l) => l.href), "/review"];
 export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [drawer, setDrawer] = useState(false);
+  const { data: health } = useApi<{ version: string }>("/health");
 
   async function logout() {
     await send("POST", "/auth/logout").catch(() => {});
@@ -63,7 +65,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="mx-auto flex max-w-3xl items-center gap-1.5 px-4 pt-4 pb-2 md:px-5">
           <Link href="/home" className="flex items-center gap-2.5 font-display text-[21px] font-extrabold">
             <Logo size={36} />
-            FreeRise
+            <span className="flex flex-col leading-none">
+              FreeRise
+              {health && <span dir="ltr" className="mt-1 font-sans text-[11px] font-semibold text-faint tabular-nums">v{health.version}</span>}
+            </span>
           </Link>
           <Link href="/search" className="icon-btn ms-auto" aria-label="חיפוש עסקאות" title="חיפוש עסקאות">
             <Search size={19} strokeWidth={1.8} />
