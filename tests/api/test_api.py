@@ -6,12 +6,24 @@ import pytest
 
 from freerise.api import routes_auth
 from freerise.crypto import decrypt_json, encrypt_json
-from freerise.models import Account, Balance, Credential, OtpRequest, SyncRun, Transaction
+from freerise.models import (
+    Account,
+    Balance,
+    Credential,
+    Invite,
+    OtpRequest,
+    SyncRun,
+    Transaction,
+)
 
 ROUTES = [
     ("post", "/api/auth/logout"),
     ("get", "/api/auth/me"),
     ("post", "/api/auth/password"),
+    ("get", "/api/auth/users"),
+    ("delete", "/api/auth/users/1"),
+    ("post", "/api/auth/invites"),
+    ("post", "/api/auth/totp/check"),
     ("get", "/api/providers"),
     ("get", "/api/credentials"),
     ("post", "/api/credentials"),
@@ -95,7 +107,7 @@ def test_login_with_totp(client, user):
         "freerise_session=" in cookie and "HttpOnly" in cookie and "samesite=lax" in cookie.lower()
     )
     assert "Secure" not in cookie
-    assert client.get("/api/auth/me").json() == {"id": 1, "username": "shai"}
+    assert client.get("/api/auth/me").json() == {"id": 1, "username": "shai", "name": "shai"}
     assert client.post("/api/auth/logout").status_code == 204
     assert client.get("/api/auth/me").status_code == 401
 
@@ -140,6 +152,92 @@ def test_change_password_rate_limited(authed, user):
         assert r.status_code == 403
     good = {"current": user["password"], "new": "brand-new-pw"}
     assert authed.post("/api/auth/password", json=good).status_code == 429
+
+
+def test_household_invite(authed, user):
+    from urllib.parse import parse_qs, urlparse
+
+    import pyotp
+    from fastapi.testclient import TestClient
+
+    from freerise.api.main import app
+
+    token = authed.post("/api/auth/invites").json()["token"]
+    noa = TestClient(app)  # her phone: no session yet
+    assert noa.get(f"/api/auth/invites/{token}").json() == {"invited_by": "shai"}
+    join = {"token": token, "username": "noa", "password": "noa-pw-123"}
+    assert noa.post("/api/auth/join", json={**join, "username": "shai"}).status_code == 409
+    assert noa.post("/api/auth/join", json={**join, "password": "short"}).status_code == 422
+
+    r = noa.post("/api/auth/join", json=join)
+    assert r.status_code == 201 and r.json()["qr"].startswith("data:image/svg+xml")
+    secret = parse_qs(urlparse(r.json()["otpauth"]).query)["secret"][0]
+    # Joined and signed in; the link is spent.
+    assert noa.post("/api/auth/totp/check", json={"code": "000000"}).status_code == 400
+    code = pyotp.TOTP(secret).now()
+    assert noa.post("/api/auth/totp/check", json={"code": code}).status_code == 204
+    assert [m["username"] for m in noa.get("/api/auth/users").json()] == ["shai", "noa"]
+    assert noa.get(f"/api/auth/invites/{token}").status_code == 404
+    again = TestClient(app).post("/api/auth/join", json={**join, "username": "eve"})
+    assert again.status_code == 404
+    assert authed.get("/api/auth/invites/not-a-token").status_code == 404
+
+    # Her own login works, with her authenticator.
+    login = {"username": "noa", "password": "noa-pw-123", "totp": pyotp.TOTP(secret).now()}
+    assert TestClient(app).post("/api/auth/login", json=login).status_code == 204
+
+
+def test_display_names(authed):
+    from fastapi.testclient import TestClient
+
+    from freerise.api.main import app
+
+    me = authed.get("/api/auth/me").json()
+    assert me["name"] == "shai"  # the username until a name is picked
+    assert authed.patch("/api/auth/me", json={"name": "   "}).status_code == 422
+    r = authed.patch("/api/auth/me", json={"name": "  שי "})
+    assert r.json() == {**me, "name": "שי"}  # the login username stays
+
+    token = authed.post("/api/auth/invites").json()["token"]
+    noa = TestClient(app)
+    assert noa.get(f"/api/auth/invites/{token}").json() == {"invited_by": "שי"}
+    join = {"token": token, "username": "noa", "password": "noa-pw-123", "name": "נועה"}
+    assert noa.post("/api/auth/join", json=join).status_code == 201
+    names = [(m["username"], m["name"]) for m in authed.get("/api/auth/users").json()]
+    assert names == [("shai", "שי"), ("noa", "נועה")]
+
+
+def test_remove_member(authed, user):
+    from fastapi.testclient import TestClient
+
+    from freerise.api.main import app
+
+    token = authed.post("/api/auth/invites").json()["token"]
+    noa = TestClient(app)
+    join = {"token": token, "username": "noa", "password": "noa-pw-123"}
+    assert noa.post("/api/auth/join", json=join).status_code == 201
+    noa_id = noa.get("/api/auth/me").json()["id"]
+    me = authed.get("/api/auth/me").json()
+
+    selfie = noa.request("DELETE", f"/api/auth/users/{noa_id}", json={"current": "noa-pw-123"})
+    assert selfie.status_code == 400  # nobody removes their own login
+    url = f"/api/auth/users/{noa_id}"
+    assert authed.request("DELETE", url, json={"current": "nope"}).status_code == 403
+    assert authed.request("DELETE", url, json={"current": user["password"]}).status_code == 204
+    assert noa.get("/api/auth/me").status_code == 401  # her sessions went with her
+    assert [m["id"] for m in authed.get("/api/auth/users").json()] == [me["id"]]
+
+
+def test_expired_invite(authed, sf):
+    from sqlalchemy import update
+
+    token = authed.post("/api/auth/invites").json()["token"]
+    with sf() as s:
+        s.execute(update(Invite).values(expires_at=datetime.now(UTC) - timedelta(minutes=1)))
+        s.commit()
+    assert authed.get(f"/api/auth/invites/{token}").status_code == 404
+    join = {"token": token, "username": "noa", "password": "noa-pw-123"}
+    assert authed.post("/api/auth/join", json=join).status_code == 404
 
 
 def test_providers(authed):

@@ -1,12 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { Bell, CalendarRange, ChevronLeft, CircleUserRound, GripVertical, Palette, RefreshCw, Send, Tags, Wallet, type LucideIcon } from "lucide-react";
+import { Bell, CalendarRange, ChevronLeft, GripVertical, Palette, RefreshCw, Send, Tags, Wallet, type LucideIcon } from "lucide-react";
 import { useApi } from "@/lib/useApi";
 
-/** RiseUp-style menu: one card of rows, each opening its own page. */
+/** RiseUp-style menu: one card of rows, each opening its own page. The account and household live at /account (drawer), not here. */
 const ROWS: { href: string; label: string; icon: LucideIcon }[] = [
-  { href: "/settings/account", label: "החשבון שלי", icon: CircleUserRound },
   { href: "/settings/cycle", label: "החודש שלי", icon: CalendarRange },
   { href: "/settings/sync", label: "סנכרון אוטומטי", icon: RefreshCw },
   { href: "/settings/alerts", label: "התראות", icon: Bell },

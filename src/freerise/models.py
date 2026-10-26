@@ -49,12 +49,22 @@ class User(Base):
     username: Mapped[str] = mapped_column(String, unique=True)
     password_hash: Mapped[str]
     totp_secret_enc: Mapped[bytes | None]
+    name: Mapped[str | None]  # shown in the app ("שי"); None = the username
 
 
 class UserSession(Base):
     __tablename__ = "user_sessions"
     token_hash: Mapped[str] = mapped_column(String, unique=True)
     user_id: Mapped[int] = _fk("users")
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class Invite(Base):
+    """A one-time link that lets someone join the household with a login of their own."""
+
+    __tablename__ = "invites"
+    token_hash: Mapped[str] = mapped_column(String, unique=True)
+    created_by: Mapped[int] = _fk("users")
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
