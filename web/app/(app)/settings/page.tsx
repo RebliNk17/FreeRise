@@ -167,23 +167,24 @@ function SyncSummary({ hours }: { hours: number[] }) {
   );
 }
 
-/** The day as one strip; night hours shaded, picked hours filled and labelled above. */
+/** The day as one strip (two rows of 12 on phones, so each hour is tappable); night hours shaded, picked hours filled and labelled. */
 function SyncTimeline({ hours, onChange }: { hours: number[]; onChange: (h: number[]) => void }) {
   const toggle = (h: number) => onChange(hours.includes(h) ? hours.filter((x) => x !== h) : [...hours, h].sort((a, b) => a - b));
   if (!hours.length) return <SyncSummary hours={hours} />;
   return (
     <div className="flex flex-col gap-4">
       <div dir="ltr">
-        <div className="relative h-6 text-[13px] font-bold text-brand tabular-nums">
+        <div className="relative hidden h-6 text-[13px] font-bold text-brand tabular-nums sm:block">
           {hours.map((h) => (
             <span key={h} className="absolute -translate-x-1/2" style={{ left: `${((h + 0.5) / 24) * 100}%` }}>
               {hh(h)}
             </span>
           ))}
         </div>
-        <div role="group" aria-label="שעות סנכרון" className="flex h-12 gap-0.5">
+        <div role="group" aria-label="שעות סנכרון" className="grid grid-cols-12 gap-x-0.5 gap-y-1.5 sm:grid-cols-24">
           {range(0, 23).map((h) => {
             const on = hours.includes(h);
+            const ends = h === 0 ? "rounded-l-xl" : h === 23 ? "rounded-r-xl" : h === 11 ? "max-sm:rounded-r-xl" : h === 12 ? "max-sm:rounded-l-xl" : "";
             return (
               <button
                 key={h}
@@ -192,12 +193,16 @@ function SyncTimeline({ hours, onChange }: { hours: number[]; onChange: (h: numb
                 aria-pressed={on}
                 aria-label={`סנכרון בשעה ${hh(h)}`}
                 onClick={() => toggle(h)}
-                className={`min-w-0 flex-1 rounded-[4px] first:rounded-l-xl last:rounded-r-xl ${on ? "bg-brand-fill" : `${h < 6 || h >= 22 ? "bg-border" : "bg-sunken"} hover:bg-brand-soft`}`}
-              />
+                className={`h-11 min-w-0 rounded-[4px] sm:h-12 ${ends} ${on ? "bg-brand-fill" : `${h < 6 || h >= 22 ? "bg-border" : "bg-sunken"} hover:bg-brand-soft`}`}
+              >
+                <span aria-hidden className={`text-xs font-bold tabular-nums sm:hidden ${on ? "text-brand-fg" : "text-muted"}`}>
+                  {String(h).padStart(2, "0")}
+                </span>
+              </button>
             );
           })}
         </div>
-        <div className="mt-1.5 flex justify-between text-xs text-faint tabular-nums">
+        <div className="mt-1.5 hidden justify-between text-xs text-faint tabular-nums sm:flex">
           <span className="flex items-center gap-1"><Moon size={12} aria-hidden /> 00:00</span>
           <span>06:00</span>
           <span className="flex items-center gap-1"><Sun size={12} aria-hidden /> 12:00</span>
