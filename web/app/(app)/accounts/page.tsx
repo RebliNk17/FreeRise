@@ -1,12 +1,12 @@
 "use client";
 
 import { Suspense, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Check, Eye, EyeOff, Lock, Pause, Pencil, Play, Plus, RefreshCw, Trash2, TriangleAlert } from "lucide-react";
-import { ApiError, api, send, type Account, type Credential, type Provider, type Uncategorized } from "@/lib/api";
+import { api, send,type Account, type Credential, type Provider, type Uncategorized } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import { SERVICE_LABELS, fieldLabel, filledFields, isSecretField, methodLabel, providerKeywords, providerName, storedMethod } from "@/lib/providers";
-import { friendlyError, technicalDetails } from "@/lib/connectErrors";
+import { friendlyError, saveError, technicalDetails } from "@/lib/connectErrors";
 import { useApi } from "@/lib/useApi";
 import { Amount } from "@/components/Amount";
 import { useInactive } from "@/components/InactiveFilter";
@@ -60,7 +60,9 @@ function Accounts() {
   const [creds, setCreds] = useState<Credential[] | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [providers, setProviders] = useState<Provider[] | null>(null); // null until loaded: it decides each card's section
-  const [adding, setAdding] = useState(useSearchParams().has("add")); // /accounts?add=1 opens the form
+  const params = useSearchParams();
+  const router = useRouter();
+  const [adding, setAdding] = useState(params.has("add")); // /accounts?add=1 opens the form
   const [unc, setUnc] = useState<Uncategorized[] | null>(null); // the categorize drawer's queue while it's open
   const [editing, setEditing] = useState<{ id: number; password?: boolean } | null>(null);
   const [deleting, setDeleting] = useState<Credential | null>(null);
@@ -138,6 +140,19 @@ function Accounts() {
     api<Uncategorized[]>("/categories/uncategorized")
       .then(setUnc)
       .catch(() => setMsg("טעינת העסקאות לסיווג נכשלה."));
+
+  // /accounts?edit=<id> (a failed-sync alert) opens that connection's edit sheet, its error on top.
+  const editParam = Number(params.get("edit")) || 0; // NaN would never equal seenEdit: endless re-render
+  const [seenEdit, setSeenEdit] = useState(0);
+  if (creds && editParam !== seenEdit) {
+    setSeenEdit(editParam);
+    const c = creds.find((x) => x.id === editParam);
+    if (c) setEditing({ id: c.id, password: friendlyError(c.last_failure_kind, c.last_error).key === "password" });
+  }
+  const closeEdit = () => {
+    setEditing(null);
+    if (editParam) router.replace("/accounts", { scroll: false }); // so the same alert opens it again
+  };
 
   const last = creds?.map((c) => c.last_success_at).filter((x): x is string => !!x).sort().at(-1);
   const edited = creds?.find((c) => c.id === editing?.id);
@@ -231,11 +246,11 @@ function Accounts() {
           provider={providers?.find((p) => p.key === edited.provider)}
           toPassword={editing?.password}
           onDone={() => {
-            setEditing(null);
+            closeEdit();
             reload();
           }}
           onVerify={(id) => {
-            setEditing(null);
+            closeEdit();
             setConnecting({ id, provider: edited.provider });
           }}
         />
@@ -608,16 +623,6 @@ function MethodSwitch({ methods, value, onChange, provider }: { methods: string[
       )}
     </div>
   );
-}
-
-/** 409 = this login is already connected (credentials API refuses duplicates). */
-function saveError(err: unknown, invalid: string): string {
-  if (!(err instanceof ApiError)) return "השמירה נכשלה.";
-  if (err.status === 409) {
-    const label = (err.body as { detail?: { label?: string } })?.detail?.label;
-    return `החשבון הזה כבר מחובר${label ? ` (${label})` : ""}. אפשר לעדכן את הפרטים בחיבור הקיים.`;
-  }
-  return err.status === 422 ? invalid : "השמירה נכשלה.";
 }
 
 /** "עדכון פרטים" sheet. Like AddCredential, a backdrop click doesn't close it; `toPassword` focuses the password (from a wrong-password error). */

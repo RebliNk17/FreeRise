@@ -315,7 +315,7 @@ def _sync_failed(s: Session, today: date) -> None:
             "sync_failed",
             f"סנכרון נכשל: {provider_name(c.provider)} · {c.label}",
             why,
-            "/accounts",
+            f"/accounts?edit={c.id}",
             f"sync_failed:{c.id}:{streak or 0}",
             "critical",
         )
@@ -336,7 +336,7 @@ def _sync_paused(s: Session, today: date) -> None:
             f"ההתחברות נכשלה {PAUSE_AFTER} פעמים ברצף, ולכן הסנכרון האוטומטי הופסק כדי שהחשבון "
             "לא יינעל. היכנסו לאתר הספק וודאו שאפשר להתחבר (ושהחשבון לא נעול), ואז לחצו "
             "״סנכרון״ בתפריט של החיבור בעמוד החשבונות.",
-            "/accounts",
+            f"/accounts?edit={c.id}",
             f"sync_paused:{c.id}:{last}",
             "critical",
         )
