@@ -8,6 +8,7 @@ import { categoryLabel } from "@/lib/format";
 import type { HomeData } from "@/lib/home";
 import { moveItem } from "@/lib/reorder";
 import { useApi } from "@/lib/useApi";
+import { SubHeader } from "../parts";
 
 type Item = { category_id: number; name: string };
 
@@ -43,7 +44,7 @@ export default function CategoryOrderPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="page-title">סדר הקטגוריות בבית</h1>
+      <SubHeader title="סדר הקטגוריות בבית" />
       <p className="text-sm text-muted">גוררים או משתמשים בחצים. הסדר נשמר מיד ומשפיע על הקטגוריות במעקב במסך הבית.</p>
       <Status loading={!list} error={error} />
       {list?.length === 0 && <p className="text-muted">אין קטגוריות במעקב.</p>}
