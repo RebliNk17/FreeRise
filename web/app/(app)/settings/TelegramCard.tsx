@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Check, Copy, ExternalLink, Send } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Check, Copy, ExternalLink, Send, Unlink } from "lucide-react";
 import { Switch } from "@/components/Switch";
+import { Menu } from "@/components/home/parts";
 import { ApiError, send, type Settings, type TelegramConfig } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
 import { Row, Section, type Patch } from "./parts";
@@ -11,7 +12,7 @@ const errText = (e: unknown, fallback: string) =>
   e instanceof ApiError && typeof (e.body as { detail?: unknown })?.detail === "string" ? (e.body as { detail: string }).detail : fallback;
 
 export function TelegramCard({ settings, patch }: { settings: Settings; patch: Patch }) {
-  const { data: tg, setData, error } = useApi<TelegramConfig>("/settings/telegram");
+  const { data: tg, setData, error, reload } = useApi<TelegramConfig>("/settings/telegram");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -30,6 +31,19 @@ export function TelegramCard({ settings, patch }: { settings: Settings; patch: P
     }
   }
 
+  // Checkboxes flip at once and save in the background (queued so saves land in order); a failed save resyncs from the server.
+  const saves = useRef<Promise<unknown>>(Promise.resolve());
+  function saveKinds(kinds: string[]) {
+    setErr("");
+    setData((d) => d && { ...d, kinds });
+    saves.current = saves.current.then(() =>
+      send("PUT", "/settings/telegram", { kinds }).catch((e) => {
+        setErr(errText(e, "השינוי נכשל"));
+        reload();
+      }),
+    );
+  }
+
   // Waiting for the user to press Start in Telegram: ask the server to look every 3s.
   const waiting = !!tg?.link_code;
   useEffect(() => {
@@ -42,6 +56,8 @@ export function TelegramCard({ settings, patch }: { settings: Settings; patch: P
     }, 3000);
     return () => clearInterval(t);
   }, [waiting, setData]);
+
+  const disconnect = () => confirm("לנתק את הבוט מ-FreeRise? ההתראות יפסיקו להגיע לטלגרם.") && act(() => send("DELETE", "/settings/telegram").then(() => api0()), "הניתוק נכשל");
 
   const state = !tg?.bot_username ? "bot" : !tg.linked ? "link" : "ready";
   const connected = state === "ready" && !waiting; // setup done: the stepper gives way to a status banner
@@ -58,8 +74,8 @@ export function TelegramCard({ settings, patch }: { settings: Settings; patch: P
         <>
           {connected ? (
             <>
-              <Connected tg={tg} busy={busy} act={act} />
-              <Ready tg={tg} settings={settings} patch={patch} busy={busy} act={act} />
+              <Connected tg={tg} busy={busy} act={act} onDisconnect={disconnect} />
+              {tg.enabled && <Ready tg={tg} settings={settings} patch={patch} saveKinds={saveKinds} />}
             </>
           ) : (
             <ol className="flex flex-col">
@@ -77,18 +93,9 @@ export function TelegramCard({ settings, patch }: { settings: Settings; patch: P
               {err}
             </p>
           )}
-          {state !== "bot" && (
+          {state !== "bot" && !connected && (
             <div className="mt-2 flex flex-wrap gap-2 border-t border-hairline pt-3">
-              {connected && (
-                <button className="btn-ghost" disabled={busy} onClick={() => act(() => send("POST", "/settings/telegram/relink"), "הפעולה נכשלה")}>
-                  {"העברה לצ'אט אחר"}
-                </button>
-              )}
-              <button
-                className="btn-ghost text-danger"
-                disabled={busy}
-                onClick={() => confirm("לנתק את הבוט מ-FreeRise? ההתראות יפסיקו להגיע לטלגרם.") && act(() => send("DELETE", "/settings/telegram").then(() => api0()), "הניתוק נכשל")}
-              >
+              <button className="btn-ghost text-danger" disabled={busy} onClick={disconnect}>
                 ניתוק הבוט
               </button>
             </div>
@@ -215,7 +222,7 @@ function LinkChat({ tg }: { tg: TelegramConfig }) {
 
 type Act = (fn: () => Promise<TelegramConfig | void>, fallback: string) => Promise<boolean>;
 
-function Connected({ tg, busy, act }: { tg: TelegramConfig; busy: boolean; act: Act }) {
+function Connected({ tg, busy, act, onDisconnect }: { tg: TelegramConfig; busy: boolean; act: Act; onDisconnect: () => void }) {
   const [tested, setTested] = useState(false);
   return (
     <div className="mb-3 flex flex-wrap items-center gap-3 rounded-2xl bg-brand-soft p-3">
@@ -232,24 +239,27 @@ function Connected({ tg, busy, act }: { tg: TelegramConfig; busy: boolean; act: 
           <bdi dir="ltr">@{tg.bot_username}</bdi>
         </p>
       </div>
-      <button className="btn-secondary" disabled={busy} onClick={async () => setTested(await act(() => send("POST", "/settings/telegram/test"), "השליחה נכשלה"))}>
-        {tested ? (
-          <>
-            <Check size={16} /> נשלחה, בדקו בטלגרם
-          </>
-        ) : (
-          "שליחת הודעת בדיקה"
-        )}
-      </button>
+      {tested && (
+        <span role="status" className="flex items-center gap-1 text-sm font-semibold text-brand">
+          <Check size={16} /> הודעת בדיקה נשלחה
+        </span>
+      )}
+      <Menu
+        label="פעולות על הבוט"
+        items={[
+          { label: "שליחת הודעת בדיקה", icon: <Send size={16} />, onSelect: async () => setTested(!busy && (await act(() => send("POST", "/settings/telegram/test"), "השליחה נכשלה"))) },
+          { label: "ניתוק הבוט", icon: <Unlink size={16} />, danger: true, onSelect: onDisconnect },
+        ]}
+      />
     </div>
   );
 }
 
-function Ready({ tg, settings, patch, busy, act }: { tg: TelegramConfig; settings: Settings; patch: Patch; busy: boolean; act: Act }) {
+function Ready({ tg, settings, patch, saveKinds }: { tg: TelegramConfig; settings: Settings; patch: Patch; saveKinds: (kinds: string[]) => void }) {
   const all = Object.keys(tg.all_kinds);
   const alerts = all.filter((k) => !tg.feed_kinds.includes(k));
   const on = new Set(tg.kinds);
-  const setKinds = (next: Set<string>) => act(() => send("PUT", "/settings/telegram", { kinds: all.filter((k) => next.has(k)) }), "השינוי נכשל");
+  const setKinds = (next: Set<string>) => saveKinds(all.filter((k) => next.has(k)));
   const allOn = alerts.every((k) => on.has(k));
   const checks = (kinds: string[]) => (
     <ul className="grid gap-x-4 sm:grid-cols-2">
@@ -259,7 +269,6 @@ function Ready({ tg, settings, patch, busy, act }: { tg: TelegramConfig; setting
             <input
               type="checkbox"
               checked={on.has(k)}
-              disabled={busy}
               onChange={(e) => {
                 const next = new Set(on);
                 if (e.target.checked) next.add(k);

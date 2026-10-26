@@ -20,7 +20,8 @@ export function Switch({
         onChange={(e) => onChange(e.target.checked)}
       />
       <span className="relative h-6 w-10 shrink-0 rounded-full bg-border transition peer-checked:bg-brand-fill peer-focus-visible:ring-2 peer-focus-visible:ring-brand after:absolute after:top-0.5 after:right-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:transition peer-checked:after:-translate-x-4" />
-      {label}
+      {/* ponytail: min width fits "פעיל"/"כבוי" so an end-aligned switch doesn't shift when the label swaps */}
+      <span className="min-w-7">{label}</span>
     </label>
   );
 }

@@ -178,17 +178,6 @@ def check_link(db: DB) -> TelegramOut:
     return _tg_out(db, cfg)
 
 
-@router.post("/settings/telegram/relink")
-def relink(db: DB) -> TelegramOut:
-    """Move notifications to another chat: new code, the current chat stays until it is used."""
-    cfg = tg.load(db)
-    _token(cfg)
-    tg.new_link_code(cfg)
-    tg.save(db, cfg)
-    db.commit()
-    return _tg_out(db, cfg)
-
-
 @router.put("/settings/telegram")
 def put_telegram(body: TelegramIn, db: DB) -> TelegramOut:
     cfg = tg.load(db)
