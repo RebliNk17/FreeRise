@@ -20,7 +20,7 @@ export function AccountCard({ onChanged }: { onChanged: () => void }) {
   }
 
   return (
-    <Section id="account" title="החשבון שלי">
+    <Section id="account">
       <Row label={me?.username ?? ""} hint="המשתמש המחובר עכשיו">
         <button type="button" className="btn-ghost" onClick={logout}>
           <LogOut size={16} /> יציאה
