@@ -177,6 +177,44 @@ body {
   .link {
     @apply text-sm font-semibold text-brand hover:text-brand-hover;
   }
+  /* Tooltip for icon-only buttons: <button aria-label="…" data-tip="…">. Shows on hover (after a beat) and keyboard focus;
+     opens above, toward the inline start, so a button at a card's edge never pushes it off screen.
+     ponytail: CSS only, always above; add a below variant for buttons at the top of the screen when one needs it. */
+  [data-tip] {
+    position: relative;
+  }
+  [data-tip]::after {
+    content: attr(data-tip);
+    position: absolute;
+    bottom: calc(100% + 6px);
+    inset-inline-end: 0;
+    z-index: 40;
+    width: max-content;
+    max-width: 14rem;
+    padding: 5px 9px;
+    border-radius: 10px;
+    background: var(--text);
+    color: var(--bg);
+    box-shadow: var(--shadow);
+    font: 600 12px/1.35 var(--font-assistant), sans-serif;
+    text-align: start;
+    white-space: normal;
+    pointer-events: none;
+    opacity: 0;
+    translate: 0 3px;
+    transition: opacity 120ms, translate 120ms;
+  }
+  @media (hover: hover) {
+    [data-tip]:hover::after {
+      opacity: 1;
+      translate: 0;
+      transition-delay: 300ms;
+    }
+  }
+  [data-tip]:focus-visible::after {
+    opacity: 1;
+    translate: 0;
+  }
 }
 
 /* Insight illustrations: element styles are the final frame; .ill-play (active card) runs intro then a
