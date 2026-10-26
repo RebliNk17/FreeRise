@@ -225,7 +225,21 @@ export type Fund = {
   fee_savings_pct: number | null;
   forecast_monthly_pension: number | null;
   monthly: { date: string; balance: number }[];
+  pension_type: string | null;
+  track: string | null;
+  employer: string | null;
+  liquid_balance: number | null;
+  investment_expense_pct: number | null; // percent number, like fee_*_pct
+  start_date: string | null;
+  insurance_covers: { title: string; description: string | null; insured_amount: number | null; monthly_cost: number | null }[];
+  yearly_movements: YearlyMovement[];
 };
+/** One fund's month: balance change minus deposits (after fees and insurance). `fund_ids`: several = a
+ *  portfolio the provider reports only as a whole (Phoenix). */
+export type MonthGain = { fund_ids: number[]; month: string; start_balance: number; end_balance: number; deposits: number; gain: number };
+/** As the portal reports it (Migdal / Phoenix); any field may be missing. */
+export type YearlyMovement = { year: string; opening_balance: number | null; deposits: number | null; gains: number | null; management_fees: number | null; insurance_costs: number | null; closing_balance: number | null };
+export type FundDepositRow = { fund_id: number; date: string; amount: number; employer: string | null; salary_month: string | null; employee_amount: number | null; employer_amount: number | null; compensation_amount: number | null; insured_salary: number | null };
 export type RetirementForecast = {
   credential_id: number;
   owner: string;
@@ -235,7 +249,8 @@ export type RetirementForecast = {
   forecast_total_balance: number | null;
   total_savings: number | null;
 };
-export type Funds = { total: number; as_of: string | null; funds: Fund[]; credentials: { id: number; label: string; owner: string; last_success_at: string | null }[]; forecast: RetirementForecast[] };
+export type Funds = { total: number; as_of: string | null; funds: Fund[]; credentials: { id: number; label: string; owner: string; last_success_at: string | null }[]; forecast: RetirementForecast[]; deposit_alerts: DepositAlert[]; gains: MonthGain[]; deposits: FundDepositRow[] };
+export type DepositAlert = { kind: "missing" | "late" | "short" | "up"; fund_id: number; month: string; title: string; body: string };
 export type FundDetail = {
   fund: Fund;
   yearly: { year: number; start_balance: number; deposits: number; profit: number; end_balance: number; return_pct: number | null }[];

@@ -6,7 +6,8 @@ from sqlalchemy import select
 
 from freerise.api.deps import DB, get_or_404
 from freerise.models import ClearingHouseReport, Credential, Fund, FundDeposit
-from freerise.pension.returns import FundOverview, fund_yearly, funds_overview
+from freerise.pension.deposits import deposit_alerts, message
+from freerise.pension.returns import FundOverview, fund_yearly, funds_overview, monthly_gains
 
 router = APIRouter()
 
@@ -35,6 +36,15 @@ class FundOut(BaseModel):
     fee_savings_pct: float | None
     forecast_monthly_pension: float | None  # Mislaka's figure, as-is (details JSON)
     monthly: list[Point]
+    pension_type: str | None
+    track: str | None  # the investment track, when there is just one
+    employer: str | None
+    liquid_balance: float | None
+    investment_expense_pct: float | None  # percent number, like fee_*_pct
+    start_date: date | None  # earliest of the policy's start / establishment dates: seniority
+    insurance_covers: list[dict]  # {title, description, insured_amount, monthly_cost}
+    yearly_movements: list[dict]  # {year, opening_balance, deposits, gains, management_fees,
+    #                               insurance_costs, closing_balance}, as the portal gives them
 
 
 class MislakaCredential(BaseModel):
@@ -56,12 +66,48 @@ class ForecastOut(BaseModel):
     total_savings: float | None
 
 
+class DepositAlertOut(BaseModel):
+    """A missing, late or short employer deposit (freerise.pension.deposits)."""
+
+    kind: str
+    fund_id: int
+    month: date
+    title: str
+    body: str
+
+
+class MonthGainOut(BaseModel):
+    fund_ids: list[int]  # several = a provider's portfolio reported only as a whole
+    month: date
+    start_balance: float
+    end_balance: float
+    deposits: float
+    gain: float
+
+
+class DepositRowOut(BaseModel):
+    """Split, salary month and insured salary only where the portal gives them (Migdal, Phoenix)."""
+
+    fund_id: int
+    date: date
+    amount: float
+    employer: str | None
+    salary_month: str | None  # YYYY-MM
+    employee_amount: float | None
+    employer_amount: float | None
+    compensation_amount: float | None
+    insured_salary: float | None
+
+
 class FundsOut(BaseModel):
     total: float
     as_of: date | None
     funds: list[FundOut]
     credentials: list[MislakaCredential]
     forecast: list[ForecastOut]
+    deposit_alerts: list[DepositAlertOut]
+    gains: list[MonthGainOut]
+    deposits: list[DepositRowOut]  # newest first
 
 
 class YearOut(BaseModel):
@@ -95,8 +141,32 @@ def _num(x) -> float | None:
         return None
 
 
+def _iso(x) -> date | None:
+    try:
+        return date.fromisoformat(str(x)[:10]) if x else None
+    except ValueError:
+        return None
+
+
+def _deposit(d: FundDeposit) -> DepositRowOut:
+    x = (d.raw or {}).get("details") or {}
+    desc = (d.raw or {}).get("description") or ""
+    return DepositRowOut(
+        fund_id=d.fund_id,
+        date=d.date,
+        amount=d.amount,
+        employer=x.get("employer") or desc.partition(" - ")[2].strip() or None,
+        salary_month=x.get("salary_month"),
+        employee_amount=_num(x.get("employee_amount")),
+        employer_amount=_num(x.get("employer_amount")),
+        compensation_amount=_num(x.get("compensation_amount")),
+        insured_salary=_num(x.get("insured_salary")),
+    )
+
+
 def _fund(o: FundOverview) -> FundOut:
     f = o.fund
+    det = f.details or {}
     return FundOut(
         id=f.id,
         policy_id=f.policy_id,
@@ -113,6 +183,17 @@ def _fund(o: FundOverview) -> FundOut:
         fee_savings_pct=f.fee_savings_pct,
         forecast_monthly_pension=_num((f.details or {}).get("monthly_pension_forecast")),
         monthly=[Point(date=d, balance=b) for d, b in o.monthly],
+        pension_type=f.pension_type,
+        track=f.tracks[0].get("name") if len(f.tracks or []) == 1 else None,
+        employer=det.get("employer"),
+        liquid_balance=_num(det.get("liquid_balance")),
+        investment_expense_pct=_num(det.get("investment_expense_pct")),
+        start_date=min(
+            filter(None, (_iso(det.get("start_date")), _iso(det.get("establishment_date")))),
+            default=None,
+        ),
+        insurance_covers=det.get("insurance_covers") or [],
+        yearly_movements=det.get("yearly_movements") or [],
     )
 
 
@@ -154,6 +235,18 @@ def list_funds(db: DB) -> FundsOut:
             )
             for c in creds
             if (r := latest.get(c.id))
+        ],
+        deposit_alerts=[
+            DepositAlertOut(kind=a.kind, fund_id=a.fund_id, month=a.month, title=t, body=b)
+            for a in deposit_alerts(db)
+            for t, b in [message(a)]
+        ],
+        gains=[MonthGainOut(**vars(g)) for g in monthly_gains(db)],
+        deposits=[
+            _deposit(d)
+            for d in db.scalars(
+                select(FundDeposit).order_by(FundDeposit.date.desc(), FundDeposit.id)
+            )
         ],
     )
 

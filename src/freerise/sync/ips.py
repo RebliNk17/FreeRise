@@ -8,6 +8,7 @@ Python without launching a browser.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 from collections.abc import Callable
@@ -139,7 +140,13 @@ class IpsScraper:
             )
 
         if res.funds:
-            accounts = [self._map_fund(f) for f in res.funds]
+            # Phoenix puts the whole portfolio's history on every fund: no fund's own balance, but
+            # the funds' sum. Kept apart as portfolio_history (pension/returns.py gains it as a group).
+            hist = [tuple((p.date, p.balance) for p in f.balance_history) for f in res.funds]
+            shared = {h for h in hist if h and hist.count(h) > 1}
+            accounts = [
+                self._map_fund(f, keep_history=h not in shared) for f, h in zip(res.funds, hist)
+            ]
         else:
             accounts = [self._map_account(a) for a in res.accounts]
         return ScrapingResult(success=True, accounts=accounts)
@@ -202,7 +209,7 @@ class IpsScraper:
             card_frame=a.credit_limit,
         )
 
-    def _map_fund(self, f: FundPolicy) -> AccountResult:
+    def _map_fund(self, f: FundPolicy, keep_history: bool = True) -> AccountResult:
         tracks = [
             {
                 "name": t.name,
@@ -216,19 +223,32 @@ class IpsScraper:
             {
                 "title": c.title,
                 "desc": c.description or "",
-                "amount": c.insured_amount or c.monthly_amount or 0.0,
+                "amount": c.insured_amount or c.monthly_cost or 0.0,
             }
             for c in f.insurance_covers
         ]
         transactions: list[Transaction] = []
+        # Transaction has no room for these; ingest merges them into FundDeposit.raw["details"].
+        deposit_details = {
+            f"{dep.date}|{dep.total_amount:.2f}": {
+                "salary_month": dep.salary_month,
+                "employer": dep.employer_name,
+                "employee_amount": dep.employee_amount,
+                "employer_amount": dep.employer_amount,
+                "compensation_amount": dep.compensation_amount,
+                "disability_amount": dep.disability_amount,
+                "insured_salary": dep.insured_salary,
+            }
+            for dep in f.deposits
+        }
         for dep in f.deposits:
             memo_parts: list[str] = []
             if dep.employee_amount:
-                memo_parts.append(f"עובד: {dep.employee_amount:.0f}")
+                memo_parts.append(f"עובד: {dep.employee_amount:.2f}")
             if dep.employer_amount:
-                memo_parts.append(f"מעסיק: {dep.employer_amount:.0f}")
+                memo_parts.append(f"מעסיק: {dep.employer_amount:.2f}")
             if dep.compensation_amount:
-                memo_parts.append(f"פיצויים: {dep.compensation_amount:.0f}")
+                memo_parts.append(f"פיצויים: {dep.compensation_amount:.2f}")
             transactions.append(
                 Transaction(
                     type=TransactionType.NORMAL,
@@ -247,7 +267,9 @@ class IpsScraper:
             )
 
         balance_date = f.balance_date or f.data_as_of_date or ""
-        history = [{"date": p.date, "balance": p.balance} for p in f.balance_history]
+        history = [
+            {"date": p.date, "balance": p.balance} for p in f.balance_history if keep_history
+        ]
         if not history and balance_date:
             history = [{"date": balance_date, "balance": f.balance}]
 
@@ -256,6 +278,17 @@ class IpsScraper:
             "employer": f.employer_name,
             "establishment_date": f.establishment_date,
             "start_date": f.start_date,
+            "portfolio_history": None
+            if keep_history
+            else [{"date": p.date, "balance": p.balance} for p in f.balance_history],
+            "liquid_balance": f.liquid_balance,
+            "taxable_balance": f.taxable_balance,
+            "investment_expense_pct": f.fees.investment_expense_pct,
+            "insurance_covers": [dataclasses.asdict(c) for c in f.insurance_covers],
+            "yearly_movements": [
+                {k: v for k, v in dataclasses.asdict(y).items() if k != "items"}
+                for y in f.yearly_movements
+            ],
             **(f.extra or {}),
         }
 
@@ -279,5 +312,6 @@ class IpsScraper:
                 "liquidity_date": f.liquidity_date,
                 "balance_history": history or None,
                 "details": json.dumps(details, ensure_ascii=False),
+                "deposit_details": deposit_details,
             },
         )

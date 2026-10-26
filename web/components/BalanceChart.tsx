@@ -5,8 +5,9 @@ import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "rec
 import { chartTooltip } from "@/components/charts/ChartTooltip";
 import { formatDate, formatILS } from "@/lib/format";
 
-type Point = { date: string; balance: number };
-const Tip = chartTooltip<Point>((d) => ({ title: formatDate(d.date), rows: [{ label: "יתרה", value: d.balance }] }));
+/** `label` names the value in the tooltip ("יתרה" by default; e.g. "רווח מצטבר"). */
+type Point = { date: string; balance: number; label?: string };
+const Tip = chartTooltip<Point>((d) => ({ title: formatDate(d.date), rows: [{ label: d.label ?? "יתרה", value: d.balance }] }));
 
 /** Fund balance over time: brand line over a soft gradient, themed tooltip. Dates run left to right (time axis). */
 export function BalanceChart({ data }: { data: Point[] }) {
@@ -14,7 +15,7 @@ export function BalanceChart({ data }: { data: Point[] }) {
   if (data.length < 2) return null;
   const last = data[data.length - 1];
   return (
-    <div dir="ltr" className="h-44" role="img" aria-label={`יתרה מ־${formatDate(data[0].date)} (${formatILS(data[0].balance)}) עד ${formatDate(last.date)} (${formatILS(last.balance)})`}>
+    <div dir="ltr" className="h-44" role="img" aria-label={`${data[0].label ?? "יתרה"} מ־${formatDate(data[0].date)} (${formatILS(data[0].balance)}) עד ${formatDate(last.date)} (${formatILS(last.balance)})`}>
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
           <defs>

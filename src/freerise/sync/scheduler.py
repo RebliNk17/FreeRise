@@ -12,13 +12,14 @@ from sqlalchemy.orm import sessionmaker
 
 from freerise.categorize.pipeline import categorize_pending
 from freerise.config import get_settings
+from freerise.crypto import decrypt_json
 from freerise.db import SessionLocal, engine
 from freerise.forecast.attribution import attribute_income
 from freerise.forecast.recurring import detect_recurring
 from freerise.models import Credential, Setting, SyncRun
 from freerise.notify.rules import generate_notifications
 from freerise.notify.senders import build_senders, deliver_pending
-from freerise.sync import demo_provider
+from freerise.sync import demo_provider, ips
 from freerise.sync.demo_provider import make_scraper
 from freerise.sync.service import (
     RETRY_GAP,
@@ -34,6 +35,7 @@ log = logging.getLogger("freerise.worker")
 WORKER_LOCK = 0x46524545  # "FREE"
 # A new connection nobody verified (check failed, tab closed) is dropped, secrets and all.
 ABANDONED = timedelta(hours=1)
+PENSION_EVERY = timedelta(hours=20)  # once a day at the first sync hour (sync_hours)
 
 CLAIM = text(
     """UPDATE sync_runs SET status = 'running'
@@ -53,6 +55,23 @@ def _is_running(s, credential_id: int, exclude_id: int | None = None) -> bool:
     if exclude_id:
         q = q.where(SyncRun.id != exclude_id)
     return s.scalar(q.limit(1)) is not None
+
+
+def _pension_due(session_factory: sessionmaker, c: Credential) -> bool:
+    """Migdal/Phoenix sync on schedule once a day, and only with a saved long-term token: without
+    one the login sends an SMS nobody is waiting for. Mislaka (SMS every time) stays manual."""
+    if not ips.enabled(c.provider) or not decrypt_json(c.secret_enc).get("otpLongTermToken"):
+        return False
+    with session_factory() as s:
+        return not s.scalar(
+            select(SyncRun.id)
+            .where(
+                SyncRun.credential_id == c.id,
+                SyncRun.status == "success",
+                SyncRun.finished_at > datetime.now(UTC) - PENSION_EVERY,
+            )
+            .limit(1)
+        )
 
 
 async def run_all(
@@ -85,7 +104,9 @@ async def run_all(
         cfg = PROVIDER_CONFIGS.get(c.provider)
         if cfg is None or (c.provider == demo_provider.KEY and not demo_provider.demo_enabled()):
             log.warning("skip credential %s: unknown provider %s", c.id, c.provider)
-        elif not (trigger == "schedule" and cfg.service == "insurances"):  # Mislaka is manual-only
+        elif (
+            trigger != "schedule" or cfg.service != "insurances" or _pension_due(session_factory, c)
+        ):
             known.append(c)
     creds = known
 

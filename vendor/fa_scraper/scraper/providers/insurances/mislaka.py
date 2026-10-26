@@ -284,7 +284,7 @@ def build_deposit_transactions(
         else:
             description = f"הפקדה - {employer}" if employer else "הפקדה"
         memo_parts = [
-            f"{label}: {group[key]:.0f}"
+            f"{label}: {group[key]:.2f}"
             for key, label in (
                 ("employee", "עובד"),
                 ("employer", "מעסיק"),

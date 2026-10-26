@@ -75,7 +75,9 @@ export function Select({
       const below = innerHeight - r.bottom;
       const up = below < 320 && r.top > below;
       const maxHeight = Math.min(320, (up ? r.top : below) - 12);
-      setPos({ left: r.left, width: r.width, maxHeight, ...(up ? { bottom: innerHeight - r.top + 4 } : { top: r.bottom + 4 }) });
+      // Start-aligned (RTL), at least as wide as the trigger, wider if the bold selected label + check need it.
+      const right = document.documentElement.clientWidth - r.right;
+      setPos({ right, width: "max-content", minWidth: r.width, maxWidth: r.right - 8, maxHeight, ...(up ? { bottom: innerHeight - r.top + 4 } : { top: r.bottom + 4 }) });
     };
     place();
     (searchable ? searchBox : list).current?.focus({ preventScroll: true });
@@ -162,6 +164,7 @@ export function Select({
                 <input
                   ref={searchBox}
                   type="search"
+                  size={1} // don't let the input's intrinsic width widen the max-content popover
                   className="min-h-10 w-full rounded-xl bg-sunken py-2 pr-8 pl-2 text-sm outline-none placeholder:text-faint"
                   placeholder="חיפוש…"
                   aria-label={`חיפוש: ${label}`}

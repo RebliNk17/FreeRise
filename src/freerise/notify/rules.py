@@ -31,6 +31,7 @@ from freerise.models import (
 )
 from freerise.notify.reports import monthly_report, telegram_feed, weekly_report
 from freerise.notify.store import notify
+from freerise.pension.deposits import deposit_alerts, message
 
 BANK_NAMES = {
     "hapoalim": "בנק הפועלים",
@@ -263,6 +264,23 @@ def _pension_reminder(s: Session, today: date) -> None:
             )
 
 
+def _pension_deposits(s: Session, today: date) -> None:
+    # Only recent months: the first sync shouldn't replay a year of history as alerts.
+    since = date(today.year - (today.month <= 3), (today.month - 4) % 12 + 1, 1)
+    for a in deposit_alerts(s):
+        if a.month >= since:
+            title, body = message(a)
+            notify(
+                s,
+                "pension_deposit",
+                title,
+                body,
+                "/pension",
+                f"pension_deposit:{a.kind}:{a.fund_id}:{a.employer}:{a.month:%Y-%m}",
+                "warning" if a.kind == "missing" else "info",
+            )
+
+
 def _sync_failed(s: Session, today: date) -> None:
     """One alert per connection per failure streak (a success starts a new one), naming the
     provider: a connection's label is usually just the owner's name. Only once the scheduler's
@@ -425,6 +443,7 @@ RULES = (
     _double_charges,
     _uncategorized_growing,
     _pension_reminder,
+    _pension_deposits,
     _card_bills,
     _fees,
     _insight_warnings,
