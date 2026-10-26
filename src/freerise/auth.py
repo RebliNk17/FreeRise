@@ -9,10 +9,11 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from freerise.crypto import decrypt_str, encrypt_str
-from freerise.models import User, UserSession
+from freerise.models import Invite, User, UserSession
 
 _ph = PasswordHasher()
 SESSION_TTL = timedelta(days=30)
+INVITE_TTL = timedelta(days=7)
 
 
 def hash_password(p: str) -> str:
@@ -80,10 +81,45 @@ def set_password(session: Session, user: User, password: str, keep_token: str) -
     session.flush()
 
 
-def create_user(session: Session, username: str, password: str) -> tuple[User, str]:
+def create_invite(session: Session, user_id: int) -> str:
+    """A one-time join link token (expired ones are dropped). Only the hash is stored, so
+    a token nobody sent can't be used."""
+    now = datetime.now(UTC)
+    session.execute(delete(Invite).where(Invite.expires_at <= now))
+    token = secrets.token_urlsafe(32)
+    session.add(
+        Invite(token_hash=_hash_token(token), created_by=user_id, expires_at=now + INVITE_TTL)
+    )
+    session.flush()
+    return token
+
+
+def invite_for_token(session: Session, token: str) -> Invite | None:
+    return session.scalars(
+        select(Invite)
+        .where(Invite.token_hash == _hash_token(token))
+        .where(Invite.expires_at > datetime.now(UTC))
+    ).first()
+
+
+def claim_invite(session: Session, token: str) -> bool:
+    """Spends a live invite; one DELETE, so two joins racing on a link can't both win."""
+    spent = session.execute(
+        delete(Invite)
+        .where(Invite.token_hash == _hash_token(token))
+        .where(Invite.expires_at > datetime.now(UTC))
+        .returning(Invite.id)
+    ).first()
+    return spent is not None
+
+
+def create_user(
+    session: Session, username: str, password: str, name: str | None = None
+) -> tuple[User, str]:
     secret = new_totp_secret()
     user = User(
         username=username,
+        name=name,
         password_hash=hash_password(password),
         totp_secret_enc=encrypt_str(secret),
     )

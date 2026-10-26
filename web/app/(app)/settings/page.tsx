@@ -2,19 +2,17 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Bell, CalendarRange, ChevronLeft, CircleUserRound, GripVertical, Moon, Palette, RefreshCw, Send, Sun, Tags, Wallet, type LucideIcon } from "lucide-react";
+import { Bell, CalendarRange, ChevronLeft, GripVertical, Moon, Palette, RefreshCw, Send, Sun, Tags, Wallet, type LucideIcon } from "lucide-react";
 import { Status } from "@/components/Card";
 import { Select } from "@/components/ui/Select";
 import { Switch } from "@/components/Switch";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ApiError, send, type Settings } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
-import { AccountCard } from "./AccountCard";
 import { Row, Section, type Patch } from "./parts";
 import { TelegramCard } from "./TelegramCard";
 
 const SECTIONS: { id: string; label: string; icon: LucideIcon }[] = [
-  { id: "account", label: "החשבון שלי", icon: CircleUserRound },
   { id: "cycle", label: "החודש שלי", icon: CalendarRange },
   { id: "sync", label: "סנכרון אוטומטי", icon: RefreshCw },
   { id: "alerts", label: "התראות", icon: Bell },
@@ -66,8 +64,6 @@ export default function SettingsPage() {
             </ul>
           </nav>
           <div className="flex min-w-0 flex-col gap-4">
-            <AccountCard onChanged={() => setMsg((m) => ({ text: "הסיסמה שונתה", n: (m?.n ?? 0) + 1 }))} />
-
             <Section id="cycle" title="החודש שלי" hint="איך FreeRise מחלק את הזמן לחודשים ומה נחשב חודש טוב.">
               <Row label="יום תחילת החודש" hint="התזרים, התקציב והתחזית נספרים מהיום הזה. כדאי לבחור את יום המשכורת.">
                 <Select label="יום תחילת החודש" className="w-28" value={String(data.cycle_start_day)} onChange={(v) => patch({ cycle_start_day: Number(v) })} options={range(1, 28).map((d) => ({ value: String(d), label: `${d} בחודש` }))} />
