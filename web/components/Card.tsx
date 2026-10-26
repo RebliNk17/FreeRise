@@ -31,7 +31,7 @@ export function Status({ loading, error, empty }: { loading: boolean; error: boo
   if (empty)
     return (
       <EmptyState text="אין עדיין נתונים">
-        <Link href="/settings/credentials" className="btn">
+        <Link href="/accounts" className="btn">
           סנכרון חשבונות
         </Link>
       </EmptyState>

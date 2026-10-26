@@ -5,11 +5,11 @@ from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import func, select
-from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.orm import Session, joinedload
 
+from freerise.accounts import latest_balances
 from freerise.cashflow.cycles import Cycle
-from freerise.models import Account, Balance, Transaction
+from freerise.models import Account, Transaction
 from freerise.view import counted
 
 
@@ -23,12 +23,7 @@ class Balances:
 
 
 def balances(session: Session, cycle: Cycle) -> Balances:
-    latest = (
-        select(Balance.account_id, Balance.balance, Balance.as_of)
-        .ext(distinct_on(Balance.account_id))
-        .order_by(Balance.account_id, Balance.as_of.desc())
-        .subquery()
-    )
+    latest = latest_balances().subquery()
     rows = session.execute(
         select(Account, latest.c.balance, latest.c.as_of)
         .options(joinedload(Account.credential))

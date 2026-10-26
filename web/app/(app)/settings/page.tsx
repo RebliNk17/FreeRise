@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Bell, CalendarRange, ChevronLeft, GripVertical, KeyRound, Moon, Palette, RefreshCw, Send, Sun, Tags, Wallet, type LucideIcon } from "lucide-react";
+import { Bell, CalendarRange, ChevronLeft, GripVertical, Moon, Palette, RefreshCw, Send, Sun, Tags, Wallet, type LucideIcon } from "lucide-react";
 import { Status } from "@/components/Card";
 import { Select } from "@/components/ui/Select";
 import { Switch } from "@/components/Switch";
@@ -26,6 +26,7 @@ const range = (from: number, to: number) => Array.from({ length: to - from + 1 }
 
 export default function SettingsPage() {
   const { data, setData, error } = useApi<Settings>("/settings");
+  const { data: health } = useApi<{ version: string }>("/health");
   const [msg, setMsg] = useState<{ text: string; bad?: boolean; n: number } | null>(null);
   useEffect(() => {
     if (!msg) return;
@@ -96,12 +97,13 @@ export default function SettingsPage() {
 
             <Section id="data" title="חשבונות ונתונים">
               <nav className="-my-1 flex flex-col">
-                <NavRow href="/settings/credentials" icon={KeyRound} label="חיבורים לבנקים ואשראי" />
-                <NavRow href="/accounts" icon={Wallet} label="חשבונות וכרטיסים" />
+                <NavRow href="/accounts" icon={Wallet} label="חשבונות וחיבורים" />
                 <NavRow href="/home?categorize=1" icon={Tags} label="סיווג עסקאות" />
                 <NavRow href="/settings/categories" icon={GripVertical} label="סדר הקטגוריות בבית" />
               </nav>
             </Section>
+
+            {health && <p dir="ltr" className="text-center text-xs text-faint tabular-nums">FreeRise v{health.version}</p>}
           </div>
         </div>
       )}

@@ -63,7 +63,7 @@ from freerise.reconcile.card_bills import (
 from freerise.sync.service import PAUSE_AFTER, login_paused
 
 log = logging.getLogger("freerise.notify")
-# Same labels as web/app/(app)/settings/credentials/page.tsx.
+# Same labels as the `short` texts in web/lib/connectErrors.ts.
 FAILURE_LABELS = {
     "auth_failed": "סיסמה שגויה",
     "provider_changed": "האתר השתנה",
@@ -252,7 +252,7 @@ def _pension_reminder(s: Session, today: date) -> None:
                 "pension_reminder",
                 "זמן לעדכן נתוני פנסיה",
                 f"טרם בוצע סנכרון מסלקה החודש ({c.label})",
-                "/settings/credentials",
+                "/accounts",
                 f"pension_reminder:{c.id}:{today:%Y-%m}",
             )
 
@@ -305,7 +305,7 @@ def _sync_failed(s: Session, today: date) -> None:
             "sync_failed",
             f"סנכרון נכשל: {provider_name(c.provider)} · {c.label}",
             why,
-            "/settings/credentials",
+            "/accounts",
             f"sync_failed:{c.id}:{streak or 0}",
             "critical",
         )
@@ -325,8 +325,8 @@ def _sync_paused(s: Session, today: date) -> None:
             f"הסנכרון האוטומטי הושהה: {provider_name(c.provider)} · {c.label}",
             f"ההתחברות נכשלה {PAUSE_AFTER} פעמים ברצף, ולכן הסנכרון האוטומטי הופסק כדי שהחשבון "
             "לא יינעל. היכנסו לאתר הספק וודאו שאפשר להתחבר (ושהחשבון לא נעול), ואז לחצו "
-            "״סנכרון״ בעמוד החיבורים.",
-            "/settings/credentials",
+            "״סנכרון״ בתפריט של החיבור בעמוד החשבונות.",
+            "/accounts",
             f"sync_paused:{c.id}:{last}",
             "critical",
         )

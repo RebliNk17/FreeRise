@@ -74,12 +74,16 @@ def active_card_ids(s: Session, accounts: list[Account]) -> set[int]:
             .distinct()
         )
     )
-    latest = (
-        select(Balance.account_id, Balance.balance)
-        .where(Balance.account_id.in_(ids))
-        .ext(distinct_on(Balance.account_id))
-        .order_by(Balance.account_id, Balance.as_of.desc())
-        .subquery()
-    )
+    latest = latest_balances().where(Balance.account_id.in_(ids)).subquery()
     active |= set(s.scalars(select(latest.c.account_id).where(latest.c.balance != 0)))
     return active
+
+
+def latest_balances():
+    """Each account's newest balance reading (account_id, balance, as_of): the last one saved.
+    Not the latest as_of: a card's reading can be dated on its coming charge day, ahead of newer ones."""
+    return (
+        select(Balance.account_id, Balance.balance, Balance.as_of)
+        .ext(distinct_on(Balance.account_id))
+        .order_by(Balance.account_id, Balance.id.desc())
+    )

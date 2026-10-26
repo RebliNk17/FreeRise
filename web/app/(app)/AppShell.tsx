@@ -7,7 +7,6 @@ import {
   ChartColumn,
   FlaskConical,
   House,
-  KeyRound,
   LogOut,
   Menu,
   MessagesSquare,
@@ -41,8 +40,7 @@ const MORE: NavLink[] = [
   { href: "/whatif", label: "תרחישים", icon: FlaskConical },
   { href: "/chat", label: "שאל אותי על התזרים", icon: MessagesSquare },
   { href: "/search", label: "חיפוש עסקאות", icon: Search },
-  { href: "/accounts", label: "חשבונות", icon: Wallet },
-  { href: "/settings/credentials", label: "חיבורים לבנקים ואשראי", icon: KeyRound },
+  { href: "/accounts", label: "חשבונות וחיבורים", icon: Wallet },
   { href: "/settings", label: "הגדרות", icon: Settings },
 ];
 
@@ -156,7 +154,7 @@ function NavDrawer({ onClose, onLogout }: { onClose: () => void; onLogout: () =>
   }, []);
 
   const item = (l: NavLink) => {
-    const active = isActive(l.href, pathname) && !(l.href === "/settings" && pathname.startsWith("/settings/credentials"));
+    const active = isActive(l.href, pathname);
     return (
       <li key={l.href}>
         <Link

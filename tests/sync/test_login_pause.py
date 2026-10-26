@@ -116,6 +116,6 @@ def test_paused_notification_in_hebrew_once_per_streak(sf, credential):
         generate_notifications(s, date.today())  # the daily run must not repeat it
     with sf() as s:
         (n,) = s.scalars(select(Notification).where(Notification.kind == "sync_paused"))
-    assert n.severity == "critical" and n.link == "/settings/credentials"
+    assert n.severity == "critical" and n.link == "/accounts"
     assert n.title == "הסנכרון האוטומטי הושהה: מקס · Max"
     assert "היכנסו לאתר הספק" in n.body and "״סנכרון״" in n.body

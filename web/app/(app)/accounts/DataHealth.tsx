@@ -1,13 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { CircleCheck, TriangleAlert } from "lucide-react";
 import { Money } from "@/components/Amount";
 import { Card } from "@/components/Card";
 import { formatDate, monthName, txnCount } from "@/lib/format";
-import { useApi } from "@/lib/useApi";
 
-type Health = {
+export type Health = {
   ok: boolean;
   connections: {
     id: number;
@@ -36,15 +34,11 @@ type Health = {
   uncategorized: number;
 };
 
-const ym = (s: string) =>
+export const ym = (s: string) =>
   `${monthName(Number(s.slice(5, 7)))} ${s.slice(0, 4)}`;
 
-type Conn = Health["connections"][number];
-const connProblem = (c: Conn) =>
-  !!c.last_error || c.months_without_data.length > 0;
-
 /** One line per kind of problem: what it means and what to do about it. */
-function problems(d: Health): { key: string; text: React.ReactNode }[] {
+function problems(d: Health, onAdd: () => void, onCategorize: () => void): { key: string; text: React.ReactNode }[] {
   const out: { key: string; text: React.ReactNode }[] = [];
   const failed = d.connections.filter((c) => c.last_error);
   if (failed.length)
@@ -54,11 +48,7 @@ function problems(d: Health): { key: string; text: React.ReactNode }[] {
         <>
           <b>הסנכרון נכשל</b> ב
           {failed.map((c) => `${c.label} · ${c.provider}`).join(", ")}. לרוב
-          הסיסמה השתנתה או שצריך קוד חדש —{" "}
-          <Link href="/settings/credentials" className="link">
-            לעדכון החיבור
-          </Link>
-          .
+          הסיסמה השתנתה או שצריך קוד חדש — אפשר לעדכן בכרטיס של החיבור למעלה.
         </>
       ),
     });
@@ -101,9 +91,9 @@ function problems(d: Health): { key: string; text: React.ReactNode }[] {
         <>
           <b>חיובי אשראי לכרטיס שלא מחובר</b> ({unknown}): הבנק חייב כרטיס שאין
           לנו את הפירוט שלו, ולכן לא רואים על מה הכסף יצא. כדאי{" "}
-          <Link href="/settings/credentials?add=1" className="link">
+          <button type="button" className="link" onClick={onAdd}>
             לחבר את הכרטיס
-          </Link>
+          </button>
           .
         </>
       ),
@@ -126,9 +116,9 @@ function problems(d: Health): { key: string; text: React.ReactNode }[] {
         <>
           <b>{txnCount(d.uncategorized)} בלי קטגוריה</b>, ולכן לא נספרות נכון
           בתקציב —{" "}
-          <Link href="/home?categorize=1" className="link">
+          <button type="button" className="link" onClick={onCategorize}>
             לסיווג
-          </Link>
+          </button>
           .
         </>
       ),
@@ -136,15 +126,10 @@ function problems(d: Health): { key: string; text: React.ReactNode }[] {
   return out;
 }
 
-/** "בדיקת תקינות": what needs checking first (with what to do), then per connection last sync and months with no data, idle accounts, card bills that don't add up. */
-export function DataHealth() {
-  const { data } = useApi<Health>("/data-health");
-  if (!data) return null;
-  const todo = problems(data);
-  // Connections with a problem first; stable otherwise.
-  const conns = [...data.connections].sort(
-    (a, b) => Number(connProblem(b)) - Number(connProblem(a)),
-  );
+/** "בדיקת תקינות": what needs checking first (with what to do), then idle accounts and card bills that don't add up.
+ * Per-connection sync status and months with no data are on the connection cards above it. */
+export function DataHealth({ data, onAdd, onCategorize }: { data: Health; onAdd: () => void; onCategorize: () => void }) {
+  const todo = problems(data, onAdd, onCategorize);
   return (
     <Card
       title="בדיקת תקינות"
@@ -180,48 +165,8 @@ export function DataHealth() {
           </ul>
         </section>
       )}
-      <ul className="flex flex-col divide-y divide-hairline text-sm">
-        {conns.map((c) => (
-          <li key={c.id} className="flex flex-col gap-0.5 py-2.5">
-            <div className="flex items-baseline gap-2">
-              <span className="flex-1 font-bold">
-                {connProblem(c) && (
-                  <TriangleAlert
-                    size={14}
-                    className="me-1 inline align-[-2px] text-sun-strong"
-                    aria-label="יש בעיה"
-                  />
-                )}
-                {c.label}{" "}
-                <span className="font-normal text-muted">· {c.provider}</span>
-              </span>
-              <span
-                className={`text-xs ${c.last_error ? "font-semibold text-danger" : "text-muted"}`}
-              >
-                {c.last_success_at ? (
-                  <>
-                    סונכרן{" "}
-                    <span dir="ltr">{formatDate(c.last_success_at)}</span>
-                  </>
-                ) : (
-                  "עוד לא סונכרן"
-                )}
-              </span>
-            </div>
-            {!c.enabled && <p className="text-xs text-muted">מושבת</p>}
-            {c.last_error && (
-              <p className="text-xs text-danger">הסנכרון האחרון נכשל</p>
-            )}
-            {c.months_without_data.length > 0 && (
-              <p className="text-xs text-sun-strong">
-                חודשים בלי נתונים: {c.months_without_data.map(ym).join(", ")}
-              </p>
-            )}
-          </li>
-        ))}
-      </ul>
       {data.idle_accounts.length > 0 && (
-        <section className="flex flex-col gap-1 border-t border-hairline pt-3 text-sm">
+        <section className="flex flex-col gap-1 text-sm">
           <h3 className="flex items-center gap-1 font-bold text-sun-strong">
             <TriangleAlert size={14} aria-hidden /> חשבונות בלי פעילות ב־90
             הימים האחרונים

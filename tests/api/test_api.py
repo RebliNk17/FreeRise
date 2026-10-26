@@ -220,6 +220,19 @@ def test_accounts_balance_and_patch(authed, sf):
     assert authed.patch("/api/accounts/999", json={}).status_code == 404
 
 
+def test_latest_balance_is_the_newest_reading(authed, sf):
+    # A card reading dated on its charge day (ahead) mustn't hide a newer reading dated today.
+    a1, _ = _seed_accounts(sf)
+    now = datetime.now(UTC)
+    with sf() as s:
+        s.add(Balance(account_id=a1, as_of=now + timedelta(days=15), balance=Decimal("-12689.63")))
+        s.flush()
+        s.add(Balance(account_id=a1, as_of=now, balance=Decimal("-13483.86")))
+        s.commit()
+    accts = {a["id"]: a for a in authed.get("/api/accounts").json()}
+    assert accts[a1]["balance"] == -13483.86
+
+
 def test_excluded_account_hidden_by_default(authed, sf):
     _, a2 = _seed_accounts(sf)
     items = authed.get("/api/transactions").json()["items"]

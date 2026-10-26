@@ -17,7 +17,11 @@ const nextConfig: NextConfig = {
   // Same-origin proxy so the API session cookie works.
   // NOTE: rewrites are resolved at build time, so API_URL must be set when running `next build`.
   rewrites: async () => [{ source: "/api/:path*", destination: `${API_URL}/api/:path*` }],
-  redirects: async () => [{ source: "/", destination: "/home", permanent: false }],
+  redirects: async () => [
+    { source: "/", destination: "/home", permanent: false },
+    // Connections merged into /accounts; old links (stored notifications, bookmarks) keep working, ?add=1 included.
+    { source: "/settings/credentials", destination: "/accounts", permanent: false },
+  ],
   headers: async () => [
     {
       source: "/:path*",
