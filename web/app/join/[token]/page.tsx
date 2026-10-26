@@ -60,7 +60,8 @@ function Join() {
 
   const join = async (f: FormData) => {
     if (f.get("password") !== f.get("confirm")) return "הסיסמאות לא זהות.";
-    const s = await send<Setup>("POST", "/auth/join", { token, username: f.get("username"), password: f.get("password") });
+    const name = String(f.get("name")).trim() || null; // empty: the app shows the username
+    const s = await send<Setup>("POST", "/auth/join", { token, name, username: f.get("username"), password: f.get("password") });
     const { totp } = await api<{ totp: boolean }>("/auth/config");
     if (totp) setSetup(s);
     else router.replace("/home");
@@ -117,8 +118,12 @@ function Join() {
       <Header title="הוזמנת ל-FreeRise">{invite.invited_by} רוצה לנהל איתך את הכסף של הבית. בוחרים שם משתמש וסיסמה, ונכנסים.</Header>
       <form onSubmit={(e) => submit(e, join)} className="card flex flex-col gap-3.5 rounded-3xl p-5">
         <label className="flex flex-col gap-1.5 text-[13px] text-muted">
-          שם משתמש
-          <input name="username" required autoFocus maxLength={50} pattern="\S+" autoCapitalize="none" autoComplete="username" className="input" dir="ltr" />
+          איך לקרוא לך?
+          <input name="name" autoFocus maxLength={40} autoComplete="given-name" className="input" dir="auto" />
+        </label>
+        <label className="flex flex-col gap-1.5 text-[13px] text-muted">
+          שם משתמש לכניסה
+          <input name="username" required maxLength={50} pattern="\S+" autoCapitalize="none" autoComplete="username" className="input" dir="ltr" />
         </label>
         <label className="flex flex-col gap-1.5 text-[13px] text-muted">
           סיסמה (לפחות {MIN} תווים)

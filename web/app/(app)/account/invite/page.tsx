@@ -12,7 +12,7 @@ const message = (url: string) =>
 
 /** RiseUp-style: one ready-made WhatsApp message with a join link; the partner signs up on their own phone. */
 export default function InvitePage() {
-  const { data: me } = useApi<{ username: string }>("/auth/me");
+  const { data: me } = useApi<{ name: string }>("/auth/me");
   const [url, setUrl] = useState<string | null>(null);
   const [guessed, setGuessed] = useState(false); // no "כתובת FreeRise" set: the link uses this tab's address
   const [failed, setFailed] = useState(false);
@@ -41,7 +41,7 @@ export default function InvitePage() {
       </Link>
 
       <div aria-hidden className="flex h-44 items-center justify-center rounded-[28px] bg-sun-soft">
-        <Avatar name={me?.username ?? ""} size={84} className="ring-[6px] ring-sun-soft" />
+        <Avatar name={me?.name ?? ""} size={84} className="ring-[6px] ring-sun-soft" />
         <span className="-ms-5 flex size-[84px] items-center justify-center rounded-full border-[3px] border-dashed border-sun-strong bg-surface text-sun-strong ring-[6px] ring-sun-soft">
           <Plus size={34} strokeWidth={2.5} />
         </span>

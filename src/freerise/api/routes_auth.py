@@ -5,7 +5,7 @@ from typing import Annotated
 
 import segno
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -59,9 +59,21 @@ class Login(BaseModel):
     totp: str = ""
 
 
+Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=40)]
+
+
 class Me(BaseModel):
     id: int
     username: str
+    name: str  # what the app shows; the username until they pick one
+
+    @classmethod
+    def of(cls, u: User) -> Me:
+        return cls(id=u.id, username=u.username, name=u.name or u.username)
+
+
+class NewName(BaseModel):
+    name: Name
 
 
 class NewPassword(BaseModel):
@@ -77,6 +89,7 @@ class Joining(BaseModel):
     token: str
     username: str = Field(min_length=1, max_length=50, pattern=r"^\S+$")
     password: str = Field(min_length=8, max_length=200)
+    name: Name | None = None
 
 
 class TotpSetup(BaseModel):
@@ -137,7 +150,15 @@ def logout(db: DB, request: Request, response: Response) -> None:
 
 @router.get("/me")
 def me(user: Annotated[User, Depends(current_user)]) -> Me:
-    return Me(id=user.id, username=user.username)
+    return Me.of(user)
+
+
+@router.patch("/me")
+def rename(body: NewName, db: DB, user: Annotated[User, Depends(current_user)]) -> Me:
+    """Your own display name only; the login username never changes."""
+    user.name = body.name
+    db.commit()
+    return Me.of(user)
 
 
 @router.post("/password", status_code=204)
@@ -163,7 +184,7 @@ def _require_password(user: User, password: str) -> None:
 # Household members: every login sees and does everything; the data isn't per user.
 @router.get("/users", dependencies=[Depends(current_user)])
 def members(db: DB) -> list[Me]:
-    return [Me(id=u.id, username=u.username) for u in db.scalars(select(User).order_by(User.id))]
+    return [Me.of(u) for u in db.scalars(select(User).order_by(User.id))]
 
 
 @router.post("/invites", status_code=201)
@@ -178,7 +199,7 @@ def invite_info(token: str, db: DB) -> dict[str, str]:
     inv = invite_for_token(db, token)
     if inv is None:
         raise HTTPException(404, "invite expired or used")
-    return {"invited_by": db.get(User, inv.created_by).username}
+    return {"invited_by": Me.of(db.get(User, inv.created_by)).name}
 
 
 @router.post("/join", status_code=201)
@@ -188,7 +209,7 @@ def join(body: Joining, db: DB, response: Response) -> TotpSetup:
         raise HTTPException(409, "username taken")
     if not claim_invite(db, body.token):
         raise HTTPException(404, "invite expired or used")
-    member, uri = create_user(db, body.username, body.password)
+    member, uri = create_user(db, body.username, body.password, body.name)
     _start_session(db, member.id, response)
     qr = segno.make(uri).svg_data_uri(scale=5, border=2, light="white")  # scannable in dark mode
     return TotpSetup(otpauth=uri, qr=qr)

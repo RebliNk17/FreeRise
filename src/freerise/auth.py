@@ -113,10 +113,13 @@ def claim_invite(session: Session, token: str) -> bool:
     return spent is not None
 
 
-def create_user(session: Session, username: str, password: str) -> tuple[User, str]:
+def create_user(
+    session: Session, username: str, password: str, name: str | None = None
+) -> tuple[User, str]:
     secret = new_totp_secret()
     user = User(
         username=username,
+        name=name,
         password_hash=hash_password(password),
         totp_secret_enc=encrypt_str(secret),
     )

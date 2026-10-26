@@ -107,7 +107,7 @@ def test_login_with_totp(client, user):
         "freerise_session=" in cookie and "HttpOnly" in cookie and "samesite=lax" in cookie.lower()
     )
     assert "Secure" not in cookie
-    assert client.get("/api/auth/me").json() == {"id": 1, "username": "shai"}
+    assert client.get("/api/auth/me").json() == {"id": 1, "username": "shai", "name": "shai"}
     assert client.post("/api/auth/logout").status_code == 204
     assert client.get("/api/auth/me").status_code == 401
 
@@ -185,6 +185,26 @@ def test_household_invite(authed, user):
     # Her own login works, with her authenticator.
     login = {"username": "noa", "password": "noa-pw-123", "totp": pyotp.TOTP(secret).now()}
     assert TestClient(app).post("/api/auth/login", json=login).status_code == 204
+
+
+def test_display_names(authed):
+    from fastapi.testclient import TestClient
+
+    from freerise.api.main import app
+
+    me = authed.get("/api/auth/me").json()
+    assert me["name"] == "shai"  # the username until a name is picked
+    assert authed.patch("/api/auth/me", json={"name": "   "}).status_code == 422
+    r = authed.patch("/api/auth/me", json={"name": "  שי "})
+    assert r.json() == {**me, "name": "שי"}  # the login username stays
+
+    token = authed.post("/api/auth/invites").json()["token"]
+    noa = TestClient(app)
+    assert noa.get(f"/api/auth/invites/{token}").json() == {"invited_by": "שי"}
+    join = {"token": token, "username": "noa", "password": "noa-pw-123", "name": "נועה"}
+    assert noa.post("/api/auth/join", json=join).status_code == 201
+    names = [(m["username"], m["name"]) for m in authed.get("/api/auth/users").json()]
+    assert names == [("shai", "שי"), ("noa", "נועה")]
 
 
 def test_remove_member(authed, user):

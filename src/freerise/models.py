@@ -49,6 +49,7 @@ class User(Base):
     username: Mapped[str] = mapped_column(String, unique=True)
     password_hash: Mapped[str]
     totp_secret_enc: Mapped[bytes | None]
+    name: Mapped[str | None]  # shown in the app ("שי"); None = the username
 
 
 class UserSession(Base):
