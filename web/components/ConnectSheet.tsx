@@ -273,7 +273,8 @@ function Failed({
             return (
               <label key={k} className="flex flex-col gap-1 text-[13px] text-muted">
                 <span>{fieldLabel(k)}</span>
-                <div className="relative flex items-center">
+                {/* ltr on the wrapper too, so the button's `end-2` and the input's `pe-9` are the same side */}
+                <div className="relative flex items-center" dir="ltr">
                   <input
                     name={`field:${k}`}
                     type={secret && !isVisible ? "password" : "text"}
@@ -281,7 +282,6 @@ function Failed({
                     placeholder={secret ? "••••" : ""}
                     autoFocus={f.key === "password" && k === keys.find(isSecretField)}
                     className="input w-full pe-9"
-                    dir="ltr"
                     autoComplete="off"
                   />
                   {secret && (
