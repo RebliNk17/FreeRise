@@ -17,7 +17,7 @@ from freerise.models import Account, Category, Credential, Transaction
 # Provider key -> bank description patterns (lowercase). Checked in order.
 ISSUER_PATTERNS = {
     "isracard": ["ישראכרט"],
-    "amex": ["אמריקן אקספרס", "amex"],
+    "amex": ["אמריקן אקספרס", "פרימיום אקספרס", "amex"],  # bank side: "חיוב מ-פרימיום אקספרס"
     "max": ["מקס איט", "max it", "לאומי קארד"],
     # "כרטיסי אשראי לישראל" is Cal; bare "כאל" is too broad (מיכאל).
     "visa cal": ["מ-כאל", " כאל", "כ.א.ל", "כרטיסי אשראי", "cal "],
@@ -223,3 +223,28 @@ def reconcile_range(session: Session, start: date, end: date) -> list[BillReconc
 
 def reconcile_cycle(session: Session, cycle: Cycle) -> list[BillReconciliation]:
     return reconcile_range(session, cycle.start, cycle.end)
+
+
+def cards_billed_elsewhere(
+    session: Session, bills: list[BillReconciliation], start: date
+) -> dict[int, Decimal]:
+    """Cards billed since start (card id -> spend) that none of the connected bank's bills
+    paid: debited from a bank account we don't have, or the bank line isn't categorized as a
+    card bill. bills = reconcile_range(start, …)."""
+    end = latest_bill_date(session)  # the bank's data reaches this far
+    if end is None:  # no bank connected: nothing to compare against
+        return {}
+    paid = {a for b in bills for a in b.matched_account_ids}
+    rows = session.execute(
+        select(Transaction.account_id, func.sum(Transaction.amount))
+        .join(Account, Account.id == Transaction.account_id)
+        .where(
+            Account.kind == "card",
+            Account.excluded.is_(False),
+            Transaction.status == "completed",
+            # a bill dated just before start may have paid charges near it
+            Transaction.processed_date.between(start + WINDOW, end),
+        )
+        .group_by(Transaction.account_id)
+    )
+    return {a: -v for a, v in rows if a not in paid and -v > TOL}
