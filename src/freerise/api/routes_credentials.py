@@ -126,7 +126,10 @@ def _out(c: Credential) -> CredentialOut:
         ),
         sync_paused=login_paused(object_session(c), c.id),
         syncing=active_run_id(object_session(c), c.id) is not None,
-        fields=mask(decrypt_json(c.secret_enc)),
+        # Only what the forms ask for: not a stored device token, nor a field this engine ignores.
+        fields=mask(
+            {k: v for k, v in decrypt_json(c.secret_enc).items() if k in _form_fields(c.provider)}
+        ),
         accounts=_accounts(c),
     )
 
@@ -134,6 +137,15 @@ def _out(c: Credential) -> CredentialOut:
 def login_methods(provider: str) -> list[list[str]]:
     alt = ips.LOGIN_METHODS.get(provider) if ips.enabled(provider) else None
     return alt or [PROVIDER_CONFIGS[provider].required_fields]
+
+
+def optional_fields(provider: str) -> list[str]:
+    """Max's `id` answers the vendored browser engine's ID challenge; the app API never asks."""
+    return [] if ips.enabled(provider) else PROVIDER_CONFIGS[provider].optional_fields
+
+
+def _form_fields(provider: str) -> set[str]:
+    return {f for m in login_methods(provider) for f in m} | set(optional_fields(provider))
 
 
 def _check_fields(
@@ -144,8 +156,7 @@ def _check_fields(
     if provider not in providers_offered():
         raise HTTPException(422, "unknown provider")
     methods = login_methods(provider)
-    known = {f for m in methods for f in m} | set(PROVIDER_CONFIGS[provider].optional_fields)
-    unknown = set(new) - known
+    unknown = set(new) - _form_fields(provider)
     if method is not None:  # checked by _for_method
         methods = [methods[method]]
     missing = min(([f for f in m if not full.get(f)] for m in methods), key=len)
@@ -161,7 +172,7 @@ def _for_method(provider: str, method: int | None, fields: dict) -> dict:
     methods = login_methods(provider)
     if not 0 <= method < len(methods):
         raise HTTPException(422, "unknown login method")
-    keep = {*methods[method], *PROVIDER_CONFIGS[provider].optional_fields}
+    keep = {*methods[method], *optional_fields(provider)}
     other = {f for m in methods for f in m} - keep
     return {k: v for k, v in fields.items() if k not in other}
 
@@ -174,7 +185,7 @@ def providers() -> list[Provider]:
             name=(c := PROVIDER_CONFIGS[k]).name,
             service=c.service,
             required_fields=c.required_fields,
-            optional_fields=c.optional_fields,
+            optional_fields=optional_fields(k),
             login_methods=login_methods(k),
             requires_2fa=c.requires_2fa,
         )
