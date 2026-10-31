@@ -1,8 +1,9 @@
 """Yearly history and Modified Dietz returns for pension / hishtalmut funds."""
 
+import calendar
 import json
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal
 from itertools import pairwise
 
@@ -117,7 +118,7 @@ class MonthGain:
 
 
 def _month_end(d: date) -> date:
-    return d - timedelta(days=1) if d.day == 1 else d
+    return d.replace(day=calendar.monthrange(d.year, d.month)[1])
 
 
 def _month_pairs(points: list[tuple[date, Decimal]]):
@@ -140,12 +141,47 @@ def _gain(ids: list[int], a, b, deps) -> MonthGain:
     )
 
 
+def _book_transfers(
+    funds: list[Fund], deps_of: dict[int, list], rows: list[MonthGain], opened: date
+):
+    """Money the funds' yearly reports show arriving beyond deposits and gains (closing − opening −
+    deposits − gains: a transfer from another company) counts as that year's deposits, in its month
+    with the largest gain. In the history's first year only for funds whose deposits start after it
+    opens: the others' money is already in its first balance."""
+    by_year: dict[int, Decimal] = {}
+    for f in funds:
+        first_dep = min((d.date for d in deps_of[f.id]), default=None)
+        for y in (f.details or {}).get("yearly_movements") or []:
+            if not str(y.get("year")).isdigit() or y.get("closing_balance") is None:
+                continue
+            year = int(y["year"])
+            if year == opened.year and not (first_dep and first_dep > opened):
+                continue
+            deposits = y.get("deposits")
+            if deposits is None:
+                deposits = sum((d.amount for d in deps_of[f.id] if d.date.year == year), Decimal(0))
+            inflow = (
+                Decimal(str(y["closing_balance"]))
+                - Decimal(str(y.get("opening_balance") or 0))
+                - Decimal(str(deposits))
+                - Decimal(str(y.get("gains") or 0))
+            )
+            if abs(inflow) > 2:  # ponytail: the reports round each figure to whole shekels
+                by_year[year] = by_year.get(year, Decimal(0)) + inflow
+    # ponytail: a year's transfers land in one month; per-month needs the provider's transfer dates
+    for year, inflow in by_year.items():
+        if months := [g for g in rows if g.month.year == year]:
+            g = max(months, key=lambda g: g.gain if inflow > 0 else -g.gain)
+            g.deposits = (g.deposits + inflow).quantize(CENT)
+            g.gain = (g.gain - inflow).quantize(CENT)
+
+
 def monthly_gains(session: Session) -> list[MonthGain]:
     """Per fund and calendar month, wherever that month and the one before have a balance. A group
     with a shared portfolio_history (details) gets one row for months its funds lack their own."""
     out: list[MonthGain] = []
     deps_of: dict[int, list] = {}
-    groups: dict[tuple[int, str], list[int]] = {}
+    groups: dict[tuple[int, str], list[Fund]] = {}
     for fund in session.scalars(select(Fund).order_by(Fund.id)):
         snaps, deps_of[fund.id] = _load(session, fund.id)
         out += [
@@ -153,15 +189,16 @@ def monthly_gains(session: Session) -> list[MonthGain]:
             for a, b in _month_pairs([(x.as_of, x.balance) for x in snaps])
         ]
         if ph := (fund.details or {}).get("portfolio_history"):
-            groups.setdefault((fund.credential_id, json.dumps(ph, sort_keys=True)), []).append(
-                fund.id
-            )
-    for (_, ph), ids in groups.items():
-        # Dated the 1st (Phoenix): the balance as the month opens, i.e. the previous month's end.
-        points = [
+            groups.setdefault((fund.credential_id, json.dumps(ph, sort_keys=True)), []).append(fund)
+    for (_, ph), funds in groups.items():
+        ids = [f.id for f in funds]
+        # Dated the 1st (Phoenix), but the month's closing balance (the latest: today's). The point
+        # dated Dec 1 matches the yearly reports' closing balances for Dec 31.
+        points = sorted(
             (_month_end(date.fromisoformat(p["date"][:10])), Decimal(str(p["balance"])))
             for p in json.loads(ph)
-        ]
+        )
+        rows: list[MonthGain] = []
         for a, b in _month_pairs(points):
             month = b[0].replace(day=1)
             own = [
@@ -170,5 +207,8 @@ def monthly_gains(session: Session) -> list[MonthGain]:
             if len(own) == len(ids):
                 continue  # every fund has its own month: keep the detail
             out = [g for g in out if g not in own]
-            out.append(_gain(ids, a, b, [d for i in ids for d in deps_of[i]]))
+            rows.append(_gain(ids, a, b, [d for i in ids for d in deps_of[i]]))
+        if points:
+            _book_transfers(funds, deps_of, rows, points[0][0])
+        out += rows
     return out
