@@ -10,6 +10,7 @@ from statistics import median, quantiles
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from freerise.cashflow.summary import NOT_COUNTED
 from freerise.categorize.normalize import _is_ref
 from freerise.models import Account, Category, RecurringItem, Transaction
 
@@ -28,7 +29,6 @@ CADENCE_HE = {
     "annual": "כל שנה",
 }
 LOOKBACK_DAYS = 400
-NON_SPENDING = ("transfer", "card_bill", "ignore")
 STATUSES = ("pending", "confirmed", "dismissed")
 CENT = Decimal("0.01")
 SWITCH_DAYS = 60  # how long a "moved to another card" note stays visible
@@ -115,7 +115,7 @@ def detect_recurring(session: Session, today: date) -> list[RecurringItem]:
         .outerjoin(Category, Category.id == Transaction.category_id)
         .where(
             Account.excluded.is_(False),
-            or_(Category.id.is_(None), Category.group.not_in(NON_SPENDING)),
+            or_(Category.id.is_(None), Category.group.not_in(NOT_COUNTED)),
             or_(Transaction.installment_total.is_(None), Transaction.installment_total <= 1),
             Transaction.date >= today - timedelta(days=LOOKBACK_DAYS),
             Transaction.merchant_key != "",

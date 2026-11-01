@@ -108,23 +108,24 @@ def test_cost_totals_filters_exclusions(authed, sf, acc):
     _txn(sf, acc["live"], t, -30, "100%_קפה", key="cafe")
     _txn(sf, acc["live"], t, 20, "WOLT זיכוי", key="wolt")  # refund: not an expense
     _txn(sf, acc["off"], t, -999, "WOLT", key="wolt")  # excluded account
-    _txn(sf, acc["live"], t, -999, "WOLT", key="wolt", cat=cats["העברות"])
+    _txn(sf, acc["live"], t, -200, "WOLT", key="wolt", cat=cats["העברות"])  # a transfer out counts
+    _txn(sf, acc["live"], t, 500, "WOLT", key="wolt", cat=cats["העברות"])  # in: income, no refund
     _txn(sf, acc["live"], t, -999, "WOLT", key="wolt", cat=cats["חיוב כרטיס אשראי"])
     _txn(sf, acc["live"], t, -999, "WOLT", key="wolt", cat=cats["להתעלם"])
 
     r = authed.get("/api/cost", params={"q": "wolt"}).json()
     assert set(r) == {"total", "count", "monthly", "top_merchants", "avg_per_month"}
-    assert (r["total"], r["count"]) == (150.5, 2)
+    assert (r["total"], r["count"]) == (350.5, 3)
     assert r["top_merchants"] == [
         {
             "merchant_key": "wolt",
             "sample": r["top_merchants"][0]["sample"],
-            "total": 150.5,
-            "count": 2,
+            "total": 350.5,
+            "count": 3,
         }
     ]
-    assert sum(m["total"] for m in r["monthly"]) == 150.5
-    assert r["avg_per_month"] == pytest.approx(150.5 / (41 / 30.44))  # 41 days in range
+    assert sum(m["total"] for m in r["monthly"]) == 350.5
+    assert r["avg_per_month"] == pytest.approx(350.5 / (41 / 30.44))  # 41 days in range
     assert {"label_year", "label_month", "total"} == set(r["monthly"][0])
 
     # LIKE wildcards are literal
@@ -132,9 +133,9 @@ def test_cost_totals_filters_exclusions(authed, sf, acc):
     assert authed.get("/api/cost", params={"q": "W%T"}).json()["total"] == 0
     assert authed.get("/api/cost", params={"q": "0_"}).json()["count"] == 0
     r = authed.get("/api/cost", params={"from": t.isoformat(), "to": t.isoformat()}).json()
-    assert (r["total"], r["count"], len(r["monthly"])) == (130, 2, 1)
+    assert (r["total"], r["count"], len(r["monthly"])) == (330, 3, 1)
     r = authed.get("/api/cost", params={"category_id": cats["העברות"]}).json()
-    assert r["total"] == 0 and r["monthly"] == []
+    assert (r["total"], r["count"]) == (200, 1)  # the transfer out; the one in is income
 
 
 def test_cost_nets_refunds_and_skips_savings(authed, sf, acc):

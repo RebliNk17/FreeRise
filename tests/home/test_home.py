@@ -202,16 +202,16 @@ def test_exclusions(session):
     a = _acct(session)
     ex = _acct(session, "0001", excluded=True)
     keep = _tx(session, a, date(2026, 10, 12), -50, "קניות")
+    sent = _tx(session, a, date(2026, 10, 12), -80, "העברות")  # a transfer out is an expense
     gone = [
-        _tx(session, ex, date(2026, 10, 12), -70, "קניות"),
-        _tx(session, a, date(2026, 10, 12), -80, "העברות"),
+        _tx(session, ex, date(2026, 10, 12), -70, "קניות"),  # the user excluded the account
         _tx(session, a, date(2026, 10, 12), -90, "חיוב כרטיס אשראי"),
         _tx(session, a, date(2026, 10, 12), -95, "להתעלם"),
     ]
     unc = _tx(session, a, date(2026, 10, 13), -10)  # uncategorized negative -> variable
     h = _home(session)
-    assert _all_txn_ids(h) == {keep.id, unc.id}
-    assert h["variable"]["spent"] == 60
+    assert _all_txn_ids(h) == {keep.id, sent.id, unc.id}
+    assert h["variable"]["spent"] == 140
     assert not {g.id for g in gone} & _all_txn_ids(h)
 
 

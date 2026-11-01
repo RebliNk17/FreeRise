@@ -85,13 +85,16 @@ def test_card_bill_not_double_counted(session):
     assert s.spending == Decimal(500)
 
 
-def test_transfer_ignored(session):
+def test_transfers_count_card_bills_and_ignored_dont(session):
+    # Every expense and income counts (rent sent by bank transfer is an expense); only a scraped
+    # card's bill and what the user marked "להתעלם" are left out.
     a = acct(session)
     tx(session, a, -800, "העברות")
-    tx(session, a, 800, "העברות")
+    tx(session, a, 300, "העברות")
+    tx(session, a, -900, "חיוב כרטיס אשראי")
     tx(session, a, -5, "להתעלם")
     s = cycle_summary(session, C)
-    assert s.spending == 0 and s.income == 0 and s.verdict == "positive"
+    assert (s.spending, s.income) == (800, 300)
 
 
 def test_history_returns_n_cycles(session):
