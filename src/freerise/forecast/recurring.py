@@ -154,6 +154,8 @@ def detect_recurring(session: Session, today: date) -> list[RecurringItem]:
         amount, how = _estimate(occ, direction, fixed, next_date)
         if row is not None and row.user_defined:  # the user's day/amount win
             row.last_date = last_date
+            if row.expected_day is None:  # no day of the user's: keep up with the charges
+                row.next_expected_date = next_date
             if row.amount_kind == "variable":
                 row.expected_amount = Decimal(amount).quantize(CENT)
             _track_account(row, txns)

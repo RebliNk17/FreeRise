@@ -10,8 +10,17 @@ from freerise.forecast.next_cycle import (
     expected_in_cycle,
     installments_ending,
     next_cycle_forecast,
+    same_quarter_month,
 )
-from freerise.models import Account, Category, Credential, RecurringItem, Transaction
+from freerise.forecast.recurring import detect_recurring
+from freerise.models import (
+    Account,
+    Category,
+    Credential,
+    RecurringItem,
+    RecurringSkip,
+    Transaction,
+)
 
 TODAY = date(2026, 10, 23)  # current cycle 10.10-9.11
 OCT, NOV = cycle_by_label(2026, 10, 10), cycle_by_label(2026, 11, 10)
@@ -86,6 +95,54 @@ def test_unconfirmed_charge_in_a_fixed_category_is_expected(session):
         session.query(RecurringItem).filter_by(merchant_key=key).one().category_id = cat[name]
     labels = [x.label for x in expected_in_cycle(session, OCT, TODAY).fixed_items]
     assert labels == ["electric"]  # a variable category or none still needs confirming
+
+
+def test_this_cycles_amount_or_skip_from_the_user(session):
+    _item(session, "gym", "monthly", "250", date(2026, 10, 18))
+    rid = session.query(RecurringItem).filter_by(merchant_key="gym").one().id
+    session.add(RecurringSkip(recurring_id=rid, cycle_start=OCT.start, amount=Decimal(300)))
+    session.flush()
+    [line] = expected_in_cycle(session, OCT, TODAY).fixed_items
+    assert (line.amount, line.expected_amount, line.overridden) == (300, 300, True)
+    [line] = expected_in_cycle(session, NOV, TODAY).fixed_items  # next cycle: back to 250
+    assert (line.amount, line.overridden) == (250, False)
+    session.query(RecurringSkip).one().amount = None  # "won't happen this month"
+    assert expected_in_cycle(session, OCT, TODAY).fixed_items == []
+
+
+def test_same_quarter_month_salary():
+    # Paid at the end of the month (or the 1st-2nd of the next): higher every Jan/Apr/Jul/Oct.
+    pay = [
+        (date(2026, 2, 2), 39731),  # January's
+        (date(2026, 2, 26), 29638),
+        (date(2026, 3, 30), 68512),  # a bonus: the median ignores it
+        (date(2026, 4, 30), 33644),
+        (date(2026, 5, 31), 30558),
+        (date(2026, 6, 30), 32069),
+        (date(2026, 8, 2), 33814),  # July's
+        (date(2026, 9, 1), 32009),
+        (date(2026, 10, 1), 33408),
+    ]
+    occ = [(d, Decimal(a)) for d, a in pay]
+    assert same_quarter_month(occ, date(2026, 11, 1)) == Decimal(33814)  # October's
+    assert same_quarter_month(occ, date(2026, 10, 28)) == Decimal(33814)
+    assert same_quarter_month(occ, date(2026, 11, 30)) == Decimal(30558)  # November's
+    assert same_quarter_month(occ[:2], date(2026, 11, 1)) is None  # too little history
+
+
+def test_user_set_expense_amount_keeps_following_the_charges(session):
+    a = _acct(session)
+    for m in (6, 7, 8, 9):
+        _tx(session, a, date(2026, m, 28), -968, "insurance")
+    [it] = [
+        r for r in detect_recurring(session, date(2026, 9, 29)) if r.merchant_key == "insurance"
+    ]
+    it.expected_amount, it.amount_kind, it.user_defined = Decimal(1000), "fixed", True
+    _tx(session, a, date(2026, 10, 28), -968, "insurance")
+    detect_recurring(session, date(2026, 11, 20))
+    assert it.next_expected_date > date(2026, 11, 20)  # dates move on; the amount is the user's
+    [line] = expected_in_cycle(session, NOV, date(2026, 11, 20)).fixed_items
+    assert (line.amount, line.date) == (1000, date(2026, 11, 28))
 
 
 def test_recurring_already_charged_uses_actual(session):

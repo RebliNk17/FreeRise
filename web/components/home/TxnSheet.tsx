@@ -30,7 +30,7 @@ const initials = (s: string) =>
     .map((w) => w[0])
     .join("");
 
-type Action = { icon: React.ReactNode; label: string; run: () => void; value?: string | null; tone?: "sun" | "danger" };
+export type Action = { icon: React.ReactNode; label: string; run: () => void; value?: string | null; tone?: "sun" | "danger" };
 
 const IGNORE_CATEGORY = "להתעלם";
 
@@ -298,7 +298,7 @@ function FixedIncomeForm({ day: initialDay, onSave, onCancel }: { day: number; o
 
 const TONE = { brand: "bg-brand-soft text-brand", sun: "bg-sun-soft text-sun-strong", danger: "bg-danger-soft text-danger" };
 
-function ActionList({ items }: { items: Action[] }) {
+export function ActionList({ items }: { items: Action[] }) {
   return (
     <ul className="card flex flex-col divide-y divide-hairline overflow-hidden rounded-[22px]">
       {items.map((a) => (

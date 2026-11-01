@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal
 from operator import attrgetter
+from statistics import median
 from typing import Literal
 
 from sqlalchemy import select
@@ -40,6 +41,7 @@ class ExpectedLine:
     txn_ids: list[int] = field(default_factory=list)
     installment_number: int | None = None  # installment lines: payment n of N
     installment_total: int | None = None
+    overridden: bool = False  # the user set this cycle's amount
 
 
 def _acct(labels: dict[int, str], account_id: int | None, previous: int | None = None) -> dict:
@@ -157,9 +159,10 @@ def _recurring_lines(session: Session, cycle: Cycle, today: date) -> list[tuple[
         e[0] += abs(t.amount)
         e[2] = t.account_id  # latest charge's account
         e[3].append(t.id)
-    history: dict[str, list[date]] = defaultdict(list)  # income occurrences, real dates
-    for k, d in session.execute(
-        select(Transaction.merchant_key, Transaction.date)
+    # income occurrences: real dates and amounts
+    history: dict[str, list[tuple[date, Decimal]]] = defaultdict(list)
+    for k, d, a in session.execute(
+        select(Transaction.merchant_key, Transaction.date, Transaction.amount)
         .join(Account, Account.id == Transaction.account_id)
         .join(
             RecurringItem,
@@ -169,17 +172,22 @@ def _recurring_lines(session: Session, cycle: Cycle, today: date) -> list[tuple[
         )
         .where(Account.excluded.is_(False), Transaction.amount > 0)
     ):
-        history[k].append(d)
-    skipped = set(
-        session.scalars(
-            select(RecurringSkip.recurring_id).where(RecurringSkip.cycle_start == cycle.start)
-        )
+        history[k].append((d, a))
+    # The user's word for this cycle: None = won't happen, an amount = expect that instead.
+    overrides = dict(
+        session.execute(
+            select(RecurringSkip.recurring_id, RecurringSkip.amount).where(
+                RecurringSkip.cycle_start == cycle.start
+            )
+        ).all()
     )
     out = []
     for it in items:
         hit = charged.get((it.merchant_key, it.direction))
-        if not hit and it.id in skipped:
+        override = overrides.get(it.id)
+        if not hit and it.id in overrides and override is None:
             continue  # the user said it won't happen this cycle
+        amount = it.expected_amount
         prev = recent_previous_account(it, today)
         if hit:  # checked before staleness: next_expected_date may not be advanced yet
             line = ExpectedLine(
@@ -201,17 +209,20 @@ def _recurring_lines(session: Session, cycle: Cycle, today: date) -> list[tuple[
                 ):
                     continue  # stream stopped (a user-defined one never does)
                 seen = history.get(it.merchant_key, [])
-                if cycle.end < min([*seen, it.created_at.date()]):
+                if cycle.end < min([*(x for x, _ in seen), it.created_at.date()]):
                     continue  # before it existed
-                day = usual_day(it.expected_day, [x.day for x in seen]) if seen else None
+                day = usual_day(it.expected_day, [x.day for x, _ in seen]) if seen else None
                 d = day_in_cycle(day or it.expected_day or it.next_expected_date.day, cycle)
+                if not it.user_defined:  # a user-set amount wins over history
+                    amount = same_quarter_month(seen, d) or amount
             else:
                 if it.next_expected_date < today - timedelta(days=STALE_DAYS):
                     continue  # stream stopped
                 # From the last real charge: detection rolls next_expected_date past today, so a
                 # late (or not yet synced) charge would drop out of its own cycle. A user's day stays.
                 step = CADENCE_MONTHS[it.cadence]
-                base, k = (it.next_expected_date, 0) if it.user_defined else (it.last_date, step)
+                own_day = it.user_defined and it.expected_day is not None
+                base, k = (it.next_expected_date, 0) if own_day else (it.last_date, step)
                 d = add_months(base, k)
                 while d < cycle.start:
                     k += step
@@ -220,16 +231,32 @@ def _recurring_lines(session: Session, cycle: Cycle, today: date) -> list[tuple[
                     continue
             line = ExpectedLine(
                 it.label,
-                it.expected_amount,
+                override if override is not None else amount,
                 d,
                 "recurring",
                 it.basis,
                 **_acct(labels, it.account_id, prev),
             )
         line.recurring_id, line.category_id = it.id, it.category_id
-        line.expected_amount = it.expected_amount
+        line.expected_amount = override if override is not None else amount
+        line.overridden = override is not None
         out.append((_bucket(session, it), line))
     return out
+
+
+# A salary paid on the 1st-2nd is the previous month's: its pay month is a week earlier.
+PAY_MONTH_SLACK = timedelta(days=7)
+
+
+def same_quarter_month(occ: list[tuple[date, Decimal]], d: date) -> Decimal | None:
+    """Median of the past year's payments for the same month of the quarter as d, so a salary
+    that comes out higher every Jan/Apr/Jul/Oct is expected higher then; None below 2 of them."""
+
+    def phase(x: date) -> int:
+        return (x - PAY_MONTH_SLACK).month % 3
+
+    same = [a for x, a in occ if d - timedelta(days=400) <= x < d and phase(x) == phase(d)]
+    return Decimal(median(same)).quantize(Decimal("0.01")) if len(same) >= 2 else None
 
 
 def _installment_lines(session: Session, cycle: Cycle) -> list[ExpectedLine]:

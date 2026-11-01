@@ -197,6 +197,7 @@ class FixedItem:
     recurring_id: int | None
     installment_number: int | None = None  # an installment payment: n of N
     installment_total: int | None = None
+    overridden: bool = False  # the user set this cycle's expected amount
 
 
 @dataclass
@@ -332,6 +333,7 @@ def _groups(
             ln.recurring_id,
             ln.installment_number,
             ln.installment_total,
+            ln.overridden,
         )
         if ln.source == "installment":
             cid: int | str | None = INSTALLMENTS
