@@ -96,23 +96,24 @@ def _txns(session: Session, *where) -> list[Transaction]:
 
 
 def _series(session: Session) -> list[list[Transaction]]:
-    """Installment series: same account, merchant_key, installment_total, amount within ±1 ₪."""
+    """Installment series: same account, merchant_key, installment_total and first month (payment
+    n falls n-1 months after the first). Not by amount: the first payment often differs, taking
+    the rounding remainder (242.50 then 232 a month)."""
     groups: dict[tuple, list[Transaction]] = defaultdict(list)
     for t in _txns(
         session, Transaction.installment_total > 1, Transaction.installment_number.is_not(None)
     ):
-        groups[(t.account_id, t.merchant_key, t.installment_total)].append(t)
+        first = t.date.year * 12 + t.date.month - t.installment_number
+        groups[(t.account_id, t.merchant_key, t.installment_total, first)].append(t)
     out = []
     for txns in groups.values():
-        # ponytail: two identical concurrent purchases at one merchant merge into one series
-        txns.sort(key=lambda t: t.amount)
-        cur: list[Transaction] = []
-        for t in txns:
-            if cur and abs(t.amount - cur[0].amount) > 1:
-                out.append(cur)
-                cur = []
-            cur.append(t)
-        out.append(cur)
+        # Two identical purchases in one month repeat each payment number: one series apiece.
+        split: dict[int, list[Transaction]] = defaultdict(list)
+        seen: dict[int, int] = defaultdict(int)
+        for t in sorted(txns, key=lambda t: (t.installment_number, t.id)):
+            split[seen[t.installment_number]].append(t)
+            seen[t.installment_number] += 1
+        out.extend(split.values())
     return out
 
 
