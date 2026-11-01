@@ -194,10 +194,14 @@ def _recurring_lines(session: Session, cycle: Cycle, today: date) -> list[tuple[
             else:
                 if it.next_expected_date < today - timedelta(days=STALE_DAYS):
                     continue  # stream stopped
-                d, k, step = it.next_expected_date, 0, CADENCE_MONTHS[it.cadence]
+                # From the last real charge: detection rolls next_expected_date past today, so a
+                # late (or not yet synced) charge would drop out of its own cycle. A user's day stays.
+                step = CADENCE_MONTHS[it.cadence]
+                base, k = (it.next_expected_date, 0) if it.user_defined else (it.last_date, step)
+                d = add_months(base, k)
                 while d < cycle.start:
                     k += step
-                    d = add_months(it.next_expected_date, k)
+                    d = add_months(base, k)
                 if not _in(d, cycle):
                     continue
             line = ExpectedLine(

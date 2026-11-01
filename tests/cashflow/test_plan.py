@@ -5,7 +5,7 @@ from sqlalchemy import select
 
 from freerise.cashflow.cycles import cycle_by_label
 from freerise.cashflow.plan import cycle_plan, get_goal, set_goal, split_by_days
-from freerise.forecast.next_cycle import expected_in_cycle
+from freerise.forecast.next_cycle import add_months, expected_in_cycle
 from freerise.models import Account, Category, Credential, RecurringItem, Transaction
 
 OCT = cycle_by_label(2026, 10, 10)  # 10.10 (Sat) - 9.11
@@ -171,7 +171,7 @@ def _rec(session, key, direction, amount, next_date, cat=None):
             cadence="monthly",
             amount_kind="fixed",
             expected_amount=Decimal(amount),
-            last_date=next_date,
+            last_date=add_months(next_date, -1),
             next_expected_date=next_date,
             status="confirmed",
             basis="b",
