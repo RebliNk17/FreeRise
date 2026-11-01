@@ -24,7 +24,16 @@ from freerise.cashflow.cycles import (
 )
 from freerise.cashflow.fees import FEES
 from freerise.cashflow.parts import txn_parts
-from freerise.cashflow.plan import CENT, HISTORY, clamp, cycle_plan, split_by_days, week_spans
+from freerise.cashflow.plan import (
+    CENT,
+    HISTORY,
+    clamp,
+    cycle_plan,
+    history,
+    projected_month_end,
+    split_by_days,
+    week_spans,
+)
 from freerise.cashflow.savings import monthly_total, plan_statuses
 from freerise.cashflow.summary import GROUPS, UNCATEGORIZED, bucket, recurring_expense_keys
 from freerise.forecast.next_cycle import ExpectedLine, expected_in_cycle
@@ -76,6 +85,7 @@ class Summary:
     goal_personal: Decimal
     goal_plans: Decimal
     variable_allowance: Decimal
+    month_end: Decimal  # projected cycle end, same number as the Telegram report and insights
 
 
 @dataclass
@@ -622,6 +632,7 @@ def build_home(session: Session, cycle: Cycle, today: date) -> Home:
             plan.goal_personal,
             plan.goal_plans,
             plan.variable_allowance,
+            projected_month_end(plan, today, history(session, cycle)).quantize(CENT),
         )
 
     # Tracked categories

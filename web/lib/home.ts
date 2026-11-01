@@ -81,7 +81,7 @@ export type FixedGroup = { category_id: number | null; name: string; spent: numb
 
 export type HomeData = {
   cycle: { start: string; end: string; label_year: number; label_month: number; is_current: boolean; prev: { year: number; month: number }; next: { year: number; month: number } | null };
-  summary: { week_left: number; next_week_allowance: number | null; goal: number; goal_personal: number; goal_plans: number; variable_allowance: number } | null;
+  summary: { week_left: number; next_week_allowance: number | null; goal: number; goal_personal: number; goal_plans: number; variable_allowance: number; month_end: number } | null;
   variable: { spent: number; allowance: number; weeks: Week[] };
   tracked: TrackedCategory[];
   untracked_available: { category_id: number; name: string }[];

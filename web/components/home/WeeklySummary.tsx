@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { Money } from "@/components/Amount";
 import { send } from "@/lib/api";
+import { monthName } from "@/lib/format";
 import type { HomeData } from "@/lib/home";
 import { useHome } from "./context";
 import { Expander } from "./Expander";
@@ -12,18 +13,16 @@ import { Illustration } from "./illustrations";
 
 const PILL = "flex w-fit items-center gap-1 rounded-xl border border-border px-3.5 py-2 text-sm font-bold hover:bg-sunken";
 
-/** Current cycle only: this week's allowance, then the month-end goal card (editable). */
+/** Current cycle only: the month-end forecast, this week's allowance, then the month-end goal card (editable). */
 export function WeeklySummary({ s }: { s: NonNullable<HomeData["summary"]> }) {
   const over = s.week_left < 0;
   return (
     <>
+      <ForecastCard s={s} />
       <section className="card overflow-hidden">
         <div className="flex flex-col gap-3 p-5">
           <h2 className="text-xl leading-snug font-bold">{over ? "בכמה חרגנו בהוצאות המשתנות השבוע?" : "כמה כסף נשאר להוציא על הוצאות משתנות השבוע?"}</h2>
           <Money value={Math.abs(s.week_left)} className={`self-start text-[44px] leading-none font-light ${over ? "text-danger" : ""}`} />
-          <Link href="/balance" className={PILL}>
-            ומה מצב העו״ש? <ChevronLeft size={16} aria-hidden />
-          </Link>
         </div>
         {s.next_week_allowance ? (
           <div className="border-t border-hairline px-5 py-3 text-sm">
@@ -34,6 +33,31 @@ export function WeeklySummary({ s }: { s: NonNullable<HomeData["summary"]> }) {
       </section>
       <GoalCard s={s} />
     </>
+  );
+}
+
+/** RiseUp's headline: where the cycle is heading (the same forecast as the Telegram report),
+ * and what's left on the "הוצאות משתנות" card until the cycle ends. */
+function ForecastCard({ s }: { s: NonNullable<HomeData["summary"]> }) {
+  const { cycle, variable } = useHome().data;
+  const month = monthName(cycle.label_month);
+  const left = Math.max(0, variable.allowance - variable.spent);
+  return (
+    <section className="card overflow-hidden">
+      <div className="flex flex-col gap-3 p-5">
+        <h2 className="text-xl leading-snug font-bold">איך צפוי להסתיים התזרים של {month}?</h2>
+        <Money value={s.month_end} className={`self-start text-[44px] leading-none font-light ${s.month_end < 0 ? "text-danger" : ""}`} />
+        <Link href="/balance" className={PILL}>
+          ומה מצב העו״ש? <ChevronLeft size={16} aria-hidden />
+        </Link>
+      </div>
+      <div className="border-t border-hairline px-5 py-3 text-sm">
+        <p className={`font-bold ${left > 0 ? "" : "text-danger"}`}>
+          נשארו <Money value={left} /> הוצאות משתנות
+        </p>
+        <p>להוציא עד סוף {month}</p>
+      </div>
+    </section>
   );
 }
 
