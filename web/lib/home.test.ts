@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { homeFixture } from "./fixtures/home";
-import { accountWithHolder, daysLabel, findTxn, fixedStatusLabel, installmentLabel, isIdle, leftLabel, mapTxns, splitMoney, weekDays, weekOver, shiftChip, weekStatus, wrapIndex, totalSegments, cycleGoal } from "./home";
+import { accountWithHolder, daysLabel, findTxn, fixedStatusLabel, installmentLabel, isIdle, leftLabel, mapTxns, splitMoney, weekDays, weekOver, shiftChip, weekStatus, wrapIndex, totalSegments, cycleGoal, forecastTone } from "./home";
 
 test("splitMoney splits integer and decimal parts", () => {
   expect(splitMoney(1819.2)).toEqual({ sign: "", int: "1,819", dec: ".2" });
@@ -112,4 +112,12 @@ test("cycleGoal: income − expenses (without savings deposits) must be above 0"
   expect(cycleGoal(d(10_000, 10_000)).met).toBe(false); // breaking even isn't meeting it
   expect(cycleGoal(d(10_000, 11_000, 2_000))).toMatchObject({ met: true, expenses: 9_000, savings: 2_000, net: 1_000 });
   expect(cycleGoal(d(0.1 + 0.2, 0.3)).met).toBe(false); // float noise
+});
+
+test("forecastTone compares the month end with the goal", () => {
+  expect(forecastTone(9064.6, 3000)).toBe("good");
+  expect(forecastTone(3000, 3000)).toBe("good");
+  expect(forecastTone(0, 0)).toBe("good");
+  expect(forecastTone(1200, 3000)).toBe("short");
+  expect(forecastTone(-0.01, 0)).toBe("minus");
 });

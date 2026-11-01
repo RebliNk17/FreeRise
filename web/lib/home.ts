@@ -125,6 +125,9 @@ export const FIXED_STATUS: Record<FixedItem["status"], { label: string; tone: st
 };
 export const fixedStatusLabel = (s: FixedItem["status"]) => FIXED_STATUS[s].label;
 
+/** Month-end forecast vs the goal: "good" at or above it, "short" in the plus but below it, "minus" below zero. */
+export const forecastTone = (end: number, goal: number) => (end < 0 ? "minus" : end < goal ? "short" : "good");
+
 /** Line under a progress bar: what's left, or by how much it went over. */
 export const leftLabel = (spent: number, expected: number) => (spent > expected ? { text: "חריגה של", value: spent - expected, over: true } : { text: "נשאר להוציא", value: expected - spent, over: false });
 
