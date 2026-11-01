@@ -6,13 +6,19 @@ from datetime import date, timedelta
 from decimal import Decimal
 from statistics import median
 
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from freerise.cashflow.cycles import Cycle, cycle_for, get_start_day, prev_cycle
 from freerise.cashflow.parts import txn_parts
 from freerise.cashflow.savings import monthly_total, plan_statuses
-from freerise.cashflow.summary import UNCATEGORIZED, CycleSummary, cycle_summary
+from freerise.cashflow.summary import (
+    UNCATEGORIZED,
+    CycleSummary,
+    bucket,
+    cycle_summary,
+    recurring_expense_keys,
+)
 from freerise.forecast.next_cycle import ExpectedLine, expected_in_cycle
 from freerise.models import (
     Account,
@@ -121,10 +127,18 @@ def tracked_ids(session: Session) -> set[int]:
 
 def _variable_by_week(session: Session, cycle: Cycle, exclude: set[int]) -> dict[date, Decimal]:
     """Variable spending outside `exclude` categories (positive, net of refunds) keyed by week
-    start (Sunday)."""
+    start (Sunday). What counts as variable is summary.bucket's rule, the same as home's."""
     p = txn_parts()
+    rec = recurring_expense_keys(session)
     rows = session.execute(
-        select(Transaction.date, p.c.amount)
+        select(
+            Transaction.date,
+            p.c.amount,
+            p.c.category_id,
+            Category.group,
+            Transaction.installment_total,
+            Transaction.merchant_key,
+        )
         .join(p, p.c.txn_id == Transaction.id)
         .join(Account, Account.id == Transaction.account_id)
         .outerjoin(Category, Category.id == p.c.category_id)
@@ -132,17 +146,12 @@ def _variable_by_week(session: Session, cycle: Cycle, exclude: set[int]) -> dict
             counted(),
             Transaction.effective_date >= cycle.start,
             Transaction.effective_date <= cycle.end,
-            # installments are fixed (summary.bucket)
-            or_(Transaction.installment_total.is_(None), Transaction.installment_total <= 1),
-            or_(
-                (Category.group == "variable") & Category.id.not_in(exclude),
-                Category.id.is_(None) & (p.c.amount < 0),
-            ),
         )
     )
     out: dict[date, Decimal] = defaultdict(Decimal)
-    for d, amt in rows:  # a txn attributed to this cycle sits in its first/last week
-        out[_sunday(clamp(d, cycle))] -= amt
+    for d, amt, cid, group, inst, key in rows:  # attributed to this cycle: first/last week
+        if cid not in exclude and bucket(group, amt, inst, key in rec) == "variable":
+            out[_sunday(clamp(d, cycle))] -= amt
     return out
 
 

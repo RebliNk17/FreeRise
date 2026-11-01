@@ -12,11 +12,11 @@ from sqlalchemy import or_, select
 from freerise.api.deps import DB
 from freerise.cashflow.cycles import cycle_for, get_start_day, next_cycle
 from freerise.cashflow.parts import txn_parts
+from freerise.cashflow.summary import NOT_COUNTED
 from freerise.models import Account, Category, Transaction
 
 router = APIRouter()
 
-NOT_SPENDING = ("transfer", "card_bill", "ignore")
 TOP = 10
 DAYS_PER_MONTH = Decimal("30.44")
 
@@ -53,7 +53,7 @@ def cost(
     to: date | None = None,
 ) -> CostOut:
     # Savings deposits aren't a cost, unless the user asked for that category explicitly.
-    skip = NOT_SPENDING if category_id is not None else (*NOT_SPENDING, "savings")
+    skip = NOT_COUNTED if category_id is not None else (*NOT_COUNTED, "savings")
     p = txn_parts()  # a split txn counts as its parts
     stmt = (
         select(
@@ -69,8 +69,8 @@ def cost(
             Account.excluded.is_(False),
             or_(
                 (p.c.amount < 0) & or_(Category.id.is_(None), Category.group.not_in(skip)),
-                # refunds: categorized credits outside income
-                (p.c.amount > 0) & Category.group.not_in((*skip, "income")),
+                # refunds: categorized credits outside income (an incoming transfer is income)
+                (p.c.amount > 0) & Category.group.not_in((*skip, "income", "transfer")),
             ),
         )
     )

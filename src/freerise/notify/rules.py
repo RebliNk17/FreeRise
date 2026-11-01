@@ -14,6 +14,7 @@ from freerise.accounts import PROVIDER_HE, account_holder, account_label, accoun
 from freerise.cashflow.cycles import cycle_for, get_start_day, prev_cycle
 from freerise.cashflow.fees import fees_in_cycle
 from freerise.cashflow.plan import cycle_plan
+from freerise.cashflow.summary import NOT_COUNTED
 from freerise.categorize.pipeline import uncategorized_merchants
 from freerise.config import get_settings
 from freerise.forecast.next_cycle import installments_ending
@@ -80,7 +81,6 @@ FAILURE_LABELS = {
     "otp_timeout": "לא הוזן קוד",
     "other": "שגיאה",
 }
-NON_SPENDING = ("transfer", "card_bill", "ignore")
 LARGE_MIN = Decimal(1500)  # default of the large_txn_min setting
 
 
@@ -186,7 +186,7 @@ def _large_transaction(s: Session, today: date) -> None:
         .join(Account, Account.id == Transaction.account_id)
         .outerjoin(Category, Category.id == Transaction.category_id)
         .where(Account.excluded.is_(False), Transaction.amount < 0)
-        .where(Category.group.is_(None) | Category.group.not_in(NON_SPENDING))
+        .where(Category.group.is_(None) | Category.group.not_in(NOT_COUNTED))
     )
     recent = s.scalars(base.where(Transaction.date >= today - timedelta(days=3)))
     since = today - timedelta(days=183)
@@ -430,7 +430,7 @@ def _double_charges(s: Session, today: date) -> None:
             Transaction.amount <= -DOUBLE_MIN,
             Transaction.merchant_key != "",
             Transaction.date >= today - timedelta(days=14),
-            Category.group.is_(None) | Category.group.not_in(NON_SPENDING),
+            Category.group.is_(None) | Category.group.not_in(NOT_COUNTED),
         )
         .group_by(
             Transaction.account_id, Transaction.merchant_key, Transaction.date, Transaction.amount

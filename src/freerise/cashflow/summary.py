@@ -12,10 +12,14 @@ from freerise.view import counted
 
 UNCATEGORIZED = "לא מסווג"
 GROUPS = ("fixed", "variable", "savings", "income")
+# Every expense and income counts, except a scraped card's bill from the bank (its purchases are
+# counted instead) and what the user marked "להתעלם". Excluded accounts are left out by counted().
+# ponytail: a transfer between two of our own scraped accounts counts on both sides (nets to 0).
+NOT_COUNTED = ("card_bill", "ignore")
 BASIS = (
-    "הכנסה = סכומים חיוביים בקטגוריות הכנסה ובתנועות לא מסווגות (כולל זיכויים); "
-    "זיכויים בקטגוריות הוצאה מקטינים את ההוצאה; העברות, חיוב כרטיס אשראי והתעלמות "
-    "אינם נספרים; חשבונות מוחרגים אינם נספרים; תנועות ממתינות נספרות; "
+    "הכנסה = סכומים חיוביים בקטגוריות הכנסה, בהעברות נכנסות ובתנועות לא מסווגות (כולל זיכויים); "
+    "העברות יוצאות הן הוצאה; זיכויים בקטגוריות הוצאה מקטינים את ההוצאה; חיוב כרטיס אשראי "
+    "והתעלמות אינם נספרים; חשבונות מוחרגים אינם נספרים; תנועות ממתינות נספרות; "
     "תשלומים של עסקאות בתשלומים וחיובים חוזרים מאושרים נספרים כהוצאה קבועה (ידועים מראש)."
 )
 
@@ -25,11 +29,12 @@ def bucket(
 ) -> str | None:
     """The cash-flow group a transaction (part) counts in, or None if it isn't counted.
 
-    group: its category's group (None = uncategorized: income if positive, else variable).
-    Installment payments and confirmed recurring charges (recurring=True, see
+    group: its category's group (None = uncategorized, or a transfer: income if positive, else
+    variable). Installment payments and confirmed recurring charges (recurring=True, see
     recurring_expense_keys) are known in advance, so they count as fixed (like RiseUp), whatever
-    variable category they carry (a hotel paid in 6 under תיירות, a monthly car lease under רכב)."""
-    if group is None:
+    variable category they carry (a hotel paid in 6 under תיירות, a monthly car lease under רכב,
+    rent sent by bank transfer)."""
+    if group is None or group == "transfer":
         group = "income" if amount > 0 else "variable"
     if group == "variable" and ((installment_total or 0) > 1 or recurring):
         return "fixed"

@@ -32,7 +32,7 @@ from freerise.view import counted
 REPORT_LATE_DAYS = 2  # a report the worker missed is sent up to this late, then skipped
 FEED_MARK = "telegram_feed_mark"  # the last transaction id the feed has looked at
 FEED_LINES = 10
-SPENDING = ("fixed", "variable", "savings")
+SPENDING = ("fixed", "variable", "savings", "transfer")  # a transfer out is spending too
 
 
 def _top(cats: list[tuple[str, Decimal]]) -> str | None:
@@ -54,7 +54,10 @@ def _variable_by_category(s: Session, start: date, end: date) -> list[tuple[str,
             counted(),
             Transaction.date.between(start, end),
             or_(Transaction.installment_total.is_(None), Transaction.installment_total <= 1),
-            or_(Category.group == "variable", Category.id.is_(None) & (p.c.amount < 0)),
+            or_(
+                Category.group == "variable",
+                (Category.id.is_(None) | (Category.group == "transfer")) & (p.c.amount < 0),
+            ),
         )
         .group_by(name)
         .order_by(total.desc())

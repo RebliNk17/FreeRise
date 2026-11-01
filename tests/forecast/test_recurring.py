@@ -111,7 +111,7 @@ def test_installments_excluded(session):
     assert "מקרר" not in _by_key(detect_recurring(session, TODAY))
 
 
-def test_excluded_account_and_transfers_ignored(session):
+def test_excluded_account_ignored_monthly_transfer_detected(session):
     excl = _acct(session, excluded=True)
     _txns(session, excl, "שכירות", _monthly(date(2026, 5, 1), [-5000] * 6))
     acct = _acct(session)
@@ -124,7 +124,8 @@ def test_excluded_account_and_transfers_ignored(session):
         category_id=transfer.id,
     )
     keys = _by_key(detect_recurring(session, TODAY))
-    assert "שכירות" not in keys and "העברה" not in keys
+    assert "שכירות" not in keys  # the user excluded that account
+    assert keys["העברה"].cadence == "monthly"  # rent by bank transfer is a fixed expense
 
 
 def test_dismissed_stays_dismissed_on_redetect(session):
