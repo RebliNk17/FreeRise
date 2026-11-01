@@ -6,7 +6,7 @@ import { ChevronLeft } from "lucide-react";
 import { Money } from "@/components/Amount";
 import { send } from "@/lib/api";
 import { monthName } from "@/lib/format";
-import type { HomeData } from "@/lib/home";
+import { forecastTone, type HomeData } from "@/lib/home";
 import { useHome } from "./context";
 import { Expander } from "./Expander";
 import { Illustration } from "./illustrations";
@@ -36,24 +36,42 @@ export function WeeklySummary({ s }: { s: NonNullable<HomeData["summary"]> }) {
   );
 }
 
+const TONE = { good: "text-positive", short: "text-sun-strong", minus: "text-danger" } as const;
+
 /** RiseUp's headline: where the cycle is heading (the same forecast as the Telegram report),
  * and what's left on the "הוצאות משתנות" card until the cycle ends. */
 function ForecastCard({ s }: { s: NonNullable<HomeData["summary"]> }) {
   const { cycle, variable } = useHome().data;
   const month = monthName(cycle.label_month);
   const left = Math.max(0, variable.allowance - variable.spent);
+  const tone = forecastTone(s.month_end, s.goal);
   return (
     <section className="card overflow-hidden">
       <div className="flex flex-col gap-3 p-5">
         <h2 className="text-xl leading-snug font-bold">איך צפוי להסתיים התזרים של {month}?</h2>
-        <Money value={s.month_end} className={`self-start text-[44px] leading-none font-light ${s.month_end < 0 ? "text-danger" : ""}`} />
+        <Money value={s.month_end} className={`self-start text-[44px] leading-none font-light ${TONE[tone]}`} />
+        <p className="-mt-1 text-sm text-muted">
+          {tone === "minus" ? (
+            "בקצב ההוצאות הנוכחי ההוצאות יעלו על ההכנסות, והחודש ייגמר במינוס."
+          ) : tone === "short" ? (
+            <>
+              בקצב ההוצאות הנוכחי החודש ייגמר בפלוס, אבל <Money value={s.goal - s.month_end} className="font-semibold text-text" /> מתחת ליעד.
+            </>
+          ) : s.goal > 0 ? (
+            <>
+              בקצב ההוצאות הנוכחי החודש ייגמר בפלוס, מעל היעד של <Money value={s.goal} className="font-semibold text-text" />.
+            </>
+          ) : (
+            "בקצב ההוצאות הנוכחי ההכנסות יעלו על ההוצאות, והחודש ייגמר בפלוס."
+          )}
+        </p>
         <Link href="/balance" className={PILL}>
           ומה מצב העו״ש? <ChevronLeft size={16} aria-hidden />
         </Link>
       </div>
       <div className="border-t border-hairline px-5 py-3 text-sm">
         <p className={`font-bold ${left > 0 ? "" : "text-danger"}`}>
-          נשארו <Money value={left} /> הוצאות משתנות
+          נשארו <Money value={left} className={left > 0 ? "text-positive" : ""} /> הוצאות משתנות
         </p>
         <p>להוציא עד סוף {month}</p>
       </div>
