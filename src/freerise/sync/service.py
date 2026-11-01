@@ -271,8 +271,11 @@ def _store(
         seen: Counter[str] = Counter()
         touched: set[int] = set()
         keyed = []
+        waived: list[str] = []
         for t in a.transactions:
             if _no_money_moved(t):
+                if t.identifier:  # discounted to ₪0 since an earlier scrape stored its full price
+                    waived.append(txn_key(t))
                 continue
             key = txn_key(t)
             seen[key] += 1
@@ -288,6 +291,13 @@ def _store(
             updated += r == "updated"
             s.flush()
             touched.add(row.id)
+        waived = [k for k in waived if k not in fresh]  # a ₪0 twin of a real charge isn't a waiver
+        if waived:  # a waived fee: no money moved, so no row
+            s.execute(
+                delete(Transaction).where(
+                    Transaction.account_id == acc.id, Transaction.txn_key.in_(waived)
+                )
+            )
         # A pending row this scrape no longer reports was cancelled or completed under a
         # different amount/description; keeping it would double count.
         s.execute(
