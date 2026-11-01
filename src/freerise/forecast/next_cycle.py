@@ -131,7 +131,20 @@ def _bucket(session: Session, it: RecurringItem) -> str:
 
 
 def _recurring_lines(session: Session, cycle: Cycle, today: date) -> list[tuple[str, ExpectedLine]]:
-    items = session.scalars(select(RecurringItem).where(RecurringItem.status == "confirmed"))
+    # Confirmed items, and unconfirmed charges already filed under a fixed category (electricity,
+    # phone, health fund): nothing asks the user to confirm those, so without this they'd never
+    # be expected (RiseUp expects them).
+    fixed_cats = select(Category.id).where(Category.group == "fixed")
+    items = session.scalars(
+        select(RecurringItem).where(
+            (RecurringItem.status == "confirmed")
+            | (
+                (RecurringItem.status == "pending")
+                & (RecurringItem.direction == "expense")
+                & RecurringItem.category_id.in_(fixed_cats)
+            )
+        )
+    )
     labels = account_labels(session)
     charged: dict[tuple[str, str], list] = {}
     for t in _txns(
