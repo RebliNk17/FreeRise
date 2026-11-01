@@ -183,17 +183,53 @@ class SkipIn(BaseModel):
     cycle_start: date | None = None  # default: the current cycle
 
 
+def _set_cycle(db: DB, id: int, start: date | None, amount: Decimal | None) -> None:
+    """This cycle's expectation for the item: None = it won't happen, else that amount."""
+    start = start or cycle_for(today(), get_start_day(db)).start
+    row = db.scalar(
+        select(RecurringSkip).where(
+            RecurringSkip.recurring_id == id, RecurringSkip.cycle_start == start
+        )
+    )
+    if row is None:
+        row = RecurringSkip(recurring_id=id, cycle_start=start)
+        db.add(row)
+    row.amount = amount
+
+
 @router.post("/recurring/{id}/skip", status_code=204)
 def skip_recurring(id: int, body: SkipIn, db: DB) -> None:
     """ "לא יורדת החודש": no expectation for this item in that cycle (a charge still counts)."""
     get_or_404(db, RecurringItem, id)
-    start = body.cycle_start or cycle_for(today(), get_start_day(db)).start
-    if not db.scalar(
-        select(RecurringSkip.id).where(
-            RecurringSkip.recurring_id == id, RecurringSkip.cycle_start == start
+    _set_cycle(db, id, body.cycle_start, None)
+    db.commit()
+
+
+class ExpectedIn(BaseModel):
+    amount: Decimal = Field(gt=0)
+    scope: Literal["cycle", "forward"]  # this cycle only / from now on
+    cycle_start: date | None = None  # scope "cycle"; default: the current cycle
+
+
+@router.put("/recurring/{id}/expected", status_code=204)
+def set_expected(id: int, body: ExpectedIn, db: DB) -> None:
+    """Change what's expected: for one cycle, or from now on (the user's amount then wins over
+    detection's; the dates keep following the charges)."""
+    it = get_or_404(db, RecurringItem, id)
+    if body.scope == "cycle":
+        _set_cycle(db, id, body.cycle_start, body.amount)
+    else:
+        it.expected_amount, it.amount_kind = body.amount, "fixed"
+        it.user_defined, it.status = True, "confirmed"
+        start = cycle_for(today(), get_start_day(db)).start  # this cycle follows the new amount
+        db.execute(
+            delete(RecurringSkip).where(
+                RecurringSkip.recurring_id == id,
+                RecurringSkip.cycle_start == start,
+                RecurringSkip.amount.is_not(None),
+            )
         )
-    ):
-        db.add(RecurringSkip(recurring_id=id, cycle_start=start))
+        attribute_income(db)
     db.commit()
 
 

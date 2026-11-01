@@ -72,6 +72,7 @@ export type FixedItem = {
   recurring_id: number | null;
   installment_number?: number | null; // an installment payment: n of N
   installment_total?: number | null;
+  overridden?: boolean; // the user set this cycle's expected amount
 };
 
 /** "תשלום 3/6" for an installment item, else null. */

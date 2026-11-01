@@ -434,9 +434,11 @@ class TransactionReview(Base):
 
 
 class RecurringSkip(Base):
-    """A confirmed recurring item that won't happen in one cycle ("לא יורדת החודש")."""
+    """A recurring item's expectation for one cycle, set by the user: amount None = it won't
+    happen this cycle ("לא יורדת החודש"); amount set = expect that much this cycle instead."""
 
     __tablename__ = "recurring_skips"
     __table_args__ = (UniqueConstraint("recurring_id", "cycle_start"),)
     recurring_id: Mapped[int] = _fk("recurring_items")
     cycle_start: Mapped[date]
+    amount: Mapped[Decimal | None] = mapped_column(Money)  # positive
