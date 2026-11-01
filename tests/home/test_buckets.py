@@ -93,6 +93,10 @@ def test_every_txn_counted_once_and_totals_balance(session):
     assert (tracked["כלכלה"]["spent"], tracked["כלכלה"]["expected"]) == (500, 2000)
     assert (tracked["אוכל בחוץ"]["spent"], tracked["אוכל בחוץ"]["expected"]) == (900, 500)
     assert reserved == 2000 + 900
+    # month end: income − fixed − variable so far − the rest of the cycle at this pace (14 of 31 days)
+    var = sum(c["spent"] for c in h["tracked"]) + h["variable"]["spent"]
+    end = h["income"]["expected"] - h["fixed"]["expected"] - var - var / 14 * 17
+    assert h["summary"]["month_end"] == pytest.approx(end, abs=0.01)
     assert h["variable"]["spent"] == 190
     # 20120 income − 5000 − 3000 − 2900 reserved; this week: the uncategorized ₪40 only
     assert h["variable"]["allowance"] == 9220

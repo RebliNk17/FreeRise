@@ -132,6 +132,7 @@ def test_structure_matches_contract(session):
         "goal_personal",
         "goal_plans",
         "variable_allowance",
+        "month_end",
     }
     w = h["variable"]["weeks"][0]
     assert set(w) == {
