@@ -1,6 +1,8 @@
 from datetime import date
 from decimal import Decimal
 
+from sqlalchemy import select
+
 from freerise.cashflow.cycles import cycle_by_label
 from freerise.forecast.next_cycle import (
     CADENCE_MONTHS,
@@ -9,7 +11,7 @@ from freerise.forecast.next_cycle import (
     installments_ending,
     next_cycle_forecast,
 )
-from freerise.models import Account, Credential, RecurringItem, Transaction
+from freerise.models import Account, Category, Credential, RecurringItem, Transaction
 
 TODAY = date(2026, 10, 23)  # current cycle 10.10-9.11
 OCT, NOV = cycle_by_label(2026, 10, 10), cycle_by_label(2026, 11, 10)
@@ -73,6 +75,17 @@ def test_bimonthly_lands_alternate_cycles(session):
     assert totals == [Decimal(600), Decimal(0), Decimal(600), Decimal(0)]
     line = expected_in_cycle(session, NOV, TODAY).fixed_items[0]
     assert (line.source, line.charged, line.basis) == ("recurring", False, "ארנונה basis")
+
+
+def test_unconfirmed_charge_in_a_fixed_category_is_expected(session):
+    cat = {c.name: c.id for c in session.scalars(select(Category))}
+    _item(session, "electric", "monthly", "390", date(2026, 11, 2), status="pending")
+    _item(session, "cafe", "monthly", "40", date(2026, 11, 2), status="pending")
+    _item(session, "loose", "monthly", "50", date(2026, 11, 2), status="pending")
+    for key, name in (("electric", "חשמל"), ("cafe", "אוכל בחוץ")):
+        session.query(RecurringItem).filter_by(merchant_key=key).one().category_id = cat[name]
+    labels = [x.label for x in expected_in_cycle(session, OCT, TODAY).fixed_items]
+    assert labels == ["electric"]  # a variable category or none still needs confirming
 
 
 def test_recurring_already_charged_uses_actual(session):
