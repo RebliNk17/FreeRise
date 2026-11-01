@@ -11,7 +11,7 @@ from freerise.api.routes_credentials import _out
 from freerise.models import Credential, Notification, SyncRun
 from freerise.notify.rules import generate_notifications
 from freerise.sync.scheduler import run_all
-from freerise.sync.service import PAUSE_AFTER, login_paused, run_credential
+from freerise.sync.service import PAUSE_AFTER, SYNC_TRIES, login_paused, run_credential
 
 NO_WAIT = {"stagger": (0, 0), "retry_gap": (0, 0)}
 # What Max's lock screen looks like through the package: no auth error type, just a timeout.
@@ -84,6 +84,19 @@ def test_failure_before_any_progress_counts(sf, credential):
     scheduled(sf)
     scheduled(sf, result=ScrapingResult(success=False, error_type="GENERAL_ERROR"))
     assert paused(sf, credential.id)
+
+
+def test_offline_failures_do_not_pause(sf, credential):
+    # The Mac lost DNS one night: every connection failed before login, through no fault of theirs.
+    offline = ScrapingResult(
+        success=False,
+        error_type="GENERAL_ERROR",
+        error_message="HTTP Error: [Errno 8] nodename nor servname provided, or not known",
+    )
+    scheduled(sf, result=offline)
+    assert not paused(sf, credential.id)
+    with sf() as s:
+        assert len(s.scalars(select(SyncRun.id)).all()) == SYNC_TRIES  # all retries still ran
 
 
 def test_successful_verify_clears(sf, credential):

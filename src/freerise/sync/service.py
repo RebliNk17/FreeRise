@@ -38,6 +38,15 @@ SYNC_TRIES = 3
 RETRY_GAP = (5 * 60, 15 * 60)  # seconds
 # ponytail: substring heuristics over the scraper's error text; extend as new messages show up.
 PROVIDER_CHANGED_HINTS = ("unexpected", "selector", "waf", "parse")
+# Our own network was down (no DNS, no route): no login was tried, so it never counts toward the pause.
+OFFLINE_HINTS = (
+    "nodename nor servname",
+    "name or service not known",
+    "temporary failure in name resolution",
+    "network is unreachable",
+    "err_name_not_resolved",
+    "err_internet_disconnected",
+)
 FIRST_SYNC_DAYS = 730
 # A new connection's verify run fetches a short window so the user isn't kept waiting; the
 # full history follows in a background run.
@@ -90,9 +99,9 @@ def active_run_id(s: Session, credential_id: int) -> int | None:
 
 
 def _last_runs(s: Session, credential_id: int, n: int):
-    """(status, progress) of the connection's last n finished runs, newest first."""
+    """(status, progress, error) of the connection's last n finished runs, newest first."""
     return s.execute(
-        select(SyncRun.status, SyncRun.progress)
+        select(SyncRun.status, SyncRun.progress, SyncRun.error)
         .where(
             SyncRun.credential_id == credential_id,
             SyncRun.started_at.is_not(None),  # not a duplicate request refused before it ran
@@ -106,15 +115,23 @@ def _last_runs(s: Session, credential_id: int, n: int):
 
 
 def login_paused(s: Session, credential_id: int) -> bool:
-    """The last PAUSE_AFTER runs all failed before fetching data (wrong details, lock screen…)."""
+    """The last PAUSE_AFTER runs all failed before fetching data (wrong details, lock screen…),
+    and not because we were offline."""
     rows = _last_runs(s, credential_id, PAUSE_AFTER)
-    return len(rows) == PAUSE_AFTER and all(st == "failed" and p != "fetch" for st, p in rows)
+    return len(rows) == PAUSE_AFTER and all(
+        st == "failed" and p != "fetch" and not offline(err) for st, p, err in rows
+    )
+
+
+def offline(error: str | None) -> bool:
+    text = (error or "").lower()
+    return any(h in text for h in OFFLINE_HINTS)
 
 
 def failures_in_row(s: Session, credential_id: int) -> int:
     """Failed runs since the last success, counted up to SYNC_TRIES."""
     rows = _last_runs(s, credential_id, SYNC_TRIES)
-    return next((i for i, (st, _) in enumerate(rows) if st == "success"), len(rows))
+    return next((i for i, (st, *_) in enumerate(rows) if st == "success"), len(rows))
 
 
 def retryable(run: SyncRun) -> bool:

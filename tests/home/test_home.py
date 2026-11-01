@@ -8,6 +8,7 @@ from sqlalchemy import select
 
 from freerise.accounts import account_label
 from freerise.cashflow.cycles import cycle_by_label
+from freerise.forecast.next_cycle import add_months
 from freerise.home.builder import DEFAULT_TRACKED, build_home
 from freerise.models import (
     Account,
@@ -73,7 +74,7 @@ def _rec(s, key, cat, amount, nxt, direction="expense", account=None):
         cadence="monthly",
         amount_kind="fixed",
         expected_amount=Decimal(amount),
-        last_date=date(2026, 9, 15),
+        last_date=add_months(nxt, -1),
         next_expected_date=nxt,
         status="confirmed",
         basis="b",

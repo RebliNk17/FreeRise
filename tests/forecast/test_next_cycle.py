@@ -2,7 +2,13 @@ from datetime import date
 from decimal import Decimal
 
 from freerise.cashflow.cycles import cycle_by_label
-from freerise.forecast.next_cycle import expected_in_cycle, installments_ending, next_cycle_forecast
+from freerise.forecast.next_cycle import (
+    CADENCE_MONTHS,
+    add_months,
+    expected_in_cycle,
+    installments_ending,
+    next_cycle_forecast,
+)
 from freerise.models import Account, Credential, RecurringItem, Transaction
 
 TODAY = date(2026, 10, 23)  # current cycle 10.10-9.11
@@ -48,7 +54,7 @@ def _item(session, key, cadence, amount, next_date, direction="expense", status=
             cadence=cadence,
             amount_kind="fixed",
             expected_amount=Decimal(amount),
-            last_date=next_date,
+            last_date=add_months(next_date, -CADENCE_MONTHS[cadence]),
             next_expected_date=next_date,
             status=status,
             basis=f"{key} basis",
@@ -115,6 +121,20 @@ def test_stale_confirmed_item_not_projected(session):
     ec = expected_in_cycle(session, OCT, TODAY)
     assert [x.label for x in ec.fixed_items] == ["late"]
     assert expected_in_cycle(session, NOV, TODAY).fixed_total == Decimal(70)
+
+
+def test_late_charge_stays_in_its_cycle(session):
+    # Charged 28.9; the 28.10 charge is late (or not synced yet), and detection already rolled
+    # next_expected_date past today to 27.11. October must still expect it.
+    _item(session, "insurance", "monthly", "968", date(2026, 11, 27))
+    session.query(RecurringItem).filter_by(merchant_key="insurance").one().last_date = date(
+        2026, 9, 28
+    )
+    [line] = expected_in_cycle(session, OCT, date(2026, 11, 1)).fixed_items
+    assert (line.date, line.amount, line.charged) == (date(2026, 10, 28), Decimal(968), False)
+    assert expected_in_cycle(session, NOV, date(2026, 11, 1)).fixed_items[0].date == date(
+        2026, 11, 28
+    )
 
 
 def test_lines_carry_account_labels(session):

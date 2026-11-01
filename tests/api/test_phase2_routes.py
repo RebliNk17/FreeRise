@@ -10,6 +10,7 @@ from sqlalchemy import delete, select
 from freerise.api.deps import today
 from freerise.cashflow.cycles import cycle_for
 from freerise.crypto import encrypt_json
+from freerise.forecast.next_cycle import add_months
 from freerise.models import (
     Account,
     Balance,
@@ -371,7 +372,7 @@ def test_charge_source_labels(authed, ids, sf):
                 cadence="monthly",
                 amount_kind="fixed",
                 expected_amount=Decimal("49.90"),
-                last_date=t,
+                last_date=add_months(t, -1),
                 next_expected_date=t,
                 status="confirmed",
                 basis="b",

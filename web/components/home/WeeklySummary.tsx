@@ -36,7 +36,8 @@ export function WeeklySummary({ s }: { s: NonNullable<HomeData["summary"]> }) {
   );
 }
 
-const TONE = { good: "text-positive", short: "text-sun-strong", minus: "text-danger" } as const;
+// The big number is large text (3:1 is enough), so it takes the bright chart green, not the darker small-text one.
+const TONE = { good: "text-positive-fill", short: "text-sun-strong", minus: "text-danger" } as const;
 
 /** RiseUp's headline: where the cycle is heading (the same forecast as the Telegram report),
  * and what's left on the "הוצאות משתנות" card until the cycle ends. */
