@@ -84,16 +84,53 @@ def test_monthly_gains_from_month_ends(session):
 def test_portfolio_history_gains_as_a_group(session):
     from freerise.pension.returns import monthly_gains
 
+    # Dated the 1st, but each is that month's closing balance: 1100.5 is September's end.
     ph = [{"date": "2026-08-01", "balance": 1000.0}, {"date": "2026-09-01", "balance": 1100.5}]
-    a = mk_fund(session, [(date(2026, 10, 20), "600")], [(date(2026, 8, 5), "30")], pid="a")
-    b = mk_fund(session, [(date(2026, 10, 20), "500")], [(date(2026, 8, 6), "20")], pid="b")
+    a = mk_fund(session, [(date(2026, 10, 20), "600")], [(date(2026, 9, 5), "30")], pid="a")
+    b = mk_fund(session, [(date(2026, 10, 20), "500")], [(date(2026, 9, 6), "20")], pid="b")
     b.credential_id = a.credential_id
     a.details = b.details = {"portfolio_history": ph}
     session.flush()
     [g] = monthly_gains(session)
     assert (sorted(g.fund_ids), g.month, g.deposits, g.gain) == (
         sorted([a.id, b.id]),
-        date(2026, 8, 1),
+        date(2026, 9, 1),
         Decimal("50.00"),
         Decimal("50.50"),
+    )
+
+
+def test_group_transfer_in_counts_as_deposits(session):
+    from freerise.pension.returns import monthly_gains
+
+    ph = [
+        {"date": "2025-11-01", "balance": 1000.0},
+        {"date": "2025-12-01", "balance": 1520.0},
+        {"date": "2026-01-01", "balance": 1530.0},
+    ]
+    # a was already in the first balance (no deposits since): its report's inflow isn't booked.
+    a = mk_fund(session, [(date(2026, 10, 20), "1000")], pid="a")
+    # b opened inside the history: 500 of its 2025 closing is neither deposits nor gains.
+    b = mk_fund(session, [(date(2026, 10, 20), "520")], [(date(2025, 12, 3), "10")], pid="b")
+    b.credential_id = a.credential_id
+    year = {"year": "2025", "opening_balance": None, "deposits": None}
+    a.details = {
+        "portfolio_history": ph,
+        "yearly_movements": [{**year, "gains": 20.0, "closing_balance": 1010.0}],
+    }
+    b.details = {
+        "portfolio_history": ph,
+        "yearly_movements": [{**year, "gains": None, "closing_balance": 510.0}],
+    }
+    session.flush()
+    dec, jan = sorted(monthly_gains(session), key=lambda g: g.month)
+    assert (dec.month, dec.deposits, dec.gain) == (
+        date(2025, 12, 1),
+        Decimal("510.00"),
+        Decimal("10.00"),
+    )
+    assert (jan.month, jan.deposits, jan.gain) == (
+        date(2026, 1, 1),
+        Decimal("0.00"),
+        Decimal("10.00"),
     )

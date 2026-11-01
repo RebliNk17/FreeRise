@@ -463,10 +463,12 @@ export default function PensionPage() {
             const liquid = sumOf(funds.map(liquidNow));
             const sorted = t === "pension" ? funds : [...funds].sort((a, b) => (a.liquidity_date ?? "9").localeCompare(b.liquidity_date ?? "9"));
             // A provider's whole-portfolio history (Phoenix) charts the section when it covers only these funds.
+            // Gains add up from its first month; the rest of the balance counts as deposited.
             const ids = new Set(funds.map((f) => f.id));
+            let gained = 0;
             const history = data.gains
               .filter((g) => g.fund_ids.length > 1 && g.fund_ids.every((id) => ids.has(id)))
-              .map((g) => ({ date: monthEnd(g.month), balance: g.end_balance }));
+              .map((g) => ({ date: monthEnd(g.month), balance: g.end_balance, gain: (gained = cents(gained + g.gain)) }));
             return (
               <Card key={t} className="rise">
                 <div className="flex items-start justify-between gap-3">
@@ -496,7 +498,12 @@ export default function PensionPage() {
                     <p className="text-xs text-muted">לפי הקרנות</p>
                   </div>
                 )}
-                {history.length > 1 && <BalanceChart data={history} />}
+                {history.length > 1 && (
+                  <>
+                    <BalanceChart data={history} />
+                    <p className="text-xs text-muted">רווח מתחילת {monthLabel(history[0].date)}; הופקד = היתרה אז וההפקדות מאז</p>
+                  </>
+                )}
                 <ul className="flex flex-col">
                   {sorted.map((f) => (
                     <FundRow key={f.id} f={f} ytd={ytdOf(f)} />
