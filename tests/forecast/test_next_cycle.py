@@ -107,10 +107,36 @@ def test_installments_ending_sum(session):
     assert all(x.basis for x in lines)
 
 
+def test_installment_plan_is_one_series_whatever_the_amounts(session):
+    # A first payment that took the rounding remainder (242.50, then 232) is the same plan: the
+    # cycle shows its one charged payment, not also a phantom "not charged yet" one.
+    a = _acct(session)
+    for n, (d, amount) in enumerate(
+        [
+            (date(2026, 7, 22), -242.5),
+            (date(2026, 8, 22), -232),
+            (date(2026, 9, 22), -232),
+            (date(2026, 10, 22), -232),
+        ],
+        start=1,
+    ):
+        _tx(session, a, d, amount, "samsung", n, 36)
+    # Two identical plans bought the same month: each its own series, both projected.
+    for _ in range(2):
+        _tx(session, a, date(2026, 10, 10), -250, "office", 2, 10)
+    lines = [x for x in expected_in_cycle(session, OCT, TODAY).fixed_items]
+    samsung = [x for x in lines if x.label == "samsung"]
+    assert [(x.amount, x.charged, x.installment_number) for x in samsung] == [
+        (Decimal(232), True, 4)
+    ]
+    nov = [x.label for x in expected_in_cycle(session, NOV, TODAY).fixed_items]
+    assert nov.count("office") == 2 and nov.count("samsung") == 1
+
+
 def test_installment_projection_into_next_cycle(session):
     a = _acct(session)
     _tx(session, a, date(2026, 9, 15), -100, "laptop", 2, 6)
-    _tx(session, a, date(2026, 10, 15), -100.5, "laptop", 3, 6)  # same series (±1)
+    _tx(session, a, date(2026, 10, 15), -100.5, "laptop", 3, 6)  # same series (same first month)
     _tx(session, a, date(2026, 10, 16), -300, "bed", 4, 4)  # ends now
     nov = expected_in_cycle(session, NOV, TODAY)
     [line] = nov.fixed_items
