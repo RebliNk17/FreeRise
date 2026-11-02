@@ -34,6 +34,12 @@ def test_isracard_installments_dated_like_the_vendored_engine():
     assert (t.identifier, t.date) == ("B2", "2026-09-20")
 
 
+def test_cal_installments_dated_on_their_payment_month():
+    # Cal dates every payment on the purchase; the vendored engine (and npm) moved each to its month.
+    (t,) = _map("visa cal", _inst("31715007312", 4, 36, "2026-07-22"))
+    assert (t.identifier, t.date) == ("31715007312", "2026-10-22")
+
+
 def test_isracard_keys_on_the_web_api_voucher_number():
     raw = {"voucherNumber": 4321, "seqVoucherNumber": "0987654321"}
     t = IfsTxn("4321", "2026-10-17", "2026-11-10", -10.0, "USD", -37.5, "SHOP", raw_data=raw)
