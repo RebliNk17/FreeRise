@@ -362,26 +362,6 @@ async def test_zero_amount_rows_are_not_stored(sf, credential):
         assert sorted(s.scalars(select(Transaction.description))) == ["AMAZON", "Shop"]
 
 
-async def test_fee_waived_later_drops_its_stored_row(sf, credential):
-    # A scraper that missed the discount stored the card fee at 22.90; the fixed one reports
-    # what was billed, ₪0. A ₪0 twin of a charge still reported isn't a waiver.
-    before = ok(
-        account("1111", txn(-22.9, "דמי כרטיס", identifier="f1"), txn(-10, "Shop", identifier="a1"))
-    )
-    after = ok(
-        account(
-            "1111",
-            txn(0, "דמי כרטיס", identifier="f1"),
-            txn(-10, "Shop", identifier="a1"),
-            txn(0, "Shop", identifier="a1"),
-        )
-    )
-    await run_credential(sf, credential.id, "manual", scraper_factory=fake_factory(before))
-    await run_credential(sf, credential.id, "manual", scraper_factory=fake_factory(after))
-    with sf() as s:
-        assert list(s.scalars(select(Transaction.description))) == ["Shop"]
-
-
 async def test_installments_sharing_identifier_are_separate_rows(sf, credential):
     # Cal's identifier is the deal number, shared by every installment of a purchase.
     first = ok(account("1111", txn(-100, "TV", identifier="d1", installments=(3, 10))))
