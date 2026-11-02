@@ -39,7 +39,7 @@ from scraper.utils.transactions import fix_installments
 DEFAULT_PROVIDERS = "all"
 # The vendored engine dated each installment on its own payment month (fix_installments);
 # rows it stored must keep their date (and txn_key) when this engine scrapes them again.
-SHIFT_INSTALLMENTS = {"max", "isracard", "amex"}
+SHIFT_INSTALLMENTS = {"max", "isracard", "amex", "visa cal"}
 
 PROVIDERS: dict[str, str] = {
     "onezero": "onezero",
