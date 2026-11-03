@@ -39,7 +39,7 @@ jobs:
         with:
           images: |
             ghcr.io/${{ github.repository }}-${{ matrix.image }}
-            name=docker.io/${{ vars.DOCKERHUB_USERNAME }}/freerise-${{ matrix.image }},enable=${{ vars.DOCKERHUB_USERNAME != '' }}
+            name=docker.io/${{ vars.DOCKERHUB_USERNAME }}/${{ matrix.image }},enable=${{ vars.DOCKERHUB_USERNAME != '' }}
           tags: |
             type=edge,branch=master
             type=semver,pattern={{version}}
