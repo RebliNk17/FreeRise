@@ -28,10 +28,18 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # Docker Hub as well, once the repo has a DOCKERHUB_USERNAME variable and DOCKERHUB_TOKEN secret.
+      - if: vars.DOCKERHUB_USERNAME != ''
+        uses: docker/login-action@v4
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
       - id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ghcr.io/${{ github.repository }}-${{ matrix.image }}
+          images: |
+            ghcr.io/${{ github.repository }}-${{ matrix.image }}
+            name=docker.io/${{ vars.DOCKERHUB_USERNAME }}/freerise-${{ matrix.image }},enable=${{ vars.DOCKERHUB_USERNAME != '' }}
           tags: |
             type=edge,branch=master
             type=semver,pattern={{version}}
@@ -55,6 +63,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - run: gh release create "$GITHUB_REF_NAME" --generate-notes --verify-tag
+      # The page leads with how to run this version (release-notes.md), then the generated
+      # changelog; GitHub renames an asset whose name starts with a dot, hence env.example.
+      - run: |
+          sed "s/{version}/${GITHUB_REF_NAME#v}/g" .github/release-notes.md > notes.md
+          cp .env.example env.example
+          gh release create "$GITHUB_REF_NAME" --generate-notes --notes-file notes.md --verify-tag \
+            docker-compose.prebuilt.yml env.example
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
