@@ -25,6 +25,8 @@ to `{version}` first):
 docker compose -f docker-compose.prebuilt.yml pull && docker compose -f docker-compose.prebuilt.yml up -d
 ```
 
-Images: `ghcr.io/reblink17/freerise-api`, `-worker` and `-web`, tagged `{version}`. The
-[README](https://github.com/RebliNk17/FreeRise#quick-start-with-docker) has the full guide.
+Images, tagged `{version}`: `freeriseil/api`, `freeriseil/worker` and `freeriseil/web` on
+[Docker Hub](https://hub.docker.com/u/freeriseil), and `ghcr.io/reblink17/freerise-api`, `-worker`
+and `-web` on GHCR. The [README](https://github.com/RebliNk17/FreeRise#quick-start-with-docker) has
+the full guide.
 
