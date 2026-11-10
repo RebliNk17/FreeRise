@@ -1,5 +1,5 @@
 import itertools
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import pytest
@@ -23,6 +23,8 @@ from freerise.models import (
 )
 
 TODAY = date(2026, 10, 23)  # Friday; OCT = 10.10 (Sat) - 9.11
+# Recurring items existed before the cycles here (created_at would be the real clock, later).
+SINCE = datetime(2026, 1, 1, tzinfo=UTC)
 OCT = cycle_by_label(2026, 10, 10)
 SEP = cycle_by_label(2026, 9, 10)
 _seq = itertools.count()
@@ -79,6 +81,7 @@ def _rec(s, key, cat, amount, nxt, direction="expense", account=None):
         status="confirmed",
         basis="b",
         account_id=account.id if account else None,
+        created_at=SINCE,
     )
     s.add(r)
     s.flush()
@@ -348,7 +351,11 @@ def test_income_groups_savings_totals(session):
     # כלכלה is tracked (₪200 spent, nothing expected): it reserves 200 of the allowance
     assert h["variable"]["allowance"] == alloc - 200
     assert h["variable"]["spent"] == 0
-    assert h["total"] == {"spent": 5000 + 200 + 1000, "expected": 5000 + alloc + 1000}
+    # expected variable spending is the forecast's (17300 − 5000 − month end), not the allowance
+    assert h["total"] == {
+        "spent": 5000 + 200 + 1000,
+        "expected": pytest.approx(5000 + (17300 - 5000 - h["summary"]["month_end"]) + 1000),
+    }
 
 
 def test_past_cycle(session):

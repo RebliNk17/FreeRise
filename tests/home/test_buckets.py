@@ -76,9 +76,11 @@ def _check(h, ids):
         h["income"]["expected"] - h["fixed"]["expected"] - s["goal"]
     )
     assert h["variable"]["allowance"] == pytest.approx(s["variable_allowance"] - reserved)
-    assert h["total"]["expected"] == pytest.approx(
-        h["fixed"]["expected"] + reserved + h["variable"]["allowance"] + h["savings"]["expected"]
-    )
+    # "expected to go out" is the forecast's spending, not the allowance: income minus it is the
+    # month-end forecast (savings stay the household's, outside the forecast)
+    assert h["income"]["expected"] - (
+        h["total"]["expected"] - h["savings"]["expected"]
+    ) == pytest.approx(s["month_end"])
     cur = next(w for w in h["variable"]["weeks"] if w["is_current"])
     assert s["week_left"] == pytest.approx(cur["expected"] - cur["spent"])
     return b, reserved, cur

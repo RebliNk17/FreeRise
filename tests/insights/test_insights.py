@@ -71,6 +71,7 @@ def _rec(session, key, direction, amount, next_date, kind="fixed", account=None)
             next_expected_date=next_date,
             status="confirmed",
             basis="b",
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),  # before the test cycles, not the real now
         )
     )
     session.flush()
