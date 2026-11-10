@@ -137,6 +137,10 @@ def test_structure_matches_contract(session):
         "goal_plans",
         "variable_allowance",
         "month_end",
+        "month_end_income",
+        "month_end_fixed",
+        "month_end_variable",
+        "month_end_pace",
     }
     w = h["variable"]["weeks"][0]
     assert set(w) == {
@@ -351,11 +355,7 @@ def test_income_groups_savings_totals(session):
     # כלכלה is tracked (₪200 spent, nothing expected): it reserves 200 of the allowance
     assert h["variable"]["allowance"] == alloc - 200
     assert h["variable"]["spent"] == 0
-    # expected variable spending is the forecast's (17300 − 5000 − month end), not the allowance
-    assert h["total"] == {
-        "spent": 5000 + 200 + 1000,
-        "expected": pytest.approx(5000 + (17300 - 5000 - h["summary"]["month_end"]) + 1000),
-    }
+    assert h["total"] == {"spent": 5000 + 200 + 1000, "expected": 5000 + alloc + 1000}
 
 
 def test_past_cycle(session):

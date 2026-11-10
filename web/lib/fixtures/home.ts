@@ -29,7 +29,7 @@ const txn = (id: number, amount: number, description: string, extra: Partial<Txn
 
 export const homeFixture: HomeData = {
   cycle: { start: "2026-10-10", end: "2026-11-09", label_year: 2026, label_month: 10, is_current: true, prev: { year: 2026, month: 9 }, next: null },
-  summary: { week_left: 812.4, next_week_allowance: 1200, goal: 3000, goal_personal: 2000, goal_plans: 1000, variable_allowance: 5200, month_end: -3838.4 },
+  summary: { week_left: 812.4, next_week_allowance: 1200, goal: 3000, goal_personal: 2000, goal_plans: 1000, variable_allowance: 5200, month_end: -3838.4, month_end_income: 20000, month_end_fixed: 15000, month_end_variable: 8838.4, month_end_pace: "cycle" },
   variable: {
     spent: 1819.2,
     allowance: 5200,

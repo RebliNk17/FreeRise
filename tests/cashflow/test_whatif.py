@@ -2,7 +2,7 @@ from datetime import date
 from decimal import Decimal
 
 from freerise.cashflow.cycles import cycle_by_label
-from freerise.cashflow.plan import CyclePlan, WeekPlan, projected_month_end
+from freerise.cashflow.plan import CyclePlan, WeekPlan, projected_month_end, uses_history_pace
 from freerise.cashflow.summary import CycleSummary, GroupSummary
 from freerise.cashflow.whatif import what_if
 
@@ -51,3 +51,6 @@ def test_projected_month_end_uses_history_early_in_cycle():
     # median 3100 / 31 = 100/day for the 28 days left
     assert projected_month_end(p, date(2026, 10, 12), hist) == 6000 - 1000 - 2800
     assert projected_month_end(p, date(2026, 10, 12), []) == 6000 - 1000 - Decimal(1000) / 3 * 28
+    assert uses_history_pace(p, date(2026, 10, 12), hist)
+    assert not uses_history_pace(p, date(2026, 10, 12), [])
+    assert not uses_history_pace(p, date(2026, 10, 20), hist)  # a week in: its own pace

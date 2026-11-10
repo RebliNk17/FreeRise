@@ -46,6 +46,8 @@ function ForecastCard({ s }: { s: NonNullable<HomeData["summary"]> }) {
   const month = monthName(cycle.label_month);
   const left = Math.max(0, variable.allowance - variable.spent);
   const tone = forecastTone(s.month_end, s.goal);
+  // Early in the cycle there is no pace of its own yet: the forecast uses past cycles'.
+  const pace = s.month_end_pace === "history" ? "בקצב ההוצאות של החודשים הקודמים" : "בקצב ההוצאות הנוכחי";
   return (
     <section className="card overflow-hidden">
       <div className="flex flex-col gap-3 p-5">
@@ -53,23 +55,24 @@ function ForecastCard({ s }: { s: NonNullable<HomeData["summary"]> }) {
         <Money value={s.month_end} className={`self-start text-[44px] leading-none font-light ${TONE[tone]}`} />
         <p className="-mt-1 text-sm text-muted">
           {tone === "minus" ? (
-            "בקצב ההוצאות הנוכחי ההוצאות יעלו על ההכנסות, והחודש ייגמר במינוס."
+            `${pace}, ההוצאות יעלו על ההכנסות, והחודש ייגמר במינוס.`
           ) : tone === "short" ? (
             <>
-              בקצב ההוצאות הנוכחי החודש ייגמר בפלוס, אבל <Money value={s.goal - s.month_end} className="font-semibold text-text" /> מתחת ליעד.
+              {pace}, החודש ייגמר בפלוס, אבל <Money value={s.goal - s.month_end} className="font-semibold text-text" /> מתחת ליעד.
             </>
           ) : s.goal > 0 ? (
             <>
-              בקצב ההוצאות הנוכחי החודש ייגמר בפלוס, מעל היעד של <Money value={s.goal} className="font-semibold text-text" />.
+              {pace}, החודש ייגמר בפלוס, מעל היעד של <Money value={s.goal} className="font-semibold text-text" />.
             </>
           ) : (
-            "בקצב ההוצאות הנוכחי ההכנסות יעלו על ההוצאות, והחודש ייגמר בפלוס."
+            `${pace}, ההכנסות יעלו על ההוצאות, והחודש ייגמר בפלוס.`
           )}
         </p>
         <Link href="/balance" className={PILL}>
           ומה מצב העו״ש? <ChevronLeft size={16} aria-hidden />
         </Link>
       </div>
+      <ForecastMath s={s} />
       <div className="border-t border-hairline px-5 py-3 text-sm">
         <p className={`font-bold ${left > 0 ? "" : "text-danger"}`}>
           נשארו <Money value={left} className={left > 0 ? "text-positive" : ""} /> הוצאות משתנות
@@ -77,6 +80,44 @@ function ForecastCard({ s }: { s: NonNullable<HomeData["summary"]> }) {
         <p>להוציא עד סוף {month}</p>
       </div>
     </section>
+  );
+}
+
+/** How the forecast is reached. Its variable line is the pace, so it differs from the plan the
+ * other cards show (what may be spent to end at the goal); the plan's amount sits beside it. */
+function ForecastMath({ s }: { s: NonNullable<HomeData["summary"]> }) {
+  const rows: [React.ReactNode, number][] = [
+    ["הכנסות צפויות", s.month_end_income],
+    ["הוצאות קבועות ועמלות", -s.month_end_fixed],
+    [
+      <>
+        הוצאות משתנות {s.month_end_pace === "history" ? "בקצב של החודשים הקודמים" : "בקצב של החודש"}
+        <span className="block text-xs text-muted">
+          בתוכנית: <Money value={s.variable_allowance} />
+        </span>
+      </>,
+      -s.month_end_variable,
+    ],
+  ];
+  return (
+    <Expander className="border-t border-hairline px-3" buttonClassName="flex min-h-12 px-2" label={<span className="text-sm font-bold">איך חישבנו?</span>}>
+      <dl className="flex flex-col divide-y divide-hairline px-2 pb-2 text-sm">
+        {rows.map(([label, value], i) => (
+          <div key={i} className="flex min-h-11 items-center gap-3 py-1.5">
+            <dt className="flex-1">{label}</dt>
+            <dd>
+              <Money value={value} className="font-semibold" />
+            </dd>
+          </div>
+        ))}
+        <div className="flex min-h-11 items-center gap-3 py-1.5 font-bold">
+          <dt className="flex-1">סוף החודש</dt>
+          <dd>
+            <Money value={s.month_end} />
+          </dd>
+        </div>
+      </dl>
+    </Expander>
   );
 }
 

@@ -76,11 +76,16 @@ def _check(h, ids):
         h["income"]["expected"] - h["fixed"]["expected"] - s["goal"]
     )
     assert h["variable"]["allowance"] == pytest.approx(s["variable_allowance"] - reserved)
-    # "expected to go out" is the forecast's spending, not the allowance: income minus it is the
-    # month-end forecast (savings stay the household's, outside the forecast)
-    assert h["income"]["expected"] - (
-        h["total"]["expected"] - h["savings"]["expected"]
-    ) == pytest.approx(s["month_end"])
+    # "expected to go out" is the plan: the cards' expected amounts add up to it
+    assert h["total"]["expected"] == pytest.approx(
+        h["fixed"]["expected"] + reserved + h["variable"]["allowance"] + h["savings"]["expected"]
+    )
+    # the forecast shows its own parts: income − fixed − variable at its pace
+    assert s["month_end_income"] == pytest.approx(h["income"]["expected"])
+    assert s["month_end_fixed"] == pytest.approx(h["fixed"]["expected"])
+    assert s["month_end_income"] - s["month_end_fixed"] - s["month_end_variable"] == pytest.approx(
+        s["month_end"]
+    )
     cur = next(w for w in h["variable"]["weeks"] if w["is_current"])
     assert s["week_left"] == pytest.approx(cur["expected"] - cur["spent"])
     return b, reserved, cur
@@ -99,6 +104,8 @@ def test_every_txn_counted_once_and_totals_balance(session):
     var = sum(c["spent"] for c in h["tracked"]) + h["variable"]["spent"]
     end = h["income"]["expected"] - h["fixed"]["expected"] - var - var / 14 * 17
     assert h["summary"]["month_end"] == pytest.approx(end, abs=0.01)
+    assert h["summary"]["month_end_variable"] == pytest.approx(var + var / 14 * 17, abs=0.01)
+    assert h["summary"]["month_end_pace"] == "cycle"  # 14 days in: this cycle's own pace
     assert h["variable"]["spent"] == 190
     # 20120 income − 5000 − 3000 − 2900 reserved; this week: the uncategorized ₪40 only
     assert h["variable"]["allowance"] == 9220

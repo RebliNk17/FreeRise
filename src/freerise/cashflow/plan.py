@@ -238,14 +238,24 @@ def history(session: Session, cycle: Cycle, n: int = HISTORY) -> list[CycleSumma
     return out
 
 
+def _elapsed(p: CyclePlan, today: date) -> int:
+    days = (p.cycle.end - p.cycle.start).days + 1
+    return min(days, max(1, (today - p.cycle.start).days + 1))
+
+
+def uses_history_pace(p: CyclePlan, today: date, hist: list[CycleSummary]) -> bool:
+    """The forecast's pace is past cycles' (first MIN_PACE_DAYS days, with history), not this one's."""
+    return bool(hist) and _elapsed(p, today) < MIN_PACE_DAYS
+
+
 def projected_month_end(p: CyclePlan, today: date, hist: list[CycleSummary]) -> Decimal:
     """expected income − expected fixed − variable spent − variable still to come.
 
     Still to come is at this cycle's pace; in its first MIN_PACE_DAYS days, at the median
     past cycle's daily variable spending (when there is history)."""
     days = (p.cycle.end - p.cycle.start).days + 1
-    elapsed = min(days, max(1, (today - p.cycle.start).days + 1))
-    if elapsed >= MIN_PACE_DAYS or not hist:
+    elapsed = _elapsed(p, today)
+    if not uses_history_pace(p, today, hist):
         per_day = p.variable_spent / elapsed
     else:
         per_day = median(_group(s, "variable").total for s in hist) / days
