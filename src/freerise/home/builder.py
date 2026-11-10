@@ -622,11 +622,16 @@ def build_home(session: Session, cycle: Cycle, today: date) -> Home:
     allowance = plan.rest_allowance if plan else rest_spent
     vweeks = _weeks(cycle, today, rest_txns, allowance, {})
     summary = None
+    var_expected = var_spent
     if plan:
         for w, pw in zip(vweeks, plan.weeks, strict=True):  # same rule; plan's numbers win
             w.expected, w.left = pw.allowance, pw.left
         cur = next((w for w in vweeks if w.is_current), vweeks[-1])
         after = vweeks[cur.index + 1] if cur.index + 1 < len(vweeks) else None
+        end = projected_month_end(plan, today, history(session, cycle)).quantize(CENT)
+        # Variable spending the forecast expects (its pace), not the allowance: the allowance is
+        # what may be spent, so income − expected spending would always be just the goal.
+        var_expected = plan.expected_income - plan.expected_fixed - end
         summary = Summary(
             cur.left,
             after.expected if after else ZERO,
@@ -634,7 +639,7 @@ def build_home(session: Session, cycle: Cycle, today: date) -> Home:
             plan.goal_personal,
             plan.goal_plans,
             plan.variable_allowance,
-            projected_month_end(plan, today, history(session, cycle)).quantize(CENT),
+            end,
         )
 
     # Tracked categories
@@ -725,10 +730,7 @@ def build_home(session: Session, cycle: Cycle, today: date) -> Home:
         fixed,
         Total(
             fixed.spent + fee_spent + var_spent + sav_spent,
-            fixed.expected
-            + fee_expected
-            + (plan.variable_allowance if plan else var_spent)
-            + sav_expected,
+            fixed.expected + fee_expected + var_expected + sav_expected,
         ),
         income,
         len(set(holders.values())) > 1,

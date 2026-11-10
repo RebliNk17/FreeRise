@@ -324,26 +324,15 @@ def expected_in_cycle(session: Session, cycle: Cycle, today: date) -> ExpectedCy
 
 
 def installments_ending(session: Session, cycle: Cycle) -> list[ExpectedLine]:
-    """Final installments charged in `cycle` — these amounts stop next cycle."""
-    labels = account_labels(session)
-    return [
-        ExpectedLine(
-            t.description,
-            abs(t.amount),
-            t.date,
-            "installment",
-            f"תשלום אחרון ({t.installment_number} מתוך {t.installment_total}) — לא יחויב במחזור הבא",
-            True,
-            **_acct(labels, t.account_id),
-        )
-        for t in _txns(
-            session,
-            Transaction.installment_total > 1,
-            Transaction.installment_number == Transaction.installment_total,
-            Transaction.effective_date >= cycle.start,
-            Transaction.effective_date <= cycle.end,
-        )
+    """Final installments of `cycle`, charged or still to come — these amounts stop next cycle."""
+    out = [
+        x for x in _installment_lines(session, cycle) if x.installment_number == x.installment_total
     ]
+    for x in out:
+        x.basis = (
+            f"תשלום אחרון ({x.installment_number} מתוך {x.installment_total}) — לא יחויב במחזור הבא"
+        )
+    return sorted(out, key=attrgetter("date"))
 
 
 def next_cycle_forecast(session: Session, today: date) -> NextCycleForecast:

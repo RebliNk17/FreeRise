@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -9,6 +9,8 @@ from freerise.forecast.next_cycle import add_months, expected_in_cycle
 from freerise.models import Account, Category, Credential, RecurringItem, Transaction
 
 OCT = cycle_by_label(2026, 10, 10)  # 10.10 (Sat) - 9.11
+# Recurring items existed before OCT (created_at would be the real clock, later).
+SINCE = datetime(2026, 1, 1, tzinfo=UTC)
 _n = 0
 
 
@@ -70,6 +72,7 @@ def test_expected_income_uses_stream_before_payday(session):
             next_expected_date=date(2026, 11, 1),
             status="confirmed",
             basis="b",
+            created_at=SINCE,
         )
     )
     session.flush()
@@ -175,6 +178,7 @@ def _rec(session, key, direction, amount, next_date, cat=None):
             next_expected_date=next_date,
             status="confirmed",
             basis="b",
+            created_at=SINCE,
         )
     )
     session.flush()

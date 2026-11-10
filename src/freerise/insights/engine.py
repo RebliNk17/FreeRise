@@ -540,7 +540,7 @@ def fixed_not_charged(ctx: Ctx) -> list[Insight]:
 
 
 def installments_stopping(ctx: Ctx) -> list[Insight]:
-    """Final installments charged this cycle: next cycle is lighter by their sum."""
+    """This cycle's final installments (charged or due): next cycle is lighter by their sum."""
     lines = installments_ending(ctx.session, ctx.cycle)
     if not lines:
         return []
