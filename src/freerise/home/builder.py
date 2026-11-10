@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
 from statistics import median
+from typing import Literal
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
@@ -32,6 +33,7 @@ from freerise.cashflow.plan import (
     history,
     projected_month_end,
     split_by_days,
+    uses_history_pace,
     week_spans,
 )
 from freerise.cashflow.savings import monthly_total, plan_statuses
@@ -86,6 +88,12 @@ class Summary:
     goal_plans: Decimal
     variable_allowance: Decimal
     month_end: Decimal  # projected cycle end, same number as the Telegram report and insights
+    # Its parts, shown on the forecast card: income − fixed (fees too) − variable at its pace.
+    # The pace is past cycles' early in the cycle ("history"), else this cycle's own ("cycle").
+    month_end_income: Decimal
+    month_end_fixed: Decimal
+    month_end_variable: Decimal
+    month_end_pace: Literal["history", "cycle"]
 
 
 @dataclass
@@ -622,16 +630,13 @@ def build_home(session: Session, cycle: Cycle, today: date) -> Home:
     allowance = plan.rest_allowance if plan else rest_spent
     vweeks = _weeks(cycle, today, rest_txns, allowance, {})
     summary = None
-    var_expected = var_spent
     if plan:
         for w, pw in zip(vweeks, plan.weeks, strict=True):  # same rule; plan's numbers win
             w.expected, w.left = pw.allowance, pw.left
         cur = next((w for w in vweeks if w.is_current), vweeks[-1])
         after = vweeks[cur.index + 1] if cur.index + 1 < len(vweeks) else None
-        end = projected_month_end(plan, today, history(session, cycle)).quantize(CENT)
-        # Variable spending the forecast expects (its pace), not the allowance: the allowance is
-        # what may be spent, so income − expected spending would always be just the goal.
-        var_expected = plan.expected_income - plan.expected_fixed - end
+        past = history(session, cycle)
+        end = projected_month_end(plan, today, past).quantize(CENT)
         summary = Summary(
             cur.left,
             after.expected if after else ZERO,
@@ -640,6 +645,10 @@ def build_home(session: Session, cycle: Cycle, today: date) -> Home:
             plan.goal_plans,
             plan.variable_allowance,
             end,
+            plan.expected_income,
+            plan.expected_fixed,
+            plan.expected_income - plan.expected_fixed - end,  # so the parts add up to `end`
+            "history" if uses_history_pace(plan, today, past) else "cycle",
         )
 
     # Tracked categories
@@ -730,7 +739,10 @@ def build_home(session: Session, cycle: Cycle, today: date) -> Home:
         fixed,
         Total(
             fixed.spent + fee_spent + var_spent + sav_spent,
-            fixed.expected + fee_expected + var_expected + sav_expected,
+            fixed.expected
+            + fee_expected
+            + (plan.variable_allowance if plan else var_spent)
+            + sav_expected,
         ),
         income,
         len(set(holders.values())) > 1,
