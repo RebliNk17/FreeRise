@@ -164,6 +164,16 @@ def test_installments_ending_sum(session):
     assert all(x.basis for x in lines)
 
 
+def test_installments_ending_counts_last_payments_not_charged_yet(session):
+    # Two plans paid 4 of 5 last cycle: their last payments fall this cycle, not charged yet.
+    a = _acct(session)
+    _tx(session, a, date(2026, 9, 25), -250, "tickets", 4, 5)
+    _tx(session, a, date(2026, 9, 25), -250, "tickets", 4, 5)
+    _tx(session, a, date(2026, 9, 25), -80, "phone", 4, 6)
+    lines = installments_ending(session, OCT)
+    assert [(x.amount, x.date, x.charged) for x in lines] == [(250, date(2026, 10, 25), False)] * 2
+
+
 def test_installment_plan_is_one_series_whatever_the_amounts(session):
     # A first payment that took the rounding remainder (242.50, then 232) is the same plan: the
     # cycle shows its one charged payment, not also a phantom "not charged yet" one.
